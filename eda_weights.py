@@ -8,8 +8,7 @@ from aciq.onnx_io import load_onnx, extract_layers
 from aciq.statistics import Moments
 
 RESULTS_DIR = Path("results/eda")
-MODEL_PATH = Path("models/resnet50_Opset18.onnx")
-
+MODEL_PATH = Path("models/bert_Opset18.onnx")
 
 def plot_layer_histogram(vec: np.ndarray, moments: Moments, layer_name: str, layer_idx: int, save_path: Path) -> None:
     fig, ax = plt.subplots(figsize=(9, 5))
