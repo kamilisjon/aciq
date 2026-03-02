@@ -58,7 +58,7 @@ def plot_layer_fit(
         f"Kurtosis  = {moments.kurtosis:.4f}",
     ]
     fit_lines = [
-        f"{f.distribution.name:10s} KS={f.ks_statistic:.4f}  p={f.ks_pvalue:.3g}" for f in fits
+        f"{f.distribution.name:10s} KS={f.ks_statistic:.4f}  p={f.ks_pvalue:.3g} ll={f.log_likelyhood:.3g}" for f in fits
     ]
     textstr = "\n".join(eda_lines + [""] + fit_lines)
     ax.text(0.98, 0.96, textstr, transform=ax.transAxes, fontsize=7.5,

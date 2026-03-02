@@ -43,6 +43,7 @@ class Distribution(StrEnum):
 @dataclass
 class DistributionFit:
     distribution: Distribution
+    log_likelyhood: float
     ks_statistic: float
     ks_pvalue: float
 
@@ -50,12 +51,12 @@ def fit_distribution(data: np.ndarray, dist: Distribution) -> DistributionFit:
     match dist:
         case Distribution.GAUSSIAN:
             params = stats.norm.fit(data)
-            # ll = np.sum(stats.norm.logpdf(data, *params))
+            ll = np.sum(stats.norm.logpdf(data, *params))
         case Distribution.LAPLACE:
             params = stats.laplace.fit(data)
-            # ll = np.sum(stats.laplace.logpdf(data, *params))
+            ll = np.sum(stats.laplace.logpdf(data, *params))
         case Distribution.STUDENT_T:
             params = stats.t.fit(data)
-            # ll = np.sum(stats.t.logpdf(data, *params))
+            ll = np.sum(stats.t.logpdf(data, *params))
     ks_stat, ks_p = stats.kstest(data, dist, args=params)
-    return DistributionFit(dist, float(ks_stat), float(ks_p))
+    return DistributionFit(dist, float(ll), float(ks_stat), float(ks_p))
