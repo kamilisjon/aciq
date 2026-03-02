@@ -8,8 +8,7 @@ from aciq.onnx_io import load_onnx, extract_layers
 from aciq.statistics import Distribution, DistributionFit, fit_distribution
 
 RESULTS_DIR = Path("results/phase2")
-MODEL_PATH = Path("models/bert_Opset18.onnx")
-KS_ALPHA = 0.05
+MODEL_PATH = Path("models/resnet50_Opset18.onnx")
 
 DIST_COLORS = {
     Distribution.GAUSSIAN:  "red",
@@ -22,12 +21,6 @@ def fit_all(data: np.ndarray) -> list[DistributionFit]:
     results = [fit_distribution(data, dist) for dist in Distribution]
     results.sort(key=lambda r: r.ks_statistic)
     return results
-
-
-def select_best(fits: list[DistributionFit]) -> DistributionFit | None:
-    passing = [f for f in fits if f.ks_pvalue >= KS_ALPHA]
-    return min(passing, key=lambda f: f.ks_statistic) if passing else None
-
 
 def _pdf_values(dist: Distribution, data: np.ndarray, x: np.ndarray) -> np.ndarray:
     if dist == Distribution.GAUSSIAN:
@@ -50,10 +43,8 @@ def plot_layer_fit(
     ax.hist(vec, bins=n_bins, density=True, alpha=0.5, color="steelblue", label="Empirical")
 
     x = np.linspace(vec.min(), vec.max(), 500)
-    best = select_best(fits)
     for fit in fits:
-        is_best = best is not None and fit.distribution == best.distribution
-        lw, ls = (2.5, "-") if is_best else (1.2, "--")
+        lw, ls = (1.2, "--")
         label = f"{fit.distribution.name.capitalize()}  KS={fit.ks_statistic:.4f}  p={fit.ks_pvalue:.3g}"
         ax.plot(x, _pdf_values(fit.distribution, vec, x),
                 color=DIST_COLORS[fit.distribution], linewidth=lw, linestyle=ls, label=label)
@@ -65,9 +56,8 @@ def plot_layer_fit(
             va="top", ha="right", bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
             family="monospace")
 
-    best_label = best.distribution.name.capitalize() if best else "Other (no fit passed KS p>0.05)"
     safe = layer_name.replace("/", "_").replace(":", "_")
-    ax.set_title(f"Layer {layer_idx}: {layer_name}\nBest fit: {best_label}", fontsize=10)
+    ax.set_title(f"Layer {layer_idx}: {layer_name}", fontsize=10)
     ax.set_xlabel("Weight value")
     ax.set_ylabel("Density")
     ax.legend(fontsize=8, loc="upper left")
@@ -89,15 +79,7 @@ def main():
     for idx, (name, arr) in enumerate(layers.items(), 1):
         vec = arr.flatten().astype(np.float32)
         fits = fit_all(vec)
-        best = select_best(fits)
-
         print(f"\n[{idx:>3}/{len(layers)}] {name} n={len(vec):,}")
-        for f in fits:
-            marker = " <--" if best and f.distribution == best.distribution else ""
-            print(f"    {f.distribution.name:10s} KS={f.ks_statistic:.4f}  p={f.ks_pvalue:.4g}{marker}")
-        if best is None:
-            print(f"    --> Other (no fit passed KS p>{KS_ALPHA})")
-
         plot_layer_fit(vec, fits, name, idx, hist_dir)
 
 
