@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
+import onnx
 
 from aciq.onnx_io import load_onnx, extract_layers
 from aciq.statistics import Distribution, DistributionFit, Moments, fit_distribution
@@ -85,12 +86,12 @@ def main():
     layers = extract_layers(model)
     print(f"Total layers: {len(layers)}")
 
-    for idx, (name, arr) in enumerate(layers.items(), 1):
-        vec = arr.flatten().astype(np.float32)
+    for idx, layer in enumerate(layers, 1):
+        vec = onnx.numpy_helper.to_array(layer.tensor).flatten().astype(np.float32)
         fits = fit_all(vec)
         moments = Moments.from_array(vec)
-        print(f"\n[{idx:>3}/{len(layers)}] {name} n={len(vec):,}")
-        plot_layer_fit(vec, fits, moments, name, idx, hist_dir)
+        print(f"\n[{idx:>3}/{len(layers)}] {layer.tensor.name} {layer.op_type} n={len(vec):,}")
+        plot_layer_fit(vec, fits, moments, layer.tensor.name, idx, hist_dir)
 
 
 if __name__ == "__main__":
