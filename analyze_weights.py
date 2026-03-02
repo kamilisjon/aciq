@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from scipy import stats
 
 from aciq.onnx_io import load_onnx, extract_layers
-from aciq.statistics import Distribution, DistributionFit, fit_distribution
+from aciq.statistics import Distribution, DistributionFit, Moments, fit_distribution
 
 RESULTS_DIR = Path("results/phase2")
 MODEL_PATH = Path("models/resnet50_Opset18.onnx")
@@ -33,6 +33,7 @@ def _pdf_values(dist: Distribution, data: np.ndarray, x: np.ndarray) -> np.ndarr
 def plot_layer_fit(
     vec: np.ndarray,
     fits: list[DistributionFit],
+    moments: Moments,
     layer_name: str,
     layer_idx: int,
     save_path: Path,
@@ -49,9 +50,17 @@ def plot_layer_fit(
         ax.plot(x, _pdf_values(fit.distribution, vec, x),
                 color=DIST_COLORS[fit.distribution], linewidth=lw, linestyle=ls, label=label)
 
-    textstr = "\n".join(
+    eda_lines = [
+        f"n         = {moments.n:,}",
+        f"Mean      = {moments.mean:.5f}",
+        f"Variance  = {moments.variance:.6f}",
+        f"Skewness  = {moments.skewness:.4f}",
+        f"Kurtosis  = {moments.kurtosis:.4f}",
+    ]
+    fit_lines = [
         f"{f.distribution.name:10s} KS={f.ks_statistic:.4f}  p={f.ks_pvalue:.3g}" for f in fits
-    )
+    ]
+    textstr = "\n".join(eda_lines + [""] + fit_lines)
     ax.text(0.98, 0.96, textstr, transform=ax.transAxes, fontsize=7.5,
             va="top", ha="right", bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
             family="monospace")
@@ -79,8 +88,9 @@ def main():
     for idx, (name, arr) in enumerate(layers.items(), 1):
         vec = arr.flatten().astype(np.float32)
         fits = fit_all(vec)
+        moments = Moments.from_array(vec)
         print(f"\n[{idx:>3}/{len(layers)}] {name} n={len(vec):,}")
-        plot_layer_fit(vec, fits, name, idx, hist_dir)
+        plot_layer_fit(vec, fits, moments, name, idx, hist_dir)
 
 
 if __name__ == "__main__":
