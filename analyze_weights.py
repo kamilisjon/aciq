@@ -4,50 +4,66 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 import onnx
+from enum import StrEnum
 
 from aciq.onnx_io import load_onnx, extract_layers
-from aciq.statistics import Distribution, DistributionFit, Moments, fit_distribution
+from aciq.statistics import Distribution, Gaussian
 
 
 RESULTS_DIR = Path("results")
-MODEL_PATH = Path("models/bert_Opset18.onnx")
+MODEL_PATH = Path("models/resnet50_Opset18.onnx")
+
+class Distributions(StrEnum):
+    GAUSSIAN = "norm"
+    LAPLACE = "laplace"
+    STUDENT_T = 't'
+
 
 DIST_COLORS = {
-    Distribution.GAUSSIAN:  "red",
-    Distribution.LAPLACE:   "green",
-    Distribution.STUDENT_T: "purple",
+    Distributions.GAUSSIAN:  "red",
+    Distributions.LAPLACE:   "green",
+    Distributions.STUDENT_T: "purple",
 }
 
-
-def fit_all(data: np.ndarray) -> list[DistributionFit]:
-    results = [fit_distribution(data, dist) for dist in Distribution]
-    results.sort(key=lambda r: r.ks_statistic)
-    return results
-
-def _pdf_values(dist: Distribution, data: np.ndarray, x: np.ndarray) -> np.ndarray:
-    if dist == Distribution.GAUSSIAN: return stats.norm.pdf(x, *stats.norm.fit(data))
-    if dist == Distribution.LAPLACE: return stats.laplace.pdf(x, *stats.laplace.fit(data))
-    return stats.t.pdf(x, *stats.t.fit(data))
-
-def plot_layer_fit(vec: np.ndarray, fits: list[DistributionFit], moments: Moments, layer_name: str, layer_idx: int, save_path: Path) -> None:
+def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: Path) -> None:
     fig, ax = plt.subplots(figsize=(9, 5))
 
     n_bins = min(200, max(50, len(vec) // 500))
     ax.hist(vec, bins=n_bins, density=True, alpha=0.5, color="steelblue", label="Empirical")
 
-    x = np.linspace(vec.min(), vec.max(), 500)
-    for fit in fits:
-        label = f"{fit.distribution.name.capitalize()}  KS={fit.ks_statistic:.4f}  p={fit.ks_pvalue:.3g}"
-        ax.plot(x, _pdf_values(fit.distribution, vec, x), color=DIST_COLORS[fit.distribution], linewidth=1.2, linestyle="--", label=label)
+
+    x_sorted = np.sort(vec)
+
+    fit_lines = []
+    for dist in [Distributions.GAUSSIAN, Distributions.LAPLACE, Distributions.STUDENT_T]:
+        match dist:
+            case Distributions.GAUSSIAN:
+                dist_fit = Gaussian(x_sorted)
+                ll = dist_fit.log_likelihood
+                pdf = dist_fit.pdf()
+            case Distributions.LAPLACE:
+                params = stats.laplace.fit(vec)
+                ll = np.sum(stats.laplace.logpdf(vec, *params))
+                pdf = stats.laplace.pdf(x_sorted, *params)
+            case Distributions.STUDENT_T:
+                params = stats.t.fit(vec)
+                ll = np.sum(stats.t.logpdf(vec, *params))
+                pdf = stats.t.pdf(x_sorted, *params)
+
+        fit_lines.append(f"{dist:10s} ll={ll:.3g}")
+        ax.plot(x_sorted, pdf, color=DIST_COLORS[dist], linewidth=1.2, linestyle="--", label=dist)
+
+
+    distribution = Distribution(vec)
 
     eda_lines = [
-        f"n         = {moments.n:,}",
-        f"Mean      = {moments.mean:.5f}",
-        f"Variance  = {moments.variance:.6f}",
-        f"Skewness  = {moments.skewness:.4f}",
-        f"Kurtosis  = {moments.kurtosis:.4f}",
+        f"n         = {distribution.n:,}",
+        f"Mean      = {distribution.mean:.5f}",
+        f"Variance  = {distribution.variance:.6f}",
+        f"Skewness  = {distribution.skewness:.4f}",
+        f"Kurtosis  = {distribution.kurtosis:.4f}",
     ]
-    fit_lines = [f"{f.distribution.name:10s} KS={f.ks_statistic:.4f}  p={f.ks_pvalue:.3g} ll={f.log_likelyhood:.3g}" for f in fits]
+
     textstr = "\n".join(eda_lines + [""] + fit_lines)
     ax.text(0.98, 0.96, textstr, transform=ax.transAxes, fontsize=7.5,va="top", ha="right", bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5), family="monospace")
     safe = layer_name.replace("/", "_").replace(":", "_")
@@ -73,9 +89,7 @@ def main():
         print(f"[{idx:>3}/{len(layers)}] {layer.op_type:20} {layer.tensor.name:50} n={n:,}")
         if n > 2000_000:
             continue
-        fits = fit_all(vec)
-        moments = Moments.from_array(vec)
-        plot_layer_fit(vec, fits, moments, layer.tensor.name, idx, RESULTS_DIR)
+        plot_layer_fit(vec, layer.tensor.name, idx, RESULTS_DIR)
 
 
 if __name__ == "__main__":

@@ -1,62 +1,81 @@
-from dataclasses import dataclass
-from enum import StrEnum
+from __future__ import annotations
+from functools import lru_cache
 
 import numpy as np
 from scipy import stats
 
+Q1_PERCENTILE: int = 25
+Q3_PERCENTILE: int = 75
 
-#TODO: What does kurtosis mean? How it is calculated?
 
-@dataclass
-class Moments:
-    mean: float
-    variance: float
-    std: float
-    skewness: float
-    kurtosis: float
-    minimum: float
-    maximum: float
-    q1: float
-    q3: float
-    n: int
+class Distribution:
+    def __init__(self, data: np.ndarray):
+        self._data = data
 
-    @classmethod
-    def from_array(cls, vec: np.ndarray) -> "Moments":
-        return cls(
-            mean=float(np.mean(vec)),
-            variance=float(np.var(vec, ddof=1)),
-            std=float(np.std(vec, ddof=1)),
-            skewness=float(stats.skew(vec)),
-            kurtosis=float(stats.kurtosis(vec)),
-            minimum=float(vec.min()),
-            maximum=float(vec.max()),
-            q1=float(np.percentile(vec, 25)),
-            q3=float(np.percentile(vec, 75)),
-            n=len(vec),
-        )
+    @property
+    @lru_cache(maxsize=None)
+    def mean(self) -> float: return float(np.mean(self._data))
 
-class Distribution(StrEnum):
-    GAUSSIAN = "norm"
-    LAPLACE = "laplace"
-    STUDENT_T = 't'
+    @property
+    @lru_cache(maxsize=None)
+    def variance(self) -> float: return float(np.var(self._data, ddof=1))
 
-@dataclass
-class DistributionFit:
-    distribution: Distribution
-    log_likelyhood: float
-    ks_statistic: float
-    ks_pvalue: float
+    @property
+    @lru_cache(maxsize=None)
+    def std(self) -> float: return float(np.std(self._data, ddof=1))
 
-def fit_distribution(data: np.ndarray, dist: Distribution) -> DistributionFit:
-    match dist:
-        case Distribution.GAUSSIAN:
-            params = stats.norm.fit(data)
-            ll = np.sum(stats.norm.logpdf(data, *params))
-        case Distribution.LAPLACE:
-            params = stats.laplace.fit(data)
-            ll = np.sum(stats.laplace.logpdf(data, *params))
-        case Distribution.STUDENT_T:
-            params = stats.t.fit(data)
-            ll = np.sum(stats.t.logpdf(data, *params))
-    ks_stat, ks_p = stats.kstest(data, dist, args=params)
-    return DistributionFit(dist, float(ll), float(ks_stat), float(ks_p))
+    @property
+    @lru_cache(maxsize=None)
+    def skewness(self) -> float: return float(stats.skew(self._data))
+
+    #TODO: What does kurtosis mean? How it is calculated?
+    @property
+    @lru_cache(maxsize=None)
+    def kurtosis(self) -> float: return float(stats.kurtosis(self._data))
+
+    @property
+    @lru_cache(maxsize=None)
+    def minimum(self) -> float: return float(self._data.min())
+
+    @property
+    @lru_cache(maxsize=None)
+    def maximum(self) -> float: return float(self._data.max())
+
+    @property
+    @lru_cache(maxsize=None)
+    def q1(self) -> float: return float(np.percentile(self._data, Q1_PERCENTILE))
+
+    @property
+    @lru_cache(maxsize=None)
+    def q3(self) -> float: return float(np.percentile(self._data, Q3_PERCENTILE))
+
+    @property
+    @lru_cache(maxsize=None)
+    def n(self) -> float: return len(self._data)
+
+
+class Gaussian(Distribution):
+    def __init__(self, data):
+        super().__init__(data)
+
+    @property
+    @lru_cache(maxsize=None)
+    def mu(self) -> float: return self.mean
+
+    # TODO: why cant I directly use self.std? Why does ddof differ?
+    @property
+    @lru_cache(maxsize=None)
+    def sigma(self) -> float: return float(np.std(self._data, ddof=0))
+
+    def pdf(self) -> np.ndarray:
+        z = (self._data - self.mu) / self.sigma
+        return np.exp(-z**2 / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
+
+    def logpdf(self) -> np.ndarray:
+        z = (self._data - self.mu) / self.sigma
+        return -z**2 / 2.0 - np.log(np.sqrt(2.0 * np.pi)) - np.log(self.sigma)
+
+    @property
+    @lru_cache(maxsize=None)
+    def log_likelihood(self) -> float:
+        return float(np.sum(self.logpdf()))
