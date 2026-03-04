@@ -2,12 +2,11 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import stats
 import onnx
 from enum import StrEnum
 
 from aciq.onnx_io import load_onnx, extract_layers
-from aciq.statistics import Distribution, Gaussian
+from aciq.distributions import Distribution, Gaussian, Laplace
 
 
 RESULTS_DIR = Path("results")
@@ -16,13 +15,11 @@ MODEL_PATH = Path("models/resnet50_Opset18.onnx")
 class Distributions(StrEnum):
     GAUSSIAN = "norm"
     LAPLACE = "laplace"
-    STUDENT_T = 't'
 
 
 DIST_COLORS = {
     Distributions.GAUSSIAN:  "red",
     Distributions.LAPLACE:   "green",
-    Distributions.STUDENT_T: "purple",
 }
 
 def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: Path) -> None:
@@ -35,20 +32,16 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
     x_sorted = np.sort(vec)
 
     fit_lines = []
-    for dist in [Distributions.GAUSSIAN, Distributions.LAPLACE, Distributions.STUDENT_T]:
+    for dist in [Distributions.GAUSSIAN, Distributions.LAPLACE]:
         match dist:
             case Distributions.GAUSSIAN:
                 dist_fit = Gaussian(x_sorted)
                 ll = dist_fit.log_likelihood
                 pdf = dist_fit.pdf()
             case Distributions.LAPLACE:
-                params = stats.laplace.fit(vec)
-                ll = np.sum(stats.laplace.logpdf(vec, *params))
-                pdf = stats.laplace.pdf(x_sorted, *params)
-            case Distributions.STUDENT_T:
-                params = stats.t.fit(vec)
-                ll = np.sum(stats.t.logpdf(vec, *params))
-                pdf = stats.t.pdf(x_sorted, *params)
+                dist_fit = Laplace(vec)
+                ll = dist_fit.log_likelihood
+                pdf = Laplace(x_sorted).pdf()
 
         fit_lines.append(f"{dist:10s} ll={ll:.3g}")
         ax.plot(x_sorted, pdf, color=DIST_COLORS[dist], linewidth=1.2, linestyle="--", label=dist)
