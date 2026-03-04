@@ -62,6 +62,7 @@ class Gaussian(Distribution):
         z = (self._data - self.mu) / self.sigma
         return np.exp(-z**2 / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
 
+    # TODO: make np.log(self.pdf()) pass scipy tests
     def logpdf(self) -> np.ndarray:
         z = (self._data - self.mu) / self.sigma
         return -z**2 / 2.0 - np.log(np.sqrt(2.0 * np.pi)) - np.log(self.sigma)
@@ -84,6 +85,7 @@ class Laplace(Distribution):
     def pdf(self) -> np.ndarray:
         return np.exp(-np.abs(self._data - self.mu) / self.b) / (2.0 * self.b)
 
+    # TODO: make np.log(self.pdf()) pass scipy tests
     def logpdf(self) -> np.ndarray:
         z = (self._data - self.mu) / self.b
         return np.log(0.5 * np.exp(-np.abs(z))) - np.log(self.b)
