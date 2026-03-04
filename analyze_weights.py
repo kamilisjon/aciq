@@ -10,7 +10,12 @@ from aciq.distributions import Distribution, Gaussian, Laplace
 
 
 RESULTS_DIR = Path("results")
-MODEL_PATH = Path("models/resnet50_Opset18.onnx")
+
+# TODO: should group layers by which model block that are in. What blocks does ResNet have? Perhaps should group by what activation function is applied?
+models: dict[str, Path] = {
+    'resnet50': Path("models/resnet50_Opset18.onnx"),
+    'bert': Path("models/bert_Opset18.onnx")  # TODO: why some layers of Bert have Add with input weights and other have encapsulated weights? How to unify?
+} 
 
 class Distributions(StrEnum):
     GAUSSIAN = "norm"
@@ -23,6 +28,7 @@ DIST_COLORS = {
 }
 
 def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: Path) -> None:
+    save_path.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(9, 5))
 
     n_bins = min(200, max(50, len(vec) // 500))
@@ -70,20 +76,17 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
     plt.close(fig)
 
 def main():
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    for model_name, model_path in models.items():
+        results_dir = RESULTS_DIR / model_name
+        model = load_onnx(model_path)
+        layers = extract_layers(model)
+        print(f"[{model_name}] Total layers: {len(layers)}")
 
-    model = load_onnx(MODEL_PATH)
-    layers = extract_layers(model)
-    print(f"Total layers: {len(layers)}")
-
-    for idx, layer in enumerate(layers, 1):
-        vec = onnx.numpy_helper.to_array(layer.tensor).flatten().astype(np.float32)
-        n = len(vec)
-        print(f"[{idx:>3}/{len(layers)}] {layer.op_type:20} {layer.tensor.name:50} n={n:,}")
-        if n > 2000_000:
-            continue
-        plot_layer_fit(vec, layer.tensor.name, idx, RESULTS_DIR)
-
+        for idx, layer in enumerate(layers, 1):
+            vec = onnx.numpy_helper.to_array(layer.tensor).flatten().astype(np.float32)
+            n = len(vec)
+            print(f"[{idx:>3}/{len(layers)}] {layer.op_type:20} {layer.tensor.name:50} n={n:,}")
+            plot_layer_fit(vec, layer.tensor.name, idx, results_dir)
 
 if __name__ == "__main__":
     main()

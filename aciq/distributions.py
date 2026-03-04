@@ -7,6 +7,8 @@ from scipy import stats
 Q1_PERCENTILE: int = 25
 Q3_PERCENTILE: int = 75
 
+# TODO: current structure is quite inconvinient. Want to initialise Distribution. Then want to be able call specific distribution features on top.
+#       How would fully functional implementation look?
 
 class Distribution:
     def __init__(self, data: np.ndarray):
@@ -62,6 +64,10 @@ class Gaussian(Distribution):
         z = (self._data - self.mu) / self.sigma
         return np.exp(-z**2 / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
 
+    def pdf_at(self, x: np.ndarray) -> np.ndarray:
+        z = (x - self.mu) / self.sigma
+        return np.exp(-z**2 / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
+
     # TODO: make np.log(self.pdf()) pass scipy tests
     def logpdf(self) -> np.ndarray:
         z = (self._data - self.mu) / self.sigma
@@ -84,6 +90,9 @@ class Laplace(Distribution):
 
     def pdf(self) -> np.ndarray:
         return np.exp(-np.abs(self._data - self.mu) / self.b) / (2.0 * self.b)
+
+    def pdf_at(self, x: np.ndarray) -> np.ndarray:
+        return np.exp(-np.abs(x - self.mu) / self.b) / (2.0 * self.b)
 
     # TODO: make np.log(self.pdf()) pass scipy tests
     def logpdf(self) -> np.ndarray:
