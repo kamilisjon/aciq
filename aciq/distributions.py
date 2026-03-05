@@ -16,33 +16,6 @@ class Distribution:
     def __init__(self, data: np.ndarray):
         self._data = data
 
-    @functools.cached_property
-    def n(self) -> int: return self._n(self._data)
-
-    @functools.cached_property
-    def mean(self) -> float: return self._mean(self._data)
-
-    @functools.cached_property
-    def variance(self) -> float: return self._variance(self._data)
-
-    @functools.cached_property
-    def std(self) -> float: return self._std(self._data)
-
-    @functools.cached_property
-    def skewness(self) -> float: return self._skewness(self._data)
-
-    @functools.cached_property
-    def kurtosis(self) -> float: return self._kurtosis(self._data)
-
-    @functools.cached_property
-    def min(self) -> float: return self._min(self._data)
-
-    @functools.cached_property
-    def median(self) -> float: return self._median(self._data)
-
-    @functools.cached_property
-    def max(self) -> float: return self._max(self._data)
-
     @staticmethod
     def _mean(data: np.ndarray) -> float: return float(np.mean(data))
 
@@ -70,6 +43,33 @@ class Distribution:
 
     @staticmethod
     def _n(data: np.ndarray) -> int: return len(data)
+
+    @functools.cached_property
+    def n(self) -> int: return self._n(self._data)
+
+    @functools.cached_property
+    def mean(self) -> float: return self._mean(self._data)
+
+    @functools.cached_property
+    def variance(self) -> float: return self._variance(self._data)
+
+    @functools.cached_property
+    def std(self) -> float: return self._std(self._data)
+
+    @functools.cached_property
+    def skewness(self) -> float: return self._skewness(self._data)
+
+    @functools.cached_property
+    def kurtosis(self) -> float: return self._kurtosis(self._data)
+
+    @functools.cached_property
+    def min(self) -> float: return self._min(self._data)
+
+    @functools.cached_property
+    def median(self) -> float: return self._median(self._data)
+
+    @functools.cached_property
+    def max(self) -> float: return self._max(self._data)
 
     @functools.cache
     def fit(self, dist_type: DistributionType) -> FittedDistribution:
