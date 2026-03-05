@@ -4,57 +4,81 @@ import functools
 import numpy as np
 from scipy import stats
 
-Q1_PERCENTILE: int = 25
-Q3_PERCENTILE: int = 75
-
-# TODO: current structure is quite inconvinient. Want to initialise Distribution. Then want to be able call specific distribution features on top.
-#       How would fully functional implementation look?
 
 class Distribution:
     def __init__(self, data: np.ndarray):
         self._data = data
 
     @functools.cached_property
-    def mean(self) -> float: return float(np.mean(self._data))
+    def n(self) -> int: return self._n(self._data)
 
     @functools.cached_property
-    def variance(self) -> float: return float(np.var(self._data, ddof=1))
+    def mean(self) -> float: return self._mean(self._data)
 
     @functools.cached_property
-    def std(self) -> float: return float(np.std(self._data, ddof=1))
+    def variance(self) -> float: return self._variance(self._data)
 
     @functools.cached_property
-    def skewness(self) -> float: return float(stats.skew(self._data))
+    def std(self) -> float: return self._std(self._data)
+
+    @functools.cached_property
+    def skewness(self) -> float: return self._skewness(self._data)
+
+    @functools.cached_property
+    def kurtosis(self) -> float: return self._kurtosis(self._data)
+
+    @functools.cached_property
+    def min(self) -> float: return self._min(self._data)
+
+    @functools.cached_property
+    def median(self) -> float: return self._median(self._data)
+
+    @functools.cached_property
+    def max(self) -> float: return self._max(self._data)
+
+    @staticmethod
+    def _mean(data: np.ndarray) -> float: return float(np.mean(data))
+
+    @staticmethod
+    def _variance(data: np.ndarray) -> float: return float(np.var(data, ddof=1))
+
+    @staticmethod
+    def _std(data: np.ndarray) -> float: return float(np.std(data, ddof=1))
+
+    @staticmethod
+    def _skewness(data: np.ndarray) -> float: return float(stats.skew(data))
 
     #TODO: What does kurtosis mean? How it is calculated?
-    @functools.cached_property
-    def kurtosis(self) -> float: return float(stats.kurtosis(self._data))
+    @staticmethod
+    def _kurtosis(data: np.ndarray) -> float: return float(stats.kurtosis(data))
+
+    @staticmethod
+    def _min(data: np.ndarray) -> float: return float(data.min())
+
+    @staticmethod
+    def _max(data: np.ndarray) -> float: return float(data.max())
+
+    @staticmethod
+    def _median(data: np.ndarray) -> float: return float(np.median(data))
+
+    @staticmethod
+    def _n(data: np.ndarray) -> int: return len(data)
 
     @functools.cached_property
-    def minimum(self) -> float: return float(self._data.min())
+    def gaussian(self) -> Laplace:
+        return Laplace(self._data)
 
     @functools.cached_property
-    def maximum(self) -> float: return float(self._data.max())
-
-    @functools.cached_property
-    def median(self) -> float: return float(np.median(self._data))
-
-    @functools.cached_property
-    def q1(self) -> float: return float(np.percentile(self._data, Q1_PERCENTILE))
-
-    @functools.cached_property
-    def q3(self) -> float: return float(np.percentile(self._data, Q3_PERCENTILE))
-
-    @functools.cached_property
-    def n(self) -> float: return len(self._data)
+    def laplace(self) -> Laplace:
+        return Gaussian(self._data)
 
 
-class Gaussian(Distribution):
+class Gaussian:
     def __init__(self, data):
-        super().__init__(data)
+        self._data = data
 
     @property
-    def mu(self) -> float: return self.mean
+    def mu(self) -> float: return Distribution._mean(self._data)
 
     # TODO: why cant I directly use self.std? Why does ddof differ?
     @functools.cached_property
@@ -78,12 +102,12 @@ class Gaussian(Distribution):
         return float(np.sum(self.logpdf()))
 
 
-class Laplace(Distribution):
+class Laplace:
     def __init__(self, data):
-        super().__init__(data)
+        self._data = data
 
     @property
-    def mu(self) -> float: return self.median
+    def mu(self) -> float: return Distribution._median(self._data)
 
     @functools.cached_property
     def b(self) -> float: return float(np.mean(np.abs(self._data - self.mu)))

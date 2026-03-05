@@ -35,24 +35,20 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
 
 
     x_sorted = np.sort(vec)
+    distribution = Distribution(x_sorted)
 
     fit_lines = []
     for dist in [Distributions.GAUSSIAN, Distributions.LAPLACE]:
         match dist:
             case Distributions.GAUSSIAN:
-                dist_fit = Gaussian(x_sorted)
-                ll = dist_fit.log_likelihood
-                pdf = dist_fit.pdf()
+                ll = distribution.gaussian.log_likelihood
+                pdf = distribution.gaussian.pdf()
             case Distributions.LAPLACE:
-                dist_fit = Laplace(vec)
-                ll = dist_fit.log_likelihood
-                pdf = Laplace(x_sorted).pdf()
+                ll = distribution.laplace.log_likelihood
+                pdf = distribution.laplace.pdf()
 
         fit_lines.append(f"{dist:10s} ll={ll:.3g}")
         ax.plot(x_sorted, pdf, color=DIST_COLORS[dist], linewidth=1.2, linestyle="--", label=dist)
-
-
-    distribution = Distribution(vec)
 
     eda_lines = [
         f"n         = {distribution.n:,}",
