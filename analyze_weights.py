@@ -1,12 +1,11 @@
 from pathlib import Path
-from enum import StrEnum
 
 import numpy as np
 import matplotlib.pyplot as plt
 import onnx
 
 from aciq.onnx_io import load_onnx, extract_layers
-from aciq.distributions import Distribution
+from aciq.distributions import Distribution, DistributionType
 
 
 RESULTS_DIR = Path("results")
@@ -15,16 +14,11 @@ RESULTS_DIR = Path("results")
 models: dict[str, Path] = {
     'resnet50': Path("models/resnet50_Opset18.onnx"),
     'bert': Path("models/bert_Opset18.onnx")  # TODO: why some layers of Bert have Add with input weights and other have encapsulated weights? How to unify?
-} 
-
-class Distributions(StrEnum):
-    GAUSSIAN = "norm"
-    LAPLACE = "laplace"
-
+}
 
 DIST_COLORS = {
-    Distributions.GAUSSIAN:  "red",
-    Distributions.LAPLACE:   "green",
+    DistributionType.GAUSSIAN:  "red",
+    DistributionType.LAPLACE:   "green",
 }
 
 def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: Path) -> None:
@@ -37,17 +31,13 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
     distribution = Distribution(x_sorted)
 
     fit_lines = []
-    for dist in [Distributions.GAUSSIAN, Distributions.LAPLACE]:
-        match dist:
-            case Distributions.GAUSSIAN:
-                ll = distribution.gaussian.log_likelihood
-                pdf = distribution.gaussian.pdf()
-            case Distributions.LAPLACE:
-                ll = distribution.laplace.log_likelihood
-                pdf = distribution.laplace.pdf()
+    for dist_type in DistributionType:
+        fitted = distribution.fit(dist_type)
+        ll = fitted.log_likelihood
+        pdf = fitted.pdf()
 
-        fit_lines.append(f"{dist:10s} ll={ll:.3g}")
-        ax.plot(x_sorted, pdf, color=DIST_COLORS[dist], linewidth=1.2, linestyle="--", label=dist)
+        fit_lines.append(f"{dist_type:10s} ll={ll:.3g}")
+        ax.plot(x_sorted, pdf, color=DIST_COLORS[dist_type], linewidth=1.2, linestyle="--", label=dist_type)
 
     eda_lines = [
         f"n         = {distribution.n:,}",

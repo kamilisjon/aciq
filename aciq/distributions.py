@@ -1,8 +1,15 @@
 from __future__ import annotations
 import functools
+from abc import ABC, abstractmethod
+from enum import StrEnum
 
 import numpy as np
 from scipy import stats
+
+
+class DistributionType(StrEnum):
+    GAUSSIAN = "Gaussian"
+    LAPLACE = "Laplace"
 
 
 class Distribution:
@@ -64,21 +71,36 @@ class Distribution:
     @staticmethod
     def _n(data: np.ndarray) -> int: return len(data)
 
-    @functools.cached_property
-    def gaussian(self) -> Laplace:
-        return Laplace(self._data)
-
-    @functools.cached_property
-    def laplace(self) -> Laplace:
-        return Gaussian(self._data)
+    @functools.cache()
+    def fit(self, dist_type: DistributionType) -> FittedDistribution:
+        match dist_type:
+            case DistributionType.GAUSSIAN:
+                return Gaussian(self._data)
+            case DistributionType.LAPLACE:
+                return Laplace(self._data)
 
 #TODO: test against R. Gaussian and Laplace.
 #TODO: find scientific article for distribution scientific backing. Need to be citable, so could be included into report. Gaussian and Laplace.
 
-class Gaussian:
-    def __init__(self, data):
+class FittedDistribution(ABC):
+    def __init__(self, data: np.ndarray):
         self._data = data
 
+    @abstractmethod
+    def pdf(self) -> np.ndarray: ...
+
+    @abstractmethod
+    def pdf_at(self, x: np.ndarray) -> np.ndarray: ...
+
+    @abstractmethod
+    def logpdf(self) -> np.ndarray: ...
+
+    @functools.cached_property
+    def log_likelihood(self) -> float:
+        return float(np.sum(self.logpdf()))
+
+
+class Gaussian(FittedDistribution):
     @property
     def mu(self) -> float: return Distribution._mean(self._data)
 
@@ -99,15 +121,8 @@ class Gaussian:
         z = (self._data - self.mu) / self.sigma
         return -z**2 / 2.0 - np.log(np.sqrt(2.0 * np.pi)) - np.log(self.sigma)
 
-    @functools.cached_property
-    def log_likelihood(self) -> float:
-        return float(np.sum(self.logpdf()))
 
-
-class Laplace:
-    def __init__(self, data):
-        self._data = data
-
+class Laplace(FittedDistribution):
     @property
     def mu(self) -> float: return Distribution._median(self._data)
 
@@ -124,7 +139,3 @@ class Laplace:
     def logpdf(self) -> np.ndarray:
         z = (self._data - self.mu) / self.b
         return np.log(0.5 * np.exp(-np.abs(z))) - np.log(self.b)
-
-    @functools.cached_property
-    def log_likelihood(self) -> float:
-        return float(np.sum(self.logpdf()))
