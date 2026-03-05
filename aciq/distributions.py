@@ -7,54 +7,30 @@ from enum import Enum
 import numpy as np
 
 
+# TODO: What does skewness mean?
+# TODO: should we return same type as would numpy return for kurtosis and skewness?
+def skewness(data: np.ndarray) -> float:
+  d = data - np.mean(data)
+  return float(np.mean(d**3) / np.mean(d**2) ** 1.5)
+
+
+# TODO: What does kurtosis mean? What variants of kurtosis exist as scipy has bias and fisher parameters?
+def kurtosis(data: np.ndarray) -> float:
+  d = data - np.mean(data)
+  return float(np.mean(d**4) / np.mean(d**2) ** 2 - 3.0)
+
+
+# TODO: test against R. all distributions
+# TODO: find scientific article for distribution scientific backing. Need to be citable, so could be included into report. all distributions
+
+
 class DistributionType(str, Enum):
   GAUSSIAN = "Gaussian"
   LAPLACE = "Laplace"
   STUDENT_T = "Student-t"
 
 
-class Distribution:
-  def __init__(self, data: np.ndarray):
-    self._data = data
-
-  # TODO: What does skewness mean?
-  @staticmethod
-  def _skewness(data: np.ndarray) -> float:
-    d = data - np.mean(data)
-    return float(np.mean(d**3) / np.mean(d**2) ** 1.5)
-
-  # TODO: What does kurtosis mean? What variants of kurtosis exist as scipy has bias and fisher parameters?
-  @staticmethod
-  def _kurtosis(data: np.ndarray) -> float:
-    d = data - np.mean(data)
-    return float(np.mean(d**4) / np.mean(d**2) ** 2 - 3.0)
-
-  @functools.cached_property
-  def skewness(self) -> float:
-    return self._skewness(self._data)
-
-  @functools.cached_property
-  def kurtosis(self) -> float:
-    return self._kurtosis(self._data)
-
-  @functools.cache
-  def fit(self, dist_type: DistributionType) -> FittedDistribution:
-    match dist_type:
-      case DistributionType.GAUSSIAN:
-        return Gaussian(self._data)
-      case DistributionType.LAPLACE:
-        return Laplace(self._data)
-      case DistributionType.STUDENT_T:
-        return StudentT(self._data)
-      case _:
-        raise ValueError(f"Unsupported distribution type: {dist_type}")
-
-
-# TODO: test against R. Gaussian and Laplace.
-# TODO: find scientific article for distribution scientific backing. Need to be citable, so could be included into report. Gaussian and Laplace.
-
-
-class FittedDistribution(ABC):
+class Distribution(ABC):
   def __init__(self, data: np.ndarray):
     self._data = data
 
@@ -72,8 +48,20 @@ class FittedDistribution(ABC):
   def log_likelihood(self) -> float:
     return float(np.sum(self.logpdf()))
 
+  @staticmethod
+  def fit(data: np.ndarray, dist_type: DistributionType) -> Distribution:
+    match dist_type:
+      case DistributionType.GAUSSIAN:
+        return Gaussian(data)
+      case DistributionType.LAPLACE:
+        return Laplace(data)
+      case DistributionType.STUDENT_T:
+        return StudentT(data)
+      case _:
+        raise ValueError(f"Unsupported distribution type: {dist_type}")
 
-class Gaussian(FittedDistribution):
+
+class Gaussian(Distribution):
   @property
   def mu(self) -> float:
     return np.mean(self._data)
@@ -87,7 +75,7 @@ class Gaussian(FittedDistribution):
     return np.exp(-(z**2) / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
 
 
-class Laplace(FittedDistribution):
+class Laplace(Distribution):
   @property
   def mu(self) -> float:
     return np.median(self._data)
@@ -100,10 +88,10 @@ class Laplace(FittedDistribution):
     return np.exp(-np.abs(x - self.mu) / self.b) / (2.0 * self.b)
 
 
-class StudentT(FittedDistribution):
+class StudentT(Distribution):
   @functools.cached_property
   def df(self) -> float:
-    k = Distribution._kurtosis(self._data)
+    k = kurtosis(self._data)
     # TODO: why df is inf at kurtosis <= 0?
     if k <= 0:
       return float("inf")

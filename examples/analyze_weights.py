@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import onnx
 
 from aciq.onnx_io import load_onnx, extract_layers
-from aciq.distributions import Distribution, DistributionType
+from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
 
 
 RESULTS_DIR = Path("results")
@@ -30,24 +30,20 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
   fig, ax = plt.subplots(figsize=(9, 5))
   ax.hist(vec, bins=200, density=True, alpha=0.5, color="steelblue", label="Empirical")
 
-  x_sorted = np.sort(vec)
-  distribution = Distribution(x_sorted)
-
   fit_lines = []
+  vec_sorted = np.sort(vec)
   for dist_type in DistributionType:
-    fitted = distribution.fit(dist_type)
+    fitted = Distribution.fit(vec_sorted, dist_type)
     ll = fitted.log_likelihood
-    pdf = fitted.pdf()
-
     fit_lines.append(f"{dist_type:10s} ll={ll:.3g}")
-    ax.plot(x_sorted, pdf, color=DIST_COLORS[dist_type], linewidth=1.2, linestyle="--", label=dist_type)
+    ax.plot(vec_sorted, fitted.pdf(), color=DIST_COLORS[dist_type], linewidth=1.2, linestyle="--", label=dist_type)
 
   eda_lines = [
-    f"n         = {x_sorted.size:,}",
-    f"Mean      = {float(np.mean(x_sorted)):.5f}",
-    f"Variance  = {float(np.var(x_sorted)):.6f}",
-    f"Skewness  = {distribution.skewness:.4f}",
-    f"Kurtosis  = {distribution.kurtosis:.4f}",
+    f"n         = {vec.size:,}",
+    f"Mean      = {float(np.mean(vec)):.5f}",
+    f"Variance  = {float(np.var(vec)):.6f}",
+    f"Skewness  = {skewness(vec):.4f}",
+    f"Kurtosis  = {kurtosis(vec):.4f}",
   ]
 
   textstr = "\n".join(eda_lines + [""] + fit_lines)

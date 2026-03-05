@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from scipy import stats
 
-from aciq.distributions import Distribution, DistributionType, Gaussian, Laplace, StudentT
+from aciq.distributions import Distribution, DistributionType, Gaussian, Laplace, StudentT, skewness, kurtosis
 from test.helpers import make_gaussian_data, make_laplace_data, make_student_t_data, make_nonpositive_kurtosis_data
 
 
@@ -13,14 +13,14 @@ LAPLACE_TEST_MU_B: list[tuple[float, float]] = GAUSSIAN_TEST_MU_SIGMA
 STUDENT_T_TEST_DF_LOC_SCALE: list[tuple[float, float, float]] = [(5.0, 0.0, 1.0), (10.0, -3.0, 0.5), (3.0, 100.0, 50.0)]
 
 
-class TestDistributionStatistics(unittest.TestCase):
+class TestCustomStatistics(unittest.TestCase):
   def test_skewness_matches_scipy(self):
     data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution._skewness(data), stats.skew(data))
+    np.testing.assert_allclose(skewness(data), stats.skew(data))
 
   def test_kurtosis_matches_scipy(self):
     data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution._kurtosis(data), stats.kurtosis(data))
+    np.testing.assert_allclose(kurtosis(data), stats.kurtosis(data))
 
 
 class TestGaussian(unittest.TestCase):
@@ -129,7 +129,7 @@ class TestStudentT(unittest.TestCase):
 
   def test_df_is_inf_when_kurtosis_nonpositive(self):
     data = make_nonpositive_kurtosis_data()
-    assert Distribution._kurtosis(data) <= 0
+    assert kurtosis(data) <= 0
     assert StudentT(data).df == float("inf")
     # Test if does not fail with inf df
     StudentT(data).scale
@@ -148,19 +148,19 @@ class TestStudentT(unittest.TestCase):
 class TestDistributionFit(unittest.TestCase):
   def test_fit_gaussian_returns_gaussian(self):
     data = make_gaussian_data()
-    assert isinstance(Distribution(data).fit(DistributionType.GAUSSIAN), Gaussian)
+    assert isinstance(Distribution.fit(data, DistributionType.GAUSSIAN), Gaussian)
 
   def test_fit_laplace_returns_laplace(self):
     data = make_gaussian_data()
-    assert isinstance(Distribution(data).fit(DistributionType.LAPLACE), Laplace)
+    assert isinstance(Distribution.fit(data, DistributionType.LAPLACE), Laplace)
 
   def test_fit_student_t_returns_student_t(self):
     data = make_gaussian_data()
-    assert isinstance(Distribution(data).fit(DistributionType.STUDENT_T), StudentT)
+    assert isinstance(Distribution.fit(data, DistributionType.STUDENT_T), StudentT)
 
   def test_fit_gaussian_matches_direct(self):
     data = make_gaussian_data()
-    fitted = Distribution(data).fit(DistributionType.GAUSSIAN)
+    fitted = Distribution.fit(data, DistributionType.GAUSSIAN)
     assert isinstance(fitted, Gaussian)
     direct = Gaussian(data)
     assert fitted.mu == direct.mu
@@ -168,7 +168,7 @@ class TestDistributionFit(unittest.TestCase):
 
   def test_fit_laplace_matches_direct(self):
     data = make_gaussian_data()
-    fitted = Distribution(data).fit(DistributionType.LAPLACE)
+    fitted = Distribution.fit(data, DistributionType.LAPLACE)
     assert isinstance(fitted, Laplace)
     direct = Laplace(data)
     assert fitted.mu == direct.mu
@@ -176,7 +176,7 @@ class TestDistributionFit(unittest.TestCase):
 
   def test_fit_student_t_matches_direct(self):
     data = make_gaussian_data()
-    fitted = Distribution(data).fit(DistributionType.STUDENT_T)
+    fitted = Distribution.fit(data, DistributionType.STUDENT_T)
     assert isinstance(fitted, StudentT)
     direct = StudentT(data)
     assert fitted.df == direct.df
@@ -184,24 +184,16 @@ class TestDistributionFit(unittest.TestCase):
     assert fitted.scale == direct.scale
 
   def test_all_distribution_types_have_fit(self):
-    d = Distribution(make_gaussian_data())
+    data = make_gaussian_data()
     for dist_type in DistributionType:
-      d.fit(dist_type)
+      Distribution.fit(data, dist_type)
 
   def test_fit_raises_for_unsupported_type(self):
     with pytest.raises(ValueError):
-      Distribution(make_gaussian_data()).fit("unsupported")
+      Distribution.fit(make_gaussian_data(), "unsupported")  # type: ignore[arg-type]
 
 
 class TestCaching(unittest.TestCase):
-  def test_distribution_skewness_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.skewness is d.skewness
-
-  def test_distribution_kurtosis_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.kurtosis is d.kurtosis
-
   def test_gaussian_sigma_is_cached(self):
     g = Gaussian(make_gaussian_data())
     assert g.sigma is g.sigma
@@ -229,11 +221,6 @@ class TestCaching(unittest.TestCase):
   def test_student_t_log_likelihood_is_cached(self):
     t = StudentT(make_gaussian_data())
     assert t.log_likelihood is t.log_likelihood
-
-  def test_fit_is_cached(self):
-    data = make_gaussian_data()
-    d = Distribution(data)
-    assert d.fit(DistributionType.GAUSSIAN) is d.fit(DistributionType.GAUSSIAN)
 
 
 if __name__ == "__main__":
