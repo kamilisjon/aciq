@@ -31,6 +31,14 @@ class TestDistributionStatistics(unittest.TestCase):
     data = make_gaussian_data()
     np.testing.assert_allclose(Distribution._median(data), statistics.median(data.tolist()))
 
+  def test_skewness_matches_scipy(self):
+    data = make_gaussian_data()
+    np.testing.assert_allclose(Distribution._skewness(data), stats.skew(data))
+
+  def test_kurtosis_matches_scipy(self):
+    data = make_gaussian_data()
+    np.testing.assert_allclose(Distribution._kurtosis(data), stats.kurtosis(data))
+
   def test_min(self):
     data = make_gaussian_data()
     assert Distribution._min(data) == min(data.tolist())
