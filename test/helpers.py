@@ -10,7 +10,7 @@ def make_gaussian_data(mu: float = 3.0, sigma: float = 1.5, n: int = DISTRIBUTIO
 
 
 def make_nonpositive_kurtosis_data(seed: int = 42) -> np.ndarray:
-  # Uniform distribution has excess kurtosis = -1.2
+  # Uniform distribution has excess kurtosis = -1.2 TODO: why so?
   return np.random.default_rng(seed).uniform(size=50_000)
 
 

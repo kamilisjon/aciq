@@ -158,6 +158,7 @@ class StudentT(FittedDistribution):
   @functools.cached_property
   def df(self) -> float:
     k = Distribution._kurtosis(self._data)
+    # TODO: why df is inf at kurtosis <= 0?
     if k <= 0:
       return float("inf")
     return max(6.0 / k + 4.0, 2.01)
@@ -169,6 +170,7 @@ class StudentT(FittedDistribution):
   @functools.cached_property
   def scale(self) -> float:
     var = float(np.var(self._data, ddof=0))
+    # TODO: why this formula for non positive kurtosis / inf df?
     if np.isinf(self.df):
       return float(np.sqrt(var))
     return float(np.sqrt(var * (self.df - 2.0) / self.df))

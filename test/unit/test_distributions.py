@@ -119,7 +119,7 @@ class TestStudentT:
     data = make_nonpositive_kurtosis_data()
     assert Distribution._kurtosis(data) <= 0
     assert StudentT(data).df == float("inf")
-    # Test if does not fail with in inf df
+    # Test if does not fail with inf df
     StudentT(data).scale
     StudentT(data).pdf()
     StudentT(data).log_likelihood
