@@ -43,9 +43,9 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
     ax.plot(x_sorted, pdf, color=DIST_COLORS[dist_type], linewidth=1.2, linestyle="--", label=dist_type)
 
   eda_lines = [
-    f"n         = {distribution.n:,}",
-    f"Mean      = {distribution.mean:.5f}",
-    f"Variance  = {distribution.variance:.6f}",
+    f"n         = {x_sorted.size:,}",
+    f"Mean      = {float(np.mean(x_sorted)):.5f}",
+    f"Variance  = {float(np.var(x_sorted)):.6f}",
     f"Skewness  = {distribution.skewness:.4f}",
     f"Kurtosis  = {distribution.kurtosis:.4f}",
   ]

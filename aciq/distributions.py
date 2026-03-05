@@ -17,67 +17,17 @@ class Distribution:
   def __init__(self, data: np.ndarray):
     self._data = data
 
-  @staticmethod
-  def _mean(data: np.ndarray) -> float:
-    return float(np.mean(data))
-
-  @staticmethod
-  def _variance(data: np.ndarray) -> float:
-    return float(np.var(data))
-
-  @staticmethod
-  def _stdev(data: np.ndarray) -> float:
-    return float(np.sqrt(Distribution._variance(data)))
-
   # TODO: What does skewness mean?
   @staticmethod
   def _skewness(data: np.ndarray) -> float:
-    mean = Distribution._mean(data)
-    d = data - mean
-    m2 = Distribution._mean(d**2)
-    m3 = Distribution._mean(d**3)
-    return float(m3 / m2**1.5)
+    d = data - np.mean(data)
+    return float(np.mean(d**3) / np.mean(d**2) ** 1.5)
 
   # TODO: What does kurtosis mean? What variants of kurtosis exist as scipy has bias and fisher parameters?
   @staticmethod
   def _kurtosis(data: np.ndarray) -> float:
-    mean = Distribution._mean(data)
-    d = data - mean
-    m2 = Distribution._mean(d**2)
-    m4 = Distribution._mean(d**4)
-    return float(m4 / m2**2 - 3.0)
-
-  @staticmethod
-  def _min(data: np.ndarray) -> float:
-    return float(data.min())
-
-  @staticmethod
-  def _max(data: np.ndarray) -> float:
-    return float(data.max())
-
-  @staticmethod
-  def _median(data: np.ndarray) -> float:
-    return float(np.median(data))
-
-  @staticmethod
-  def _n(data: np.ndarray) -> int:
-    return len(data)
-
-  @functools.cached_property
-  def n(self) -> int:
-    return self._n(self._data)
-
-  @functools.cached_property
-  def mean(self) -> float:
-    return self._mean(self._data)
-
-  @functools.cached_property
-  def variance(self) -> float:
-    return self._variance(self._data)
-
-  @functools.cached_property
-  def stdev(self) -> float:
-    return self._stdev(self._data)
+    d = data - np.mean(data)
+    return float(np.mean(d**4) / np.mean(d**2) ** 2 - 3.0)
 
   @functools.cached_property
   def skewness(self) -> float:
@@ -86,18 +36,6 @@ class Distribution:
   @functools.cached_property
   def kurtosis(self) -> float:
     return self._kurtosis(self._data)
-
-  @functools.cached_property
-  def min(self) -> float:
-    return self._min(self._data)
-
-  @functools.cached_property
-  def median(self) -> float:
-    return self._median(self._data)
-
-  @functools.cached_property
-  def max(self) -> float:
-    return self._max(self._data)
 
   @functools.cache
   def fit(self, dist_type: DistributionType) -> FittedDistribution:
@@ -138,11 +76,11 @@ class FittedDistribution(ABC):
 class Gaussian(FittedDistribution):
   @property
   def mu(self) -> float:
-    return Distribution._mean(self._data)
+    return np.mean(self._data)
 
   @functools.cached_property
   def sigma(self) -> float:
-    return Distribution._stdev(self._data)
+    return np.std(self._data)
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     z = (x - self.mu) / self.sigma
@@ -152,7 +90,7 @@ class Gaussian(FittedDistribution):
 class Laplace(FittedDistribution):
   @property
   def mu(self) -> float:
-    return Distribution._median(self._data)
+    return np.median(self._data)
 
   @functools.cached_property
   def b(self) -> float:
@@ -173,11 +111,11 @@ class StudentT(FittedDistribution):
 
   @property
   def loc(self) -> float:
-    return Distribution._mean(self._data)
+    return np.mean(self._data)
 
   @functools.cached_property
   def scale(self) -> float:
-    var = Distribution._variance(self._data)
+    var = np.var(self._data)
     # TODO: why this formula for non positive kurtosis / inf df?
     if np.isinf(self.df):
       return float(np.sqrt(var))

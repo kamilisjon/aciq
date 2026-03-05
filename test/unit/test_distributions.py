@@ -1,4 +1,3 @@
-import statistics
 import unittest
 
 import numpy as np
@@ -15,22 +14,6 @@ STUDENT_T_TEST_DF_LOC_SCALE: list[tuple[float, float, float]] = [(5.0, 0.0, 1.0)
 
 
 class TestDistributionStatistics(unittest.TestCase):
-  def test_mean(self):
-    data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution._mean(data), statistics.mean(data.tolist()))
-
-  def test_variance(self):
-    data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution._variance(data), statistics.pvariance(data.tolist()))
-
-  def test_stdev(self):
-    data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution._stdev(data), statistics.pstdev(data.tolist()))
-
-  def test_median(self):
-    data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution._median(data), statistics.median(data.tolist()))
-
   def test_skewness_matches_scipy(self):
     data = make_gaussian_data()
     np.testing.assert_allclose(Distribution._skewness(data), stats.skew(data))
@@ -38,48 +21,6 @@ class TestDistributionStatistics(unittest.TestCase):
   def test_kurtosis_matches_scipy(self):
     data = make_gaussian_data()
     np.testing.assert_allclose(Distribution._kurtosis(data), stats.kurtosis(data))
-
-  def test_min(self):
-    data = make_gaussian_data()
-    assert Distribution._min(data) == min(data.tolist())
-
-  def test_max(self):
-    data = make_gaussian_data()
-    assert Distribution._max(data) == max(data.tolist())
-
-  def test_n(self):
-    data = make_gaussian_data()
-    assert Distribution._n(data) == len(data.tolist())
-
-
-class TestDistributionCachedProperties(unittest.TestCase):
-  def test_mean(self):
-    data = make_gaussian_data()
-    assert Distribution(data).mean == Distribution._mean(data)
-
-  def test_variance(self):
-    data = make_gaussian_data()
-    assert Distribution(data).variance == Distribution._variance(data)
-
-  def test_std(self):
-    data = make_gaussian_data()
-    assert Distribution(data).stdev == Distribution._stdev(data)
-
-  def test_median(self):
-    data = make_gaussian_data()
-    assert Distribution(data).median == Distribution._median(data)
-
-  def test_min(self):
-    data = make_gaussian_data()
-    assert Distribution(data).min == Distribution._min(data)
-
-  def test_max(self):
-    data = make_gaussian_data()
-    assert Distribution(data).max == Distribution._max(data)
-
-  def test_n(self):
-    data = make_gaussian_data()
-    assert Distribution(data).n == len(data.tolist())
 
 
 class TestGaussian(unittest.TestCase):
@@ -253,18 +194,6 @@ class TestDistributionFit(unittest.TestCase):
 
 
 class TestCaching(unittest.TestCase):
-  def test_distribution_mean_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.mean is d.mean
-
-  def test_distribution_variance_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.variance is d.variance
-
-  def test_distribution_std_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.stdev is d.stdev
-
   def test_distribution_skewness_is_cached(self):
     d = Distribution(make_gaussian_data())
     assert d.skewness is d.skewness
@@ -272,18 +201,6 @@ class TestCaching(unittest.TestCase):
   def test_distribution_kurtosis_is_cached(self):
     d = Distribution(make_gaussian_data())
     assert d.kurtosis is d.kurtosis
-
-  def test_distribution_min_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.min is d.min
-
-  def test_distribution_max_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.max is d.max
-
-  def test_distribution_median_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.median is d.median
 
   def test_gaussian_sigma_is_cached(self):
     g = Gaussian(make_gaussian_data())
