@@ -21,11 +21,11 @@ class TestDistributionStatistics(unittest.TestCase):
 
   def test_variance(self):
     data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution._variance(data), statistics.variance(data.tolist()))
+    np.testing.assert_allclose(Distribution._variance(data), statistics.pvariance(data.tolist()))
 
   def test_stdev(self):
     data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution._stdev(data), statistics.stdev(data.tolist()))
+    np.testing.assert_allclose(Distribution._stdev(data), statistics.pstdev(data.tolist()))
 
   def test_median(self):
     data = make_gaussian_data()
