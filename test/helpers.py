@@ -1,23 +1,22 @@
 import numpy as np
 
-SEED: int = 42
 DISTRIBUTION_SAMPLE_SIZE: int = 50_000
 RELATIVE_TOLERANCE = 1e-10
 
 
-def make_gaussian_data(mu: float = 3.0, sigma: float = 1.5, n: int = DISTRIBUTION_SAMPLE_SIZE, seed: int = SEED) -> np.ndarray:
+def make_gaussian_data(mu: float = 3.0, sigma: float = 1.5, n: int = DISTRIBUTION_SAMPLE_SIZE, seed: int | None = None) -> np.ndarray:
   return np.random.default_rng(seed).normal(loc=mu, scale=sigma, size=n)
 
 
-def make_nonpositive_kurtosis_data(seed: int = 42) -> np.ndarray:
+def make_nonpositive_kurtosis_data(seed: int | None = None) -> np.ndarray:
   # Uniform distribution has excess kurtosis = -1.2 TODO: why so?
   return np.random.default_rng(seed).uniform(size=50_000)
 
 
-def make_laplace_data(mu: float, b: float, n: int = DISTRIBUTION_SAMPLE_SIZE, seed: int = SEED) -> np.ndarray:
+def make_laplace_data(mu: float, b: float, n: int = DISTRIBUTION_SAMPLE_SIZE, seed: int | None = None) -> np.ndarray:
   return np.random.default_rng(seed).laplace(loc=mu, scale=b, size=n)
 
 
-def make_student_t_data(df: float, loc: float, scale: float, n: int = DISTRIBUTION_SAMPLE_SIZE, seed: int = SEED) -> np.ndarray:
+def make_student_t_data(df: float, loc: float, scale: float, n: int = DISTRIBUTION_SAMPLE_SIZE, seed: int | None = None) -> np.ndarray:
   rng = np.random.default_rng(seed)
   return rng.standard_t(df, size=n) * scale + loc
