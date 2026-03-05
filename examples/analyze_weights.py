@@ -13,7 +13,7 @@ RESULTS_DIR = Path("results")
 # TODO: should group layers by which model block that are in. What blocks does ResNet have?
 #       Perhaps should group by what activation function is applied?
 # TODO: why some layers of Bert have Add with input weights and other have encapsulated weights? How to unify?
-# TODO: add this file testing to CI.
+# TODO: add this file testing to CI. Will need to add models auto download and will need to study GitHub caching.
 
 models: dict[str, Path] = {"resnet50": Path("models/resnet50_Opset18.onnx"), "bert": Path("models/bert_Opset18.onnx")}
 
@@ -42,8 +42,8 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
     f"n         = {vec.size:,}",
     f"Mean      = {float(np.mean(vec)):.5f}",
     f"Variance  = {float(np.var(vec)):.6f}",
-    f"Skewness  = {skewness(vec):.4f}",
-    f"Kurtosis  = {kurtosis(vec):.4f}",
+    f"Skewness  = {float(skewness(vec)):.4f}",
+    f"Kurtosis  = {float(kurtosis(vec)):.4f}",
   ]
 
   textstr = "\n".join(eda_lines + [""] + fit_lines)
