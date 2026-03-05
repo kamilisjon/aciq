@@ -1,0 +1,91 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linting:
+    name: Linting
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: pip
+
+    - name: Install requirements
+      run: pip install -e '.[linting]'
+
+    - name: Run typos
+      run: typos .
+
+    - name: Run ruff
+      run: ruff check .
+
+    - name: Run mypy
+      run: mypy
+
+  tests-linux:
+    name: Tests on Ubuntu
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: pip
+
+    - name: Install requirements
+      run: |
+        pip install -e '.[testing]'
+
+    - name: Run tests
+      run: pytest test/ -s
+
+  tests-windows:
+    name: Tests on Windows
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: pip
+
+    - name: Install requirements
+      shell: bash           # ← make Unix-style commands work on Windows
+      run: |
+        pip install -e '.[testing]'
+
+    - name: Run tests
+      shell: bash
+      run: pytest test/ -s
+
+  tests-macos:
+    name: Tests on macOS
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: pip
+
+    - name: Install requirements
+      run: |
+        pip install -e '.[testing]'
+
+    - name: Run tests
+      run: pytest test/ -s
