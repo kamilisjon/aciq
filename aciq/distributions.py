@@ -23,11 +23,11 @@ class Distribution:
 
   @staticmethod
   def _variance(data: np.ndarray) -> float:
-    return float(np.var(data, ddof=1))
+    return float(np.var(data))
 
   @staticmethod
   def _stdev(data: np.ndarray) -> float:
-    return float(np.std(data, ddof=1))
+    return float(np.sqrt(Distribution._variance(data)))
 
   # TODO: What does skewness mean?
   @staticmethod
@@ -140,10 +140,9 @@ class Gaussian(FittedDistribution):
   def mu(self) -> float:
     return Distribution._mean(self._data)
 
-  # TODO: why cant I directly use self.std? Why does ddof differ?
   @functools.cached_property
   def sigma(self) -> float:
-    return float(np.std(self._data, ddof=0))
+    return Distribution._stdev(self._data)
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     z = (x - self.mu) / self.sigma
@@ -178,7 +177,7 @@ class StudentT(FittedDistribution):
 
   @functools.cached_property
   def scale(self) -> float:
-    var = float(np.var(self._data, ddof=0))
+    var = Distribution._variance(self._data)
     # TODO: why this formula for non positive kurtosis / inf df?
     if np.isinf(self.df):
       return float(np.sqrt(var))
