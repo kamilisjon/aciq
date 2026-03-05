@@ -1,8 +1,9 @@
 import numpy as np
+import pytest
 from scipy import stats
 
 from aciq.distributions import Distribution, DistributionType, Gaussian, Laplace, StudentT
-from test.helpers import make_gaussian_data, make_laplace_data, make_student_t_data, RELATIVE_TOLERANCE
+from test.helpers import make_gaussian_data, make_laplace_data, make_student_t_data, make_nonpositive_kurtosis_data, RELATIVE_TOLERANCE
 
 
 GAUSSIAN_TEST_MU_SIGMA: list[tuple[float, float]] = [(-3.0, 0.1), (0.0, 1.0), (100.0, 50.0)]
@@ -42,6 +43,14 @@ class TestGaussian:
       expected = float(np.sum(stats.norm.logpdf(data, loc=scipy_mu, scale=scipy_sigma)))
       np.testing.assert_allclose(g.log_likelihood, expected, rtol=RELATIVE_TOLERANCE)
 
+  def test_pdf_at_arbitrary_x_matches_scipy(self):
+    for mu, sigma in GAUSSIAN_TEST_MU_SIGMA:
+      data = make_gaussian_data(mu=mu, sigma=sigma)
+      g = Gaussian(data)
+      x = np.linspace(mu - 3 * sigma, mu + 3 * sigma, 100)
+      scipy_mu, scipy_sigma = stats.norm.fit(data)
+      np.testing.assert_allclose(g.pdf_at(x), stats.norm.pdf(x, loc=scipy_mu, scale=scipy_sigma), rtol=RELATIVE_TOLERANCE)
+
 
 class TestLaplace:
   def test_fit_matches_scipy(self):
@@ -75,6 +84,14 @@ class TestLaplace:
       expected = float(np.sum(stats.laplace.logpdf(data, loc=scipy_mu, scale=scipy_b)))
       np.testing.assert_allclose(g.log_likelihood, expected, rtol=RELATIVE_TOLERANCE)
 
+  def test_pdf_at_arbitrary_x_matches_scipy(self):
+    for mu, b in LAPLACE_TEST_MU_B:
+      data = make_laplace_data(mu=mu, b=b)
+      g = Laplace(data)
+      x = np.linspace(mu - 3 * b, mu + 3 * b, 100)
+      scipy_mu, scipy_b = stats.laplace.fit(data)
+      np.testing.assert_allclose(g.pdf_at(x), stats.laplace.pdf(x, loc=scipy_mu, scale=scipy_b), rtol=RELATIVE_TOLERANCE)
+
 
 class TestStudentT:
   def test_logpdf_formula_matches_scipy(self):
@@ -97,6 +114,23 @@ class TestStudentT:
       t = StudentT(data)
       expected = float(np.sum(stats.t.logpdf(data, t.df, loc=t.loc, scale=t.scale)))
       np.testing.assert_allclose(t.log_likelihood, expected, rtol=RELATIVE_TOLERANCE)
+
+  def test_df_is_inf_when_kurtosis_nonpositive(self):
+    data = make_nonpositive_kurtosis_data()
+    assert Distribution._kurtosis(data) <= 0
+    assert StudentT(data).df == float("inf")
+    # Test if does not fail with in inf df
+    StudentT(data).scale
+    StudentT(data).pdf()
+    StudentT(data).log_likelihood
+
+  def test_pdf_at_arbitrary_x_matches_scipy(self):
+    for df, loc, scale in STUDENT_T_TEST_DF_LOC_SCALE:
+      data = make_student_t_data(df=df, loc=loc, scale=scale)
+      t = StudentT(data)
+      x = np.linspace(loc - 3 * scale, loc + 3 * scale, 100)
+      expected = stats.t.pdf(x, t.df, loc=t.loc, scale=t.scale)
+      np.testing.assert_allclose(t.pdf_at(x), expected, rtol=RELATIVE_TOLERANCE)
 
 
 class TestDistributionFit:
@@ -141,3 +175,12 @@ class TestDistributionFit:
     np.testing.assert_equal(fitted.df, direct.df)
     np.testing.assert_equal(fitted.loc, direct.loc)
     np.testing.assert_equal(fitted.scale, direct.scale)
+
+  def test_all_distribution_types_have_fit(self):
+    d = Distribution(make_gaussian_data())
+    for dist_type in DistributionType:
+      d.fit(dist_type)
+
+  def test_fit_raises_for_unsupported_type(self):
+    with pytest.raises(ValueError):
+      Distribution(make_gaussian_data()).fit("unsupported")

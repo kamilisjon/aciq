@@ -9,6 +9,11 @@ def make_gaussian_data(mu: float = 3.0, sigma: float = 1.5, n: int = DISTRIBUTIO
   return np.random.default_rng(seed).normal(loc=mu, scale=sigma, size=n)
 
 
+def make_nonpositive_kurtosis_data(seed: int = 42) -> np.ndarray:
+  # Uniform distribution has excess kurtosis = -1.2
+  return np.random.default_rng(seed).uniform(size=50_000)
+
+
 def make_laplace_data(mu: float, b: float, n: int = DISTRIBUTION_SAMPLE_SIZE, seed: int = SEED) -> np.ndarray:
   return np.random.default_rng(seed).laplace(loc=mu, scale=b, size=n)
 
