@@ -31,8 +31,7 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
     save_path.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(9, 5))
 
-    n_bins = min(200, max(50, len(vec) // 500))
-    ax.hist(vec, bins=n_bins, density=True, alpha=0.5, color="steelblue", label="Empirical")
+    ax.hist(vec, bins=200, density=True, alpha=0.5, color="steelblue", label="Empirical")
 
 
     x_sorted = np.sort(vec)
