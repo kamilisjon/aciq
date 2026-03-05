@@ -6,7 +6,7 @@ import onnx
 from enum import StrEnum
 
 from aciq.onnx_io import load_onnx, extract_layers
-from aciq.distributions import Distribution, Gaussian, Laplace
+from aciq.distributions import Distribution
 
 
 RESULTS_DIR = Path("results")
