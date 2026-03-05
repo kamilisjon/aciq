@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 from enum import Enum
 
 import numpy as np
-from scipy import stats
 
 
 class DistributionType(str, Enum):
@@ -30,14 +29,23 @@ class Distribution:
   def _stdev(data: np.ndarray) -> float:
     return float(np.std(data, ddof=1))
 
+  # TODO: What does skewness mean?
   @staticmethod
   def _skewness(data: np.ndarray) -> float:
-    return float(stats.skew(data))
+    mean = Distribution._mean(data)
+    d = data - mean
+    m2 = Distribution._mean(d**2)
+    m3 = Distribution._mean(d**3)
+    return float(m3 / m2**1.5)
 
-  # TODO: What does kurtosis mean? How it is calculated?
+  # TODO: What does kurtosis mean? What variants of kurtosis exist as scipy has bias and fisher parameters?
   @staticmethod
   def _kurtosis(data: np.ndarray) -> float:
-    return float(stats.kurtosis(data))
+    mean = Distribution._mean(data)
+    d = data - mean
+    m2 = Distribution._mean(d**2)
+    m4 = Distribution._mean(d**4)
+    return float(m4 / m2**2 - 3.0)
 
   @staticmethod
   def _min(data: np.ndarray) -> float:
@@ -122,6 +130,7 @@ class FittedDistribution(ABC):
     return np.log(self.pdf())
 
   @functools.cached_property
+  # TODO: how does Log-Likelihood informs about how well data fits the distribution?
   def log_likelihood(self) -> float:
     return float(np.sum(self.logpdf()))
 
