@@ -3,8 +3,25 @@ import functools
 import math
 from abc import ABC, abstractmethod
 from enum import Enum
+from typing import Any
 
 import numpy as np
+
+
+# TODO: What does skewness mean?
+def skewness(data: np.ndarray) -> np.floating[Any]:
+  d = data - np.mean(data)
+  return np.mean(d**3) / np.mean(d**2) ** 1.5
+
+
+# TODO: What does kurtosis mean? What variants of kurtosis exist as scipy has bias and fisher parameters?
+def kurtosis(data: np.ndarray) -> np.floating[Any]:
+  d = data - np.mean(data)
+  return np.mean(d**4) / np.mean(d**2) ** 2 - 3.0
+
+
+# TODO: test all distributions against R.
+# TODO: find scientific article for all distributions scientific backing. Need to be citable, so could be included into report.
 
 
 class DistributionType(str, Enum):
@@ -13,110 +30,7 @@ class DistributionType(str, Enum):
   STUDENT_T = "Student-t"
 
 
-class Distribution:
-  def __init__(self, data: np.ndarray):
-    self._data = data
-
-  @staticmethod
-  def _mean(data: np.ndarray) -> float:
-    return float(np.mean(data))
-
-  @staticmethod
-  def _variance(data: np.ndarray) -> float:
-    return float(np.var(data))
-
-  @staticmethod
-  def _stdev(data: np.ndarray) -> float:
-    return float(np.sqrt(Distribution._variance(data)))
-
-  # TODO: What does skewness mean?
-  @staticmethod
-  def _skewness(data: np.ndarray) -> float:
-    mean = Distribution._mean(data)
-    d = data - mean
-    m2 = Distribution._mean(d**2)
-    m3 = Distribution._mean(d**3)
-    return float(m3 / m2**1.5)
-
-  # TODO: What does kurtosis mean? What variants of kurtosis exist as scipy has bias and fisher parameters?
-  @staticmethod
-  def _kurtosis(data: np.ndarray) -> float:
-    mean = Distribution._mean(data)
-    d = data - mean
-    m2 = Distribution._mean(d**2)
-    m4 = Distribution._mean(d**4)
-    return float(m4 / m2**2 - 3.0)
-
-  @staticmethod
-  def _min(data: np.ndarray) -> float:
-    return float(data.min())
-
-  @staticmethod
-  def _max(data: np.ndarray) -> float:
-    return float(data.max())
-
-  @staticmethod
-  def _median(data: np.ndarray) -> float:
-    return float(np.median(data))
-
-  @staticmethod
-  def _n(data: np.ndarray) -> int:
-    return len(data)
-
-  @functools.cached_property
-  def n(self) -> int:
-    return self._n(self._data)
-
-  @functools.cached_property
-  def mean(self) -> float:
-    return self._mean(self._data)
-
-  @functools.cached_property
-  def variance(self) -> float:
-    return self._variance(self._data)
-
-  @functools.cached_property
-  def stdev(self) -> float:
-    return self._stdev(self._data)
-
-  @functools.cached_property
-  def skewness(self) -> float:
-    return self._skewness(self._data)
-
-  @functools.cached_property
-  def kurtosis(self) -> float:
-    return self._kurtosis(self._data)
-
-  @functools.cached_property
-  def min(self) -> float:
-    return self._min(self._data)
-
-  @functools.cached_property
-  def median(self) -> float:
-    return self._median(self._data)
-
-  @functools.cached_property
-  def max(self) -> float:
-    return self._max(self._data)
-
-  @functools.cache
-  def fit(self, dist_type: DistributionType) -> FittedDistribution:
-    match dist_type:
-      case DistributionType.GAUSSIAN:
-        return Gaussian(self._data)
-      case DistributionType.LAPLACE:
-        return Laplace(self._data)
-      case DistributionType.STUDENT_T:
-        return StudentT(self._data)
-      case _:
-        raise ValueError(f"Unsupported distribution type: {dist_type}")
-
-
-# TODO: test against R. Gaussian and Laplace.
-# TODO: find scientific article for distribution scientific backing. Need to be citable, so could be included into report. Gaussian and Laplace.
-
-
-class FittedDistribution(ABC):
+class Distribution(ABC):
   def __init__(self, data: np.ndarray):
     self._data = data
 
@@ -134,54 +48,67 @@ class FittedDistribution(ABC):
   def log_likelihood(self) -> float:
     return float(np.sum(self.logpdf()))
 
+  @staticmethod
+  def fit(data: np.ndarray, dist_type: DistributionType) -> Distribution:
+    match dist_type:
+      case DistributionType.GAUSSIAN:
+        return Gaussian(data)
+      case DistributionType.LAPLACE:
+        return Laplace(data)
+      case DistributionType.STUDENT_T:
+        return StudentT(data)
+      case _:
+        raise ValueError(f"Unsupported distribution type: {dist_type}")
 
-class Gaussian(FittedDistribution):
+
+class Gaussian(Distribution):
   @property
-  def mu(self) -> float:
-    return Distribution._mean(self._data)
+  def mu(self) -> np.floating[Any]:
+    return np.mean(self._data)
 
   @functools.cached_property
-  def sigma(self) -> float:
-    return Distribution._stdev(self._data)
+  def sigma(self) -> np.floating[Any]:
+    return np.std(self._data)
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     z = (x - self.mu) / self.sigma
     return np.exp(-(z**2) / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
 
 
-class Laplace(FittedDistribution):
+class Laplace(Distribution):
   @property
-  def mu(self) -> float:
-    return Distribution._median(self._data)
+  def mu(self) -> np.floating[Any]:
+    return np.median(self._data)
 
   @functools.cached_property
-  def b(self) -> float:
-    return float(np.mean(np.abs(self._data - self.mu)))
+  def b(self) -> np.floating[Any]:
+    return np.mean(np.abs(self._data - self.mu))
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     return np.exp(-np.abs(x - self.mu) / self.b) / (2.0 * self.b)
 
 
-class StudentT(FittedDistribution):
+class StudentT(Distribution):
   @functools.cached_property
-  def df(self) -> float:
-    k = Distribution._kurtosis(self._data)
+  def df(self) -> np.floating[Any]:
+    k = kurtosis(self._data)
     # TODO: why df is inf at kurtosis <= 0?
     if k <= 0:
-      return float("inf")
-    return max(6.0 / k + 4.0, 2.01)
+      # infinity with data type if self._data
+      return self._data.dtype.type(np.inf)
+    return np.maximum(6.0 / k + 4.0, 2.01)
 
   @property
-  def loc(self) -> float:
-    return Distribution._mean(self._data)
+  def loc(self) -> np.floating[Any]:
+    return np.mean(self._data)
 
   @functools.cached_property
-  def scale(self) -> float:
-    var = Distribution._variance(self._data)
+  def scale(self) -> np.floating[Any]:
+    var = np.var(self._data)
     # TODO: why this formula for non positive kurtosis / inf df?
     if np.isinf(self.df):
-      return float(np.sqrt(var))
-    return float(np.sqrt(var * (self.df - 2.0) / self.df))
+      return np.sqrt(var)
+    return np.sqrt(var * (self.df - 2.0) / self.df)
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     coeff = math.exp(math.lgamma((self.df + 1) / 2) - math.lgamma(self.df / 2)) / (math.sqrt(self.df * math.pi) * self.scale)
