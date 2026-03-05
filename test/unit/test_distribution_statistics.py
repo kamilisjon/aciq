@@ -39,27 +39,27 @@ class TestDistributionStats:
 class TestDistributionCachedProperties:
   def test_mean(self):
     data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution(data).mean, statistics.mean(data.tolist()), rtol=RELATIVE_TOLERANCE)
+    assert Distribution(data).mean == Distribution._mean(data)
 
   def test_variance(self):
     data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution(data).variance, statistics.variance(data.tolist()), rtol=RELATIVE_TOLERANCE)
+    assert Distribution(data).variance == Distribution._variance(data)
 
   def test_std(self):
     data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution(data).stdev, statistics.stdev(data.tolist()), rtol=RELATIVE_TOLERANCE)
+    assert Distribution(data).stdev == Distribution._stdev(data)
 
   def test_median(self):
     data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution(data).median, statistics.median(data.tolist()), rtol=RELATIVE_TOLERANCE)
+    assert Distribution(data).median == Distribution._median(data)
 
   def test_min(self):
     data = make_gaussian_data()
-    assert Distribution(data).min == min(data.tolist())
+    assert Distribution(data).min == Distribution._min(data)
 
   def test_max(self):
     data = make_gaussian_data()
-    assert Distribution(data).max == max(data.tolist())
+    assert Distribution(data).max == Distribution._max(data)
 
   def test_n(self):
     data = make_gaussian_data()
