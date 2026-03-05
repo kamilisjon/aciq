@@ -3,51 +3,42 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import onnx
-from enum import StrEnum
 
 from aciq.onnx_io import load_onnx, extract_layers
-from aciq.distributions import Distribution, Gaussian, Laplace
+from aciq.distributions import Distribution, DistributionType
 
 
 RESULTS_DIR = Path("results")
-MODEL_PATH = Path("models/resnet50_Opset18.onnx")
 
-class Distributions(StrEnum):
-    GAUSSIAN = "norm"
-    LAPLACE = "laplace"
-
+# TODO: should group layers by which model block that are in. What blocks does ResNet have? Perhaps should group by what activation function is applied?
+models: dict[str, Path] = {
+    'resnet50': Path("models/resnet50_Opset18.onnx"),
+    'bert': Path("models/bert_Opset18.onnx")  # TODO: why some layers of Bert have Add with input weights and other have encapsulated weights? How to unify?
+}
 
 DIST_COLORS = {
-    Distributions.GAUSSIAN:  "red",
-    Distributions.LAPLACE:   "green",
+    DistributionType.GAUSSIAN:  "red",
+    DistributionType.LAPLACE:   "green",
+    DistributionType.STUDENT_T: "orange",
 }
 
 def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: Path) -> None:
+    save_path.mkdir(parents=True, exist_ok=True)
+
     fig, ax = plt.subplots(figsize=(9, 5))
-
-    n_bins = min(200, max(50, len(vec) // 500))
-    ax.hist(vec, bins=n_bins, density=True, alpha=0.5, color="steelblue", label="Empirical")
-
+    ax.hist(vec, bins=200, density=True, alpha=0.5, color="steelblue", label="Empirical")
 
     x_sorted = np.sort(vec)
+    distribution = Distribution(x_sorted)
 
     fit_lines = []
-    for dist in [Distributions.GAUSSIAN, Distributions.LAPLACE]:
-        match dist:
-            case Distributions.GAUSSIAN:
-                dist_fit = Gaussian(x_sorted)
-                ll = dist_fit.log_likelihood
-                pdf = dist_fit.pdf()
-            case Distributions.LAPLACE:
-                dist_fit = Laplace(vec)
-                ll = dist_fit.log_likelihood
-                pdf = Laplace(x_sorted).pdf()
+    for dist_type in DistributionType:
+        fitted = distribution.fit(dist_type)
+        ll = fitted.log_likelihood
+        pdf = fitted.pdf()
 
-        fit_lines.append(f"{dist:10s} ll={ll:.3g}")
-        ax.plot(x_sorted, pdf, color=DIST_COLORS[dist], linewidth=1.2, linestyle="--", label=dist)
-
-
-    distribution = Distribution(vec)
+        fit_lines.append(f"{dist_type:10s} ll={ll:.3g}")
+        ax.plot(x_sorted, pdf, color=DIST_COLORS[dist_type], linewidth=1.2, linestyle="--", label=dist_type)
 
     eda_lines = [
         f"n         = {distribution.n:,}",
@@ -58,7 +49,7 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
     ]
 
     textstr = "\n".join(eda_lines + [""] + fit_lines)
-    ax.text(0.98, 0.96, textstr, transform=ax.transAxes, fontsize=7.5,va="top", ha="right", bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5), family="monospace")
+    ax.text(0.98, 0.96, textstr, transform=ax.transAxes, fontsize=7.5,va="top", ha="right", bbox=dict(boxstyle="round"), family="monospace")
     safe = layer_name.replace("/", "_").replace(":", "_")
     ax.set_title(f"Layer {layer_idx}: {layer_name}", fontsize=10)
     ax.set_xlabel("Weight value")
@@ -70,20 +61,17 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
     plt.close(fig)
 
 def main():
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    for model_name, model_path in models.items():
+        results_dir = RESULTS_DIR / model_name
+        model = load_onnx(model_path)
+        layers = extract_layers(model)
+        print(f"[{model_name}] Total layers: {len(layers)}")
 
-    model = load_onnx(MODEL_PATH)
-    layers = extract_layers(model)
-    print(f"Total layers: {len(layers)}")
-
-    for idx, layer in enumerate(layers, 1):
-        vec = onnx.numpy_helper.to_array(layer.tensor).flatten().astype(np.float32)
-        n = len(vec)
-        print(f"[{idx:>3}/{len(layers)}] {layer.op_type:20} {layer.tensor.name:50} n={n:,}")
-        if n > 2000_000:
-            continue
-        plot_layer_fit(vec, layer.tensor.name, idx, RESULTS_DIR)
-
+        for idx, layer in enumerate(layers, 1):
+            vec = onnx.numpy_helper.to_array(layer.tensor).flatten().astype(np.float32)
+            n = len(vec)
+            print(f"[{idx:>3}/{len(layers)}] {layer.op_type:20} {layer.tensor.name:50} n={n:,}")
+            plot_layer_fit(vec, layer.tensor.name, idx, results_dir)
 
 if __name__ == "__main__":
     main()
