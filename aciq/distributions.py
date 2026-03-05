@@ -71,7 +71,7 @@ class Distribution:
     @staticmethod
     def _n(data: np.ndarray) -> int: return len(data)
 
-    @functools.cache()
+    @functools.cache
     def fit(self, dist_type: DistributionType) -> FittedDistribution:
         match dist_type:
             case DistributionType.GAUSSIAN:
@@ -87,13 +87,14 @@ class FittedDistribution(ABC):
         self._data = data
 
     @abstractmethod
-    def pdf(self) -> np.ndarray: ...
-
-    @abstractmethod
     def pdf_at(self, x: np.ndarray) -> np.ndarray: ...
 
+    # TODO: make np.log(self.pdf()) pass scipy tests
     @abstractmethod
     def logpdf(self) -> np.ndarray: ...
+
+    def pdf(self) -> np.ndarray:
+        return self.pdf_at(self._data)
 
     @functools.cached_property
     def log_likelihood(self) -> float:
@@ -108,15 +109,10 @@ class Gaussian(FittedDistribution):
     @functools.cached_property
     def sigma(self) -> float: return float(np.std(self._data, ddof=0))
 
-    def pdf(self) -> np.ndarray:
-        z = (self._data - self.mu) / self.sigma
-        return np.exp(-z**2 / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
-
     def pdf_at(self, x: np.ndarray) -> np.ndarray:
         z = (x - self.mu) / self.sigma
         return np.exp(-z**2 / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
 
-    # TODO: make np.log(self.pdf()) pass scipy tests
     def logpdf(self) -> np.ndarray:
         z = (self._data - self.mu) / self.sigma
         return -z**2 / 2.0 - np.log(np.sqrt(2.0 * np.pi)) - np.log(self.sigma)
@@ -129,13 +125,9 @@ class Laplace(FittedDistribution):
     @functools.cached_property
     def b(self) -> float: return float(np.mean(np.abs(self._data - self.mu)))
 
-    def pdf(self) -> np.ndarray:
-        return np.exp(-np.abs(self._data - self.mu) / self.b) / (2.0 * self.b)
-
     def pdf_at(self, x: np.ndarray) -> np.ndarray:
         return np.exp(-np.abs(x - self.mu) / self.b) / (2.0 * self.b)
 
-    # TODO: make np.log(self.pdf()) pass scipy tests
     def logpdf(self) -> np.ndarray:
         z = (self._data - self.mu) / self.b
         return np.log(0.5 * np.exp(-np.abs(z))) - np.log(self.b)
