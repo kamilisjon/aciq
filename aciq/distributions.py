@@ -72,6 +72,8 @@ class Distribution:
     def laplace(self) -> Laplace:
         return Gaussian(self._data)
 
+#TODO: test against R. Gaussian and Laplace.
+#TODO: find scientific article for distribution scientific backing. Need to be citable, so could be included into report. Gaussian and Laplace.
 
 class Gaussian:
     def __init__(self, data):

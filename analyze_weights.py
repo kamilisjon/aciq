@@ -1,9 +1,9 @@
 from pathlib import Path
+from enum import StrEnum
 
 import numpy as np
 import matplotlib.pyplot as plt
 import onnx
-from enum import StrEnum
 
 from aciq.onnx_io import load_onnx, extract_layers
 from aciq.distributions import Distribution
@@ -29,10 +29,9 @@ DIST_COLORS = {
 
 def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: Path) -> None:
     save_path.mkdir(parents=True, exist_ok=True)
+
     fig, ax = plt.subplots(figsize=(9, 5))
-
     ax.hist(vec, bins=200, density=True, alpha=0.5, color="steelblue", label="Empirical")
-
 
     x_sorted = np.sort(vec)
     distribution = Distribution(x_sorted)
