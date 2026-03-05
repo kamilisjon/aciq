@@ -19,6 +19,7 @@ models: dict[str, Path] = {
 DIST_COLORS = {
     DistributionType.GAUSSIAN:  "red",
     DistributionType.LAPLACE:   "green",
+    DistributionType.STUDENT_T: "orange",
 }
 
 def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: Path) -> None:
@@ -48,7 +49,7 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
     ]
 
     textstr = "\n".join(eda_lines + [""] + fit_lines)
-    ax.text(0.98, 0.96, textstr, transform=ax.transAxes, fontsize=7.5,va="top", ha="right", bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5), family="monospace")
+    ax.text(0.98, 0.96, textstr, transform=ax.transAxes, fontsize=7.5,va="top", ha="right", bbox=dict(boxstyle="round"), family="monospace")
     safe = layer_name.replace("/", "_").replace(":", "_")
     ax.set_title(f"Layer {layer_idx}: {layer_name}", fontsize=10)
     ax.set_xlabel("Weight value")

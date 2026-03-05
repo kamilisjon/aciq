@@ -1,5 +1,6 @@
 from __future__ import annotations
 import functools
+import math
 from abc import ABC, abstractmethod
 from enum import StrEnum
 
@@ -10,6 +11,7 @@ from scipy import stats
 class DistributionType(StrEnum):
     GAUSSIAN = "Gaussian"
     LAPLACE = "Laplace"
+    STUDENT_T = "Student-t"
 
 
 class Distribution:
@@ -78,6 +80,8 @@ class Distribution:
                 return Gaussian(self._data)
             case DistributionType.LAPLACE:
                 return Laplace(self._data)
+            case DistributionType.STUDENT_T:
+                return StudentT(self._data)
 
 #TODO: test against R. Gaussian and Laplace.
 #TODO: find scientific article for distribution scientific backing. Need to be citable, so could be included into report. Gaussian and Laplace.
@@ -89,12 +93,11 @@ class FittedDistribution(ABC):
     @abstractmethod
     def pdf_at(self, x: np.ndarray) -> np.ndarray: ...
 
-    # TODO: make np.log(self.pdf()) pass scipy tests
-    @abstractmethod
-    def logpdf(self) -> np.ndarray: ...
-
     def pdf(self) -> np.ndarray:
         return self.pdf_at(self._data)
+
+    def logpdf(self) -> np.ndarray:
+        return np.log(self.pdf())
 
     @functools.cached_property
     def log_likelihood(self) -> float:
@@ -113,10 +116,6 @@ class Gaussian(FittedDistribution):
         z = (x - self.mu) / self.sigma
         return np.exp(-z**2 / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
 
-    def logpdf(self) -> np.ndarray:
-        z = (self._data - self.mu) / self.sigma
-        return -z**2 / 2.0 - np.log(np.sqrt(2.0 * np.pi)) - np.log(self.sigma)
-
 
 class Laplace(FittedDistribution):
     @property
@@ -128,6 +127,25 @@ class Laplace(FittedDistribution):
     def pdf_at(self, x: np.ndarray) -> np.ndarray:
         return np.exp(-np.abs(x - self.mu) / self.b) / (2.0 * self.b)
 
-    def logpdf(self) -> np.ndarray:
-        z = (self._data - self.mu) / self.b
-        return np.log(0.5 * np.exp(-np.abs(z))) - np.log(self.b)
+
+class StudentT(FittedDistribution):
+    @functools.cached_property
+    def df(self) -> float:
+        k = Distribution._kurtosis(self._data)
+        if k <= 0:
+            return float('inf')
+        return max(6.0 / k + 4.0, 2.01)
+
+    @property
+    def loc(self) -> float: return Distribution._mean(self._data)
+
+    @functools.cached_property
+    def scale(self) -> float:
+        var = float(np.var(self._data, ddof=0))
+        if np.isinf(self.df):
+            return float(np.sqrt(var))
+        return float(np.sqrt(var * (self.df - 2.0) / self.df))
+
+    def pdf_at(self, x: np.ndarray) -> np.ndarray:
+        coeff = (math.exp(math.lgamma((self.df + 1) / 2) - math.lgamma(self.df / 2)) / (math.sqrt(self.df * math.pi) * self.scale))
+        return coeff * (1 + ((x - self.loc) / self.scale) ** 2 / self.df) ** (-(self.df + 1) / 2)
