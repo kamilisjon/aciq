@@ -27,7 +27,7 @@ class Distribution:
     return float(np.var(data, ddof=1))
 
   @staticmethod
-  def _std(data: np.ndarray) -> float:
+  def _stdev(data: np.ndarray) -> float:
     return float(np.std(data, ddof=1))
 
   @staticmethod
@@ -68,8 +68,8 @@ class Distribution:
     return self._variance(self._data)
 
   @functools.cached_property
-  def std(self) -> float:
-    return self._std(self._data)
+  def stdev(self) -> float:
+    return self._stdev(self._data)
 
   @functools.cached_property
   def skewness(self) -> float:
@@ -158,6 +158,7 @@ class StudentT(FittedDistribution):
   @functools.cached_property
   def df(self) -> float:
     k = Distribution._kurtosis(self._data)
+    # TODO: why df is inf at kurtosis <= 0?
     if k <= 0:
       return float("inf")
     return max(6.0 / k + 4.0, 2.01)
@@ -169,6 +170,7 @@ class StudentT(FittedDistribution):
   @functools.cached_property
   def scale(self) -> float:
     var = float(np.var(self._data, ddof=0))
+    # TODO: why this formula for non positive kurtosis / inf df?
     if np.isinf(self.df):
       return float(np.sqrt(var))
     return float(np.sqrt(var * (self.df - 2.0) / self.df))
