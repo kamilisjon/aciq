@@ -17,7 +17,7 @@ class TestDistributionStats:
 
   def test_std(self):
     data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution._std(data), statistics.stdev(data.tolist()), rtol=RELATIVE_TOLERANCE)
+    np.testing.assert_allclose(Distribution._stdev(data), statistics.stdev(data.tolist()), rtol=RELATIVE_TOLERANCE)
 
   def test_median(self):
     data = make_gaussian_data()
@@ -47,7 +47,7 @@ class TestDistributionCachedProperties:
 
   def test_std(self):
     data = make_gaussian_data()
-    np.testing.assert_allclose(Distribution(data).std, statistics.stdev(data.tolist()), rtol=RELATIVE_TOLERANCE)
+    np.testing.assert_allclose(Distribution(data).stdev, statistics.stdev(data.tolist()), rtol=RELATIVE_TOLERANCE)
 
   def test_median(self):
     data = make_gaussian_data()
@@ -77,7 +77,7 @@ class TestCachedProperties:
 
   def test_distribution_std_is_cached(self):
     d = Distribution(make_gaussian_data())
-    assert d.std is d.std
+    assert d.stdev is d.stdev
 
   def test_distribution_skewness_is_cached(self):
     d = Distribution(make_gaussian_data())

@@ -27,7 +27,7 @@ class Distribution:
     return float(np.var(data, ddof=1))
 
   @staticmethod
-  def _std(data: np.ndarray) -> float:
+  def _stdev(data: np.ndarray) -> float:
     return float(np.std(data, ddof=1))
 
   @staticmethod
@@ -68,8 +68,8 @@ class Distribution:
     return self._variance(self._data)
 
   @functools.cached_property
-  def std(self) -> float:
-    return self._std(self._data)
+  def stdev(self) -> float:
+    return self._stdev(self._data)
 
   @functools.cached_property
   def skewness(self) -> float:
