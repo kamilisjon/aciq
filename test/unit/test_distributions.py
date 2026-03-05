@@ -74,68 +74,6 @@ class TestDistributionCachedProperties(unittest.TestCase):
     assert Distribution(data).n == len(data.tolist())
 
 
-class TestCaching(unittest.TestCase):
-  def test_distribution_mean_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.mean is d.mean
-
-  def test_distribution_variance_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.variance is d.variance
-
-  def test_distribution_std_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.stdev is d.stdev
-
-  def test_distribution_skewness_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.skewness is d.skewness
-
-  def test_distribution_kurtosis_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.kurtosis is d.kurtosis
-
-  def test_distribution_min_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.min is d.min
-
-  def test_distribution_max_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.max is d.max
-
-  def test_distribution_median_is_cached(self):
-    d = Distribution(make_gaussian_data())
-    assert d.median is d.median
-
-  def test_gaussian_sigma_is_cached(self):
-    g = Gaussian(make_gaussian_data())
-    assert g.sigma is g.sigma
-
-  def test_gaussian_log_likelihood_is_cached(self):
-    g = Gaussian(make_gaussian_data())
-    assert g.log_likelihood is g.log_likelihood
-
-  def test_laplace_b_is_cached(self):
-    g = Laplace(make_gaussian_data())
-    assert g.b is g.b
-
-  def test_laplace_log_likelihood_is_cached(self):
-    g = Laplace(make_gaussian_data())
-    assert g.log_likelihood is g.log_likelihood
-
-  def test_student_t_df_is_cached(self):
-    t = StudentT(make_gaussian_data())
-    assert t.df is t.df
-
-  def test_student_t_scale_is_cached(self):
-    t = StudentT(make_gaussian_data())
-    assert t.scale is t.scale
-
-  def test_student_t_log_likelihood_is_cached(self):
-    t = StudentT(make_gaussian_data())
-    assert t.log_likelihood is t.log_likelihood
-
-
 class TestGaussian(unittest.TestCase):
   def test_fit_matches_scipy(self):
     for mu, sigma in GAUSSIAN_TEST_MU_SIGMA:
@@ -271,11 +209,6 @@ class TestDistributionFit(unittest.TestCase):
     data = make_gaussian_data()
     assert isinstance(Distribution(data).fit(DistributionType.STUDENT_T), StudentT)
 
-  def test_fit_is_cached(self):
-    data = make_gaussian_data()
-    d = Distribution(data)
-    assert d.fit(DistributionType.GAUSSIAN) is d.fit(DistributionType.GAUSSIAN)
-
   def test_fit_gaussian_matches_direct(self):
     data = make_gaussian_data()
     fitted = Distribution(data).fit(DistributionType.GAUSSIAN)
@@ -309,6 +242,73 @@ class TestDistributionFit(unittest.TestCase):
   def test_fit_raises_for_unsupported_type(self):
     with pytest.raises(ValueError):
       Distribution(make_gaussian_data()).fit("unsupported")
+
+
+class TestCaching(unittest.TestCase):
+  def test_distribution_mean_is_cached(self):
+    d = Distribution(make_gaussian_data())
+    assert d.mean is d.mean
+
+  def test_distribution_variance_is_cached(self):
+    d = Distribution(make_gaussian_data())
+    assert d.variance is d.variance
+
+  def test_distribution_std_is_cached(self):
+    d = Distribution(make_gaussian_data())
+    assert d.stdev is d.stdev
+
+  def test_distribution_skewness_is_cached(self):
+    d = Distribution(make_gaussian_data())
+    assert d.skewness is d.skewness
+
+  def test_distribution_kurtosis_is_cached(self):
+    d = Distribution(make_gaussian_data())
+    assert d.kurtosis is d.kurtosis
+
+  def test_distribution_min_is_cached(self):
+    d = Distribution(make_gaussian_data())
+    assert d.min is d.min
+
+  def test_distribution_max_is_cached(self):
+    d = Distribution(make_gaussian_data())
+    assert d.max is d.max
+
+  def test_distribution_median_is_cached(self):
+    d = Distribution(make_gaussian_data())
+    assert d.median is d.median
+
+  def test_gaussian_sigma_is_cached(self):
+    g = Gaussian(make_gaussian_data())
+    assert g.sigma is g.sigma
+
+  def test_gaussian_log_likelihood_is_cached(self):
+    g = Gaussian(make_gaussian_data())
+    assert g.log_likelihood is g.log_likelihood
+
+  def test_laplace_b_is_cached(self):
+    g = Laplace(make_gaussian_data())
+    assert g.b is g.b
+
+  def test_laplace_log_likelihood_is_cached(self):
+    g = Laplace(make_gaussian_data())
+    assert g.log_likelihood is g.log_likelihood
+
+  def test_student_t_df_is_cached(self):
+    t = StudentT(make_gaussian_data())
+    assert t.df is t.df
+
+  def test_student_t_scale_is_cached(self):
+    t = StudentT(make_gaussian_data())
+    assert t.scale is t.scale
+
+  def test_student_t_log_likelihood_is_cached(self):
+    t = StudentT(make_gaussian_data())
+    assert t.log_likelihood is t.log_likelihood
+
+  def test_fit_is_cached(self):
+    data = make_gaussian_data()
+    d = Distribution(data)
+    assert d.fit(DistributionType.GAUSSIAN) is d.fit(DistributionType.GAUSSIAN)
 
 
 if __name__ == "__main__":
