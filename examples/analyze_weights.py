@@ -29,26 +29,36 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
   save_path.mkdir(parents=True, exist_ok=True)
 
   fig, ax = plt.subplots(figsize=(9, 5))
-  ax.hist(vec, bins=200, density=True, alpha=0.5, color="steelblue", label="Empirical")
+  ax.hist(vec, bins=300, density=True, alpha=0.5, color="steelblue", label="Empirical")
 
   fit_lines = []
   vec_sorted = np.sort(vec)
   for dist_type in DistributionType:
     fitted = Distribution.fit(vec_sorted, dist_type)
     ll = fitted.log_likelihood
-    fit_lines.append(f"{dist_type:10s} ll={ll:.3g}")
-    ax.plot(vec_sorted, fitted.pdf(), color=DIST_COLORS[dist_type], linewidth=1.2, linestyle="--", label=dist_type)
+    fit_lines.append(f"{repr(fitted):30s} ll={ll:.3g}")
+    ax.plot(vec_sorted, fitted.pdf(), color=DIST_COLORS[dist_type], linewidth=0.7, linestyle="--", label=repr(fitted))
 
   eda_lines = [
-    f"n         = {vec.size:,}",
-    f"Mean      = {float(np.mean(vec)):.5f}",
-    f"Variance  = {float(np.var(vec)):.6f}",
-    f"Skewness  = {float(skewness(vec)):.4f}",
-    f"Kurtosis  = {float(kurtosis(vec)):.4f}",
+    f"n        = {vec.size:,}",
+    f"Mean     = {float(np.mean(vec)):.5f}",
+    f"Variance = {float(np.var(vec)):.6f}",
+    f"Skewness = {float(skewness(vec)):.4f}",
+    f"Kurtosis = {float(kurtosis(vec)):.4f}",
   ]
 
-  textstr = "\n".join(eda_lines + [""] + fit_lines)
-  ax.text(0.98, 0.96, textstr, transform=ax.transAxes, fontsize=7.5, va="top", ha="right", bbox=dict(boxstyle="round"), family="monospace")
+  ax.text(
+    0.98,
+    0.96,
+    "\n".join(eda_lines + [""] + fit_lines),
+    transform=ax.transAxes,
+    fontsize=7.5,
+    va="top",
+    ha="right",
+    multialignment="left",
+    bbox=dict(facecolor="lightgrey"),
+    family="monospace",
+  )
   safe = layer_name.replace("/", "_").replace(":", "_")
   ax.set_title(f"Layer {layer_idx}: {layer_name}", fontsize=10)
   ax.set_xlabel("Weight value")
@@ -56,7 +66,7 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
   ax.legend(fontsize=8, loc="upper left")
   ax.grid(True, alpha=0.3)
   fig.tight_layout()
-  fig.savefig(save_path / f"layer_{layer_idx:03d}_{safe[:60]}.png", dpi=150)
+  fig.savefig(save_path / f"layer_{layer_idx:03d}_{safe[:60]}.png", dpi=500)
   plt.close(fig)
 
 
