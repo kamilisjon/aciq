@@ -14,6 +14,9 @@ STUDENT_T_TEST_DF_LOC_SCALE: list[tuple[float, float, float]] = [(5.0, 0.0, 1.0)
 GED_TEST_BETA_LOC_SCALE: list[tuple[float, float, float]] = [(0.5, 0.0, 1.0), (1.5, -3.0, 0.5), (3.0, 100.0, 50.0)]
 
 
+# TODO: test all distributions against R with https://rpy2.github.io/
+
+
 class TestCustomStatistics(unittest.TestCase):
   def test_skewness_matches_scipy(self):
     data = make_gaussian_data()
