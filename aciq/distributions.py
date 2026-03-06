@@ -2,7 +2,7 @@ from __future__ import annotations
 import functools
 import math
 from abc import ABC, abstractmethod
-from enum import Enum
+from enum import Enum, auto
 from typing import Any
 
 import numpy as np
@@ -20,15 +20,19 @@ def kurtosis(data: np.ndarray) -> np.floating[Any]:
   return np.mean(d**4) / np.mean(d**2) ** 2 - 3.0
 
 
+def _ged_kurtosis(beta: float) -> float:
+  return math.exp(math.lgamma(5 / beta) + math.lgamma(1 / beta) - 2 * math.lgamma(3 / beta)) - 3
+
+
 # TODO: test all distributions against R.
 # TODO: find scientific article for all distributions scientific backing. Need to be citable, so could be included into report.
 
 
-class DistributionType(str, Enum):
-  GAUSSIAN = "Gaussian"
-  LAPLACE = "Laplace"
-  STUDENT_T = "Student-t"
-  GENERALIZED_GAUSSIAN = "GED"
+class DistributionType(Enum):
+  GAUSSIAN = auto()
+  LAPLACE = auto()
+  STUDENT_T = auto()
+  GENERALIZED_GAUSSIAN = auto()
 
 
 class Distribution(ABC):
@@ -37,6 +41,9 @@ class Distribution(ABC):
 
   @abstractmethod
   def pdf_at(self, x: np.ndarray) -> np.ndarray: ...
+
+  @abstractmethod
+  def __repr__(self) -> str: ...
 
   def pdf(self) -> np.ndarray:
     return self.pdf_at(self._data)
@@ -65,6 +72,9 @@ class Distribution(ABC):
 
 
 class Gaussian(Distribution):
+  def __repr__(self) -> str:
+    return f"Gaussian({self.mu:.1f}, {self.sigma:.1f})"
+
   @property
   def mu(self) -> np.floating[Any]:
     return np.mean(self._data)
@@ -74,14 +84,13 @@ class Gaussian(Distribution):
     return np.std(self._data)
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
-    z = (x - self.mu) / self.sigma
-    return np.exp(-(z**2) / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
-
-  def __repr__(self) -> str:
-    return f"Gaussian({self.mu:.1f}, {self.sigma:.1f})"
+    return np.exp(-(((x - self.mu) / self.sigma) ** 2) / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
 
 
 class Laplace(Distribution):
+  def __repr__(self) -> str:
+    return f"Laplace({self.mu:.1f}, {self.b:.1f})"
+
   @property
   def mu(self) -> np.floating[Any]:
     return np.median(self._data)
@@ -93,11 +102,11 @@ class Laplace(Distribution):
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     return np.exp(-np.abs(x - self.mu) / self.b) / (2.0 * self.b)
 
-  def __repr__(self) -> str:
-    return f"Laplace({self.mu:.1f}, {self.b:.1f})"
-
 
 class StudentT(Distribution):
+  def __repr__(self) -> str:
+    return f"Student-t({self.df:.1f}, {self.loc:.1f}, {self.scale:.1f})"
+
   @functools.cached_property
   def df(self) -> np.floating[Any]:
     k = kurtosis(self._data)
@@ -113,25 +122,20 @@ class StudentT(Distribution):
 
   @functools.cached_property
   def scale(self) -> np.floating[Any]:
-    var = np.var(self._data)
     # TODO: why this formula for non positive kurtosis / inf df?
     if np.isinf(self.df):
-      return np.sqrt(var)
-    return np.sqrt(var * (self.df - 2.0) / self.df)
+      return np.sqrt(np.var(self._data))
+    return np.sqrt(np.var(self._data) * (self.df - 2.0) / self.df)
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     coeff = math.exp(math.lgamma((self.df + 1) / 2) - math.lgamma(self.df / 2)) / (math.sqrt(self.df * math.pi) * self.scale)
     return coeff * (1 + ((x - self.loc) / self.scale) ** 2 / self.df) ** (-(self.df + 1) / 2)
 
-  def __repr__(self) -> str:
-    return f"Student-t({self.df:.1f}, {self.loc:.1f}, {self.scale:.1f})"
-
-
-def _ged_kurtosis(beta: float) -> float:
-  return math.exp(math.lgamma(5 / beta) + math.lgamma(1 / beta) - 2 * math.lgamma(3 / beta)) - 3
-
 
 class GeneralizedGaussian(Distribution):
+  def __repr__(self) -> str:
+    return f"GED({self.beta:.1f}, {self.loc:.1f}, {self.scale:.1f})"
+
   @functools.cached_property
   def beta(self) -> np.floating[Any]:
     k = kurtosis(self._data)
@@ -156,13 +160,7 @@ class GeneralizedGaussian(Distribution):
 
   @functools.cached_property
   def scale(self) -> np.floating[Any]:
-    var = np.var(self._data)
-    return np.sqrt(var * math.exp(math.lgamma(1 / self.beta) - math.lgamma(3 / self.beta)))
+    return np.sqrt(np.var(self._data) * math.exp(math.lgamma(1 / self.beta) - math.lgamma(3 / self.beta)))
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
-    b = self.beta
-    coeff = b / (2 * self.scale * math.exp(math.lgamma(1 / b)))
-    return coeff * np.exp(-(np.abs((x - self.loc) / self.scale) ** b))
-
-  def __repr__(self) -> str:
-    return f"GED({self.beta:.1f}, {self.loc:.1f}, {self.scale:.1f})"
+    return self.beta / (2 * self.scale * math.exp(math.lgamma(1 / self.beta))) * np.exp(-(np.abs((x - self.loc) / self.scale) ** self.beta))
