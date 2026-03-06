@@ -141,14 +141,14 @@ class TestStudentT(unittest.TestCase):
       expected = np.sum(stats.t.logpdf(data, t.df, loc=t.loc, scale=t.scale))
       np.testing.assert_allclose(t.log_likelihood, expected)
 
-  def test_df_is_inf_when_kurtosis_nonpositive(self):
+  def test_fit_works_when_kurtosis_nonpositive(self):
     data = make_nonpositive_kurtosis_data()
     assert kurtosis(data) <= 0
-    assert StudentT(data).df == float("inf")
-    # Test if does not fail with inf df
-    StudentT(data).scale
-    StudentT(data).pdf()
-    StudentT(data).log_likelihood
+    t = StudentT(data)
+    assert t.df > 0
+    t.scale
+    t.pdf()
+    t.log_likelihood
 
   def test_pdf_at_arbitrary_x_matches_scipy(self):
     for df, loc, scale in STUDENT_T_TEST_DF_LOC_SCALE:

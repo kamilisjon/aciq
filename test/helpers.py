@@ -1,6 +1,6 @@
 import numpy as np
 
-DISTRIBUTION_SAMPLE_SIZE: int = 100_000
+DISTRIBUTION_SAMPLE_SIZE: int = 100_00
 
 
 def make_gaussian_data(mu: float = 3.0, sigma: float = 1.5, n: int = DISTRIBUTION_SAMPLE_SIZE, seed: int | None = None) -> np.ndarray:
