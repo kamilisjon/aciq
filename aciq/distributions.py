@@ -38,6 +38,9 @@ class Distribution(ABC):
   @abstractmethod
   def pdf_at(self, x: np.ndarray) -> np.ndarray: ...
 
+  @abstractmethod
+  def __repr__(self) -> str: ...
+
   def pdf(self) -> np.ndarray:
     return self.pdf_at(self._data)
 
