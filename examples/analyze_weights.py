@@ -21,6 +21,7 @@ DIST_COLORS = {
   DistributionType.GAUSSIAN: "red",
   DistributionType.LAPLACE: "green",
   DistributionType.STUDENT_T: "orange",
+  DistributionType.GENERALIZED_GAUSSIAN: "blue",
 }
 
 
