@@ -16,7 +16,6 @@ BITS = [4, 8]
 # TODO: should group layers by which model block that are in. What blocks does ResNet have?
 #       Perhaps should group by what activation function is applied?
 # TODO: why some layers of Bert have Add with input weights and other have encapsulated weights? How to unify?
-# TODO: add this file testing to CI. Will need to add models auto download and will need to study GitHub caching.
 
 models: dict[str, Path] = {"resnet50": Path("models/resnet50_Opset18.onnx"), "bert": Path("models/bert_Opset18.onnx")}
 

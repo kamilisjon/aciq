@@ -8,13 +8,11 @@ from typing import Any
 import numpy as np
 
 
-# TODO: What does skewness mean?
 def skewness(data: np.ndarray) -> np.floating[Any]:
   d = data - np.mean(data)
   return np.mean(d**3) / np.mean(d**2) ** 1.5
 
 
-# TODO: What does kurtosis mean? What variants of kurtosis exist as scipy has bias and fisher parameters?
 def kurtosis(data: np.ndarray) -> np.floating[Any]:
   d = data - np.mean(data)
   return np.mean(d**4) / np.mean(d**2) ** 2 - 3.0
@@ -22,10 +20,6 @@ def kurtosis(data: np.ndarray) -> np.floating[Any]:
 
 def _ged_kurtosis(beta: float) -> float:
   return math.exp(math.lgamma(5 / beta) + math.lgamma(1 / beta) - 2 * math.lgamma(3 / beta)) - 3
-
-
-# TODO: test all distributions against R.
-# TODO: find scientific article for all distributions scientific backing. Need to be citable, so could be included into report.
 
 
 class DistributionType(Enum):
@@ -52,7 +46,6 @@ class Distribution(ABC):
     return np.log(self.pdf())
 
   @functools.cached_property
-  # TODO: how does Log-Likelihood informs about how well data fits the distribution?
   def log_likelihood(self) -> float:
     return float(np.sum(self.logpdf()))
 
@@ -110,9 +103,7 @@ class StudentT(Distribution):
   @functools.cached_property
   def df(self) -> np.floating[Any]:
     k = kurtosis(self._data)
-    # TODO: why df is inf at kurtosis <= 0?
     if k <= 0:
-      # infinity with data type if self._data
       return self._data.dtype.type(np.inf)
     return np.maximum(6.0 / k + 4.0, 2.01)
 
@@ -122,7 +113,6 @@ class StudentT(Distribution):
 
   @functools.cached_property
   def scale(self) -> np.floating[Any]:
-    # TODO: why this formula for non positive kurtosis / inf df?
     if np.isinf(self.df):
       return np.sqrt(np.var(self._data))
     return np.sqrt(np.var(self._data) * (self.df - 2.0) / self.df)
