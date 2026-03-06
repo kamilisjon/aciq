@@ -2,7 +2,7 @@ from __future__ import annotations
 import functools
 import math
 from abc import ABC, abstractmethod
-from enum import Enum
+from enum import Enum, auto
 from typing import Any
 
 import numpy as np
@@ -28,11 +28,11 @@ def _ged_kurtosis(beta: float) -> float:
 # TODO: find scientific article for all distributions scientific backing. Need to be citable, so could be included into report.
 
 
-class DistributionType(str, Enum):
-  GAUSSIAN = "Gaussian"
-  LAPLACE = "Laplace"
-  STUDENT_T = "Student-t"
-  GENERALIZED_GAUSSIAN = "GED"
+class DistributionType(Enum):
+  GAUSSIAN = auto()
+  LAPLACE = auto()
+  STUDENT_T = auto()
+  GENERALIZED_GAUSSIAN = auto()
 
 
 class Distribution(ABC):
