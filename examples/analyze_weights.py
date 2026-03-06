@@ -36,6 +36,9 @@ def plot_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save
   # Distribution fits
   vec_sorted = np.sort(vec)
   for dist_type in DistributionType:
+    # TODO: Make these two distributions fit faster.
+    if vec.size > 200_000 and dist_type in (DistributionType.GENERALIZED_GAUSSIAN, DistributionType.STUDENT_T):
+      continue
     fitted = Distribution.fit(vec_sorted, dist_type)
     ll = fitted.log_likelihood
     ax.plot(vec_sorted, fitted.pdf(), color=DIST_COLORS[dist_type], linewidth=0.7, linestyle="--", label=f"{repr(fitted):30s} ll={ll:.3g}")

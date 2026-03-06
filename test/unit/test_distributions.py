@@ -110,6 +110,16 @@ class TestLaplace(unittest.TestCase):
 
 
 class TestStudentT(unittest.TestCase):
+  def test_fit_matches_scipy(self):
+    # Only df > 4 cases: StudentT fit uses kurtosis which is only finite for df > 4
+    for df, loc, scale in STUDENT_T_TEST_DF_LOC_SCALE:
+      data = make_student_t_data(df=df, loc=loc, scale=scale)
+      t = StudentT(data)
+      scipy_df, scipy_loc, scipy_scale = stats.t.fit(data)
+      np.testing.assert_allclose(t.df, scipy_df)
+      np.testing.assert_allclose(t.loc, scipy_loc)
+      np.testing.assert_allclose(t.scale, scipy_scale)
+
   def test_logpdf_formula_matches_scipy(self):
     for df, loc, scale in STUDENT_T_TEST_DF_LOC_SCALE:
       data = make_student_t_data(df=df, loc=loc, scale=scale)
@@ -131,14 +141,14 @@ class TestStudentT(unittest.TestCase):
       expected = np.sum(stats.t.logpdf(data, t.df, loc=t.loc, scale=t.scale))
       np.testing.assert_allclose(t.log_likelihood, expected)
 
-  def test_df_is_inf_when_kurtosis_nonpositive(self):
+  def test_fit_works_when_kurtosis_nonpositive(self):
     data = make_nonpositive_kurtosis_data()
     assert kurtosis(data) <= 0
-    assert StudentT(data).df == float("inf")
-    # Test if does not fail with inf df
-    StudentT(data).scale
-    StudentT(data).pdf()
-    StudentT(data).log_likelihood
+    t = StudentT(data)
+    assert t.df > 0
+    t.scale
+    t.pdf()
+    t.log_likelihood
 
   def test_pdf_at_arbitrary_x_matches_scipy(self):
     for df, loc, scale in STUDENT_T_TEST_DF_LOC_SCALE:
@@ -150,6 +160,15 @@ class TestStudentT(unittest.TestCase):
 
 
 class TestGeneralizedGaussian(unittest.TestCase):
+  def test_fit_matches_scipy(self):
+    for beta, loc, scale in GED_TEST_BETA_LOC_SCALE:
+      data = make_ged_data(beta=beta, loc=loc, scale=scale)
+      g = GeneralizedGaussian(data)
+      scipy_beta, scipy_loc, scipy_scale = stats.gennorm.fit(data)
+      np.testing.assert_allclose(g.beta, scipy_beta)
+      np.testing.assert_allclose(g.loc, scipy_loc)
+      np.testing.assert_allclose(g.scale, scipy_scale)
+
   def test_logpdf_formula_matches_scipy(self):
     for beta, loc, scale in GED_TEST_BETA_LOC_SCALE:
       data = make_ged_data(beta=beta, loc=loc, scale=scale)

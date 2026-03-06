@@ -18,10 +18,6 @@ def kurtosis(data: np.ndarray) -> np.floating[Any]:
   return np.mean(d**4) / np.mean(d**2) ** 2 - 3.0
 
 
-def _ged_kurtosis(beta: float) -> float:
-  return math.exp(math.lgamma(5 / beta) + math.lgamma(1 / beta) - 2 * math.lgamma(3 / beta)) - 3
-
-
 class DistributionType(Enum):
   GAUSSIAN = auto()
   LAPLACE = auto()
@@ -43,7 +39,8 @@ class Distribution(ABC):
     return self.pdf_at(self._data)
 
   def logpdf(self) -> np.ndarray:
-    return np.log(self.pdf())
+    p = self.pdf()
+    return np.log(np.maximum(p, np.finfo(p.dtype).tiny))
 
   @functools.cached_property
   def log_likelihood(self) -> float:
@@ -66,7 +63,7 @@ class Distribution(ABC):
 
 class Gaussian(Distribution):
   def __repr__(self) -> str:
-    return f"Gaussian({self.mu:.1f}, {self.sigma:.1f})"
+    return f"Gaussian({self.mu:.2f}, {self.sigma:.2f})"
 
   @property
   def mu(self) -> np.floating[Any]:
@@ -82,7 +79,7 @@ class Gaussian(Distribution):
 
 class Laplace(Distribution):
   def __repr__(self) -> str:
-    return f"Laplace({self.mu:.1f}, {self.b:.1f})"
+    return f"Laplace({self.mu:.2f}, {self.b:.2f})"
 
   @property
   def mu(self) -> np.floating[Any]:
@@ -98,24 +95,25 @@ class Laplace(Distribution):
 
 class StudentT(Distribution):
   def __repr__(self) -> str:
-    return f"Student-t({self.df:.1f}, {self.loc:.1f}, {self.scale:.1f})"
+    return f"Student-t({self.df:.2f}, {self.loc:.2f}, {self.scale:.2f})"
 
   @functools.cached_property
-  def df(self) -> np.floating[Any]:
-    k = kurtosis(self._data)
-    if k <= 0:
-      return self._data.dtype.type(np.inf)
-    return np.maximum(6.0 / k + 4.0, 2.01)
+  def _fit(self) -> tuple[float, float, float]:
+    from scipy import stats
 
-  @property
-  def loc(self) -> np.floating[Any]:
-    return np.mean(self._data)
+    return stats.t.fit(self._data)
 
   @functools.cached_property
-  def scale(self) -> np.floating[Any]:
-    if np.isinf(self.df):
-      return np.sqrt(np.var(self._data))
-    return np.sqrt(np.var(self._data) * (self.df - 2.0) / self.df)
+  def df(self) -> float:
+    return self._fit[0]
+
+  @functools.cached_property
+  def loc(self) -> float:
+    return self._fit[1]
+
+  @functools.cached_property
+  def scale(self) -> float:
+    return self._fit[2]
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     coeff = math.exp(math.lgamma((self.df + 1) / 2) - math.lgamma(self.df / 2)) / (math.sqrt(self.df * math.pi) * self.scale)
@@ -124,33 +122,25 @@ class StudentT(Distribution):
 
 class GeneralizedGaussian(Distribution):
   def __repr__(self) -> str:
-    return f"GED({self.beta:.1f}, {self.loc:.1f}, {self.scale:.1f})"
+    return f"GED({self.beta:.2f}, {self.loc:.2f}, {self.scale:.2f})"
 
   @functools.cached_property
-  def beta(self) -> np.floating[Any]:
-    k = kurtosis(self._data)
-    lo, hi = 0.01, 100.0
-    k_at_hi = _ged_kurtosis(hi)
-    k_at_lo = _ged_kurtosis(lo)
-    if k >= k_at_lo:
-      return self._data.dtype.type(lo)
-    if k <= k_at_hi:
-      return self._data.dtype.type(hi)
-    for _ in range(100):
-      mid = (lo + hi) / 2
-      if _ged_kurtosis(mid) > k:
-        lo = mid
-      else:
-        hi = mid
-    return self._data.dtype.type((lo + hi) / 2)
+  def _fit(self) -> tuple[float, float, float]:
+    from scipy import stats
 
-  @property
-  def loc(self) -> np.floating[Any]:
-    return np.mean(self._data)
+    return stats.gennorm.fit(self._data)
 
   @functools.cached_property
-  def scale(self) -> np.floating[Any]:
-    return np.sqrt(np.var(self._data) * math.exp(math.lgamma(1 / self.beta) - math.lgamma(3 / self.beta)))
+  def beta(self) -> float:
+    return self._fit[0]
+
+  @functools.cached_property
+  def loc(self) -> float:
+    return self._fit[1]
+
+  @functools.cached_property
+  def scale(self) -> float:
+    return self._fit[2]
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     return self.beta / (2 * self.scale * math.exp(math.lgamma(1 / self.beta))) * np.exp(-(np.abs((x - self.loc) / self.scale) ** self.beta))
