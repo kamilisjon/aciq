@@ -19,3 +19,10 @@ def make_laplace_data(mu: float, b: float, n: int = DISTRIBUTION_SAMPLE_SIZE, se
 def make_student_t_data(df: float, loc: float, scale: float, n: int = DISTRIBUTION_SAMPLE_SIZE, seed: int | None = None) -> np.ndarray:
   rng = np.random.default_rng(seed)
   return rng.standard_t(df, size=n) * scale + loc
+
+
+def make_ged_data(beta: float, loc: float, scale: float, n: int = DISTRIBUTION_SAMPLE_SIZE, seed: int | None = None) -> np.ndarray:
+  rng = np.random.default_rng(seed)
+  gamma_samples = rng.gamma(1 / beta, 1, size=n)
+  signs = rng.choice([-1, 1], size=n)
+  return loc + scale * signs * gamma_samples ** (1 / beta)

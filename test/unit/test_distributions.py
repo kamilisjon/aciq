@@ -4,13 +4,14 @@ import numpy as np
 import pytest
 from scipy import stats
 
-from aciq.distributions import Distribution, DistributionType, Gaussian, Laplace, StudentT, skewness, kurtosis
-from test.helpers import make_gaussian_data, make_laplace_data, make_student_t_data, make_nonpositive_kurtosis_data
+from aciq.distributions import Distribution, DistributionType, Gaussian, GeneralizedGaussian, Laplace, StudentT, skewness, kurtosis
+from test.helpers import make_gaussian_data, make_ged_data, make_laplace_data, make_student_t_data, make_nonpositive_kurtosis_data
 
 
 GAUSSIAN_TEST_MU_SIGMA: list[tuple[float, float]] = [(-3.0, 0.1), (0.0, 1.0), (100.0, 50.0)]
 LAPLACE_TEST_MU_B: list[tuple[float, float]] = GAUSSIAN_TEST_MU_SIGMA
 STUDENT_T_TEST_DF_LOC_SCALE: list[tuple[float, float, float]] = [(5.0, 0.0, 1.0), (10.0, -3.0, 0.5), (3.0, 100.0, 50.0)]
+GED_TEST_BETA_LOC_SCALE: list[tuple[float, float, float]] = [(0.5, 0.0, 1.0), (1.5, -3.0, 0.5), (3.0, 100.0, 50.0)]
 
 
 class TestCustomStatistics(unittest.TestCase):
@@ -145,6 +146,37 @@ class TestStudentT(unittest.TestCase):
       np.testing.assert_allclose(t.pdf_at(x), expected)
 
 
+class TestGeneralizedGaussian(unittest.TestCase):
+  def test_logpdf_formula_matches_scipy(self):
+    for beta, loc, scale in GED_TEST_BETA_LOC_SCALE:
+      data = make_ged_data(beta=beta, loc=loc, scale=scale)
+      g = GeneralizedGaussian(data)
+      expected = stats.gennorm.logpdf(data, g.beta, loc=g.loc, scale=g.scale)
+      np.testing.assert_allclose(g.logpdf(), expected)
+
+  def test_pdf_matches_scipy(self):
+    for beta, loc, scale in GED_TEST_BETA_LOC_SCALE:
+      data = make_ged_data(beta=beta, loc=loc, scale=scale)
+      g = GeneralizedGaussian(data)
+      expected = stats.gennorm.pdf(data, g.beta, loc=g.loc, scale=g.scale)
+      np.testing.assert_allclose(g.pdf(), expected)
+
+  def test_log_likelihood_matches_scipy(self):
+    for beta, loc, scale in GED_TEST_BETA_LOC_SCALE:
+      data = make_ged_data(beta=beta, loc=loc, scale=scale)
+      g = GeneralizedGaussian(data)
+      expected = np.sum(stats.gennorm.logpdf(data, g.beta, loc=g.loc, scale=g.scale))
+      np.testing.assert_allclose(g.log_likelihood, expected)
+
+  def test_pdf_at_arbitrary_x_matches_scipy(self):
+    for beta, loc, scale in GED_TEST_BETA_LOC_SCALE:
+      data = make_ged_data(beta=beta, loc=loc, scale=scale)
+      g = GeneralizedGaussian(data)
+      x = np.linspace(loc - 3 * scale, loc + 3 * scale, 100)
+      expected = stats.gennorm.pdf(x, g.beta, loc=g.loc, scale=g.scale)
+      np.testing.assert_allclose(g.pdf_at(x), expected)
+
+
 class TestDistributionFit(unittest.TestCase):
   def test_fit_gaussian_returns_gaussian(self):
     data = make_gaussian_data()
@@ -188,6 +220,19 @@ class TestDistributionFit(unittest.TestCase):
     for dist_type in DistributionType:
       Distribution.fit(data, dist_type)
 
+  def test_fit_generalized_gaussian_returns_generalized_gaussian(self):
+    data = make_gaussian_data()
+    assert isinstance(Distribution.fit(data, DistributionType.GENERALIZED_GAUSSIAN), GeneralizedGaussian)
+
+  def test_fit_generalized_gaussian_matches_direct(self):
+    data = make_gaussian_data()
+    fitted = Distribution.fit(data, DistributionType.GENERALIZED_GAUSSIAN)
+    assert isinstance(fitted, GeneralizedGaussian)
+    direct = GeneralizedGaussian(data)
+    assert fitted.beta == direct.beta
+    assert fitted.loc == direct.loc
+    assert fitted.scale == direct.scale
+
   def test_fit_raises_for_unsupported_type(self):
     with pytest.raises(ValueError):
       Distribution.fit(make_gaussian_data(), "unsupported")  # type: ignore[arg-type]
@@ -221,6 +266,18 @@ class TestCaching(unittest.TestCase):
   def test_student_t_log_likelihood_is_cached(self):
     t = StudentT(make_gaussian_data())
     assert t.log_likelihood is t.log_likelihood
+
+  def test_generalized_gaussian_beta_is_cached(self):
+    g = GeneralizedGaussian(make_gaussian_data())
+    assert g.beta is g.beta
+
+  def test_generalized_gaussian_scale_is_cached(self):
+    g = GeneralizedGaussian(make_gaussian_data())
+    assert g.scale is g.scale
+
+  def test_generalized_gaussian_log_likelihood_is_cached(self):
+    g = GeneralizedGaussian(make_gaussian_data())
+    assert g.log_likelihood is g.log_likelihood
 
 
 if __name__ == "__main__":

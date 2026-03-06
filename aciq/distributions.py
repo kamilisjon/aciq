@@ -28,6 +28,7 @@ class DistributionType(str, Enum):
   GAUSSIAN = "Gaussian"
   LAPLACE = "Laplace"
   STUDENT_T = "Student-t"
+  GENERALIZED_GAUSSIAN = "GED"
 
 
 class Distribution(ABC):
@@ -57,6 +58,8 @@ class Distribution(ABC):
         return Laplace(data)
       case DistributionType.STUDENT_T:
         return StudentT(data)
+      case DistributionType.GENERALIZED_GAUSSIAN:
+        return GeneralizedGaussian(data)
       case _:
         raise ValueError(f"Unsupported distribution type: {dist_type}")
 
@@ -113,3 +116,41 @@ class StudentT(Distribution):
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     coeff = math.exp(math.lgamma((self.df + 1) / 2) - math.lgamma(self.df / 2)) / (math.sqrt(self.df * math.pi) * self.scale)
     return coeff * (1 + ((x - self.loc) / self.scale) ** 2 / self.df) ** (-(self.df + 1) / 2)
+
+
+def _ged_kurtosis(beta: float) -> float:
+  return math.exp(math.lgamma(5 / beta) + math.lgamma(1 / beta) - 2 * math.lgamma(3 / beta)) - 3
+
+
+class GeneralizedGaussian(Distribution):
+  @functools.cached_property
+  def beta(self) -> np.floating[Any]:
+    k = kurtosis(self._data)
+    lo, hi = 0.01, 100.0
+    k_at_hi = _ged_kurtosis(hi)
+    k_at_lo = _ged_kurtosis(lo)
+    if k >= k_at_lo:
+      return self._data.dtype.type(lo)
+    if k <= k_at_hi:
+      return self._data.dtype.type(hi)
+    for _ in range(100):
+      mid = (lo + hi) / 2
+      if _ged_kurtosis(mid) > k:
+        lo = mid
+      else:
+        hi = mid
+    return self._data.dtype.type((lo + hi) / 2)
+
+  @property
+  def loc(self) -> np.floating[Any]:
+    return np.mean(self._data)
+
+  @functools.cached_property
+  def scale(self) -> np.floating[Any]:
+    var = np.var(self._data)
+    return np.sqrt(var * math.exp(math.lgamma(1 / self.beta) - math.lgamma(3 / self.beta)))
+
+  def pdf_at(self, x: np.ndarray) -> np.ndarray:
+    b = self.beta
+    coeff = b / (2 * self.scale * math.exp(math.lgamma(1 / b)))
+    return coeff * np.exp(-(np.abs((x - self.loc) / self.scale) ** b))
