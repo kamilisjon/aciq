@@ -155,4 +155,3 @@ class GeneralizedGaussian(Distribution):
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     return self.beta / (2 * self.scale * math.exp(math.lgamma(1 / self.beta))) * np.exp(-(np.abs((x - self.loc) / self.scale) ** self.beta))
-
