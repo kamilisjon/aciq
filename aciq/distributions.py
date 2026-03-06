@@ -37,16 +37,14 @@ class Distribution(ABC):
   def pdf_at(self, x: np.ndarray) -> np.ndarray: ...
 
   @abstractmethod
-  def logpdf_at(self, x: np.ndarray) -> np.ndarray: ...
-
-  @abstractmethod
   def __repr__(self) -> str: ...
 
   def pdf(self) -> np.ndarray:
     return self.pdf_at(self._data)
 
   def logpdf(self) -> np.ndarray:
-    return self.logpdf_at(self._data)
+    p = self.pdf()
+    return np.log(np.maximum(p, np.finfo(p.dtype).tiny))
 
   @functools.cached_property
   def log_likelihood(self) -> float:
@@ -82,10 +80,6 @@ class Gaussian(Distribution):
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     return np.exp(-(((x - self.mu) / self.sigma) ** 2) / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
 
-  def logpdf_at(self, x: np.ndarray) -> np.ndarray:
-    z = (x - self.mu) / self.sigma
-    return -0.5 * z**2 - 0.5 * np.log(2.0 * math.pi) - np.log(float(self.sigma))
-
 
 class Laplace(Distribution):
   def __repr__(self) -> str:
@@ -101,9 +95,6 @@ class Laplace(Distribution):
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     return np.exp(-np.abs(x - self.mu) / self.b) / (2.0 * self.b)
-
-  def logpdf_at(self, x: np.ndarray) -> np.ndarray:
-    return -np.abs(x - self.mu) / self.b - np.log(2.0 * float(self.b))
 
 
 class StudentT(Distribution):
@@ -130,13 +121,6 @@ class StudentT(Distribution):
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     coeff = math.exp(math.lgamma((self.df + 1) / 2) - math.lgamma(self.df / 2)) / (math.sqrt(self.df * math.pi) * self.scale)
     return coeff * (1 + ((x - self.loc) / self.scale) ** 2 / self.df) ** (-(self.df + 1) / 2)
-
-  def logpdf_at(self, x: np.ndarray) -> np.ndarray:
-    if np.isinf(self.df):
-      z = (x - self.loc) / self.scale
-      return -0.5 * z**2 - 0.5 * np.log(2.0 * math.pi) - np.log(float(self.scale))
-    log_coeff = math.lgamma((self.df + 1) / 2) - math.lgamma(self.df / 2) - 0.5 * np.log(float(self.df) * math.pi) - np.log(float(self.scale))
-    return log_coeff - (self.df + 1) / 2 * np.log1p(((x - self.loc) / self.scale) ** 2 / self.df)
 
 
 class GeneralizedGaussian(Distribution):
@@ -172,6 +156,3 @@ class GeneralizedGaussian(Distribution):
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     return self.beta / (2 * self.scale * math.exp(math.lgamma(1 / self.beta))) * np.exp(-(np.abs((x - self.loc) / self.scale) ** self.beta))
 
-  def logpdf_at(self, x: np.ndarray) -> np.ndarray:
-    log_coeff = np.log(float(self.beta)) - np.log(2.0 * float(self.scale)) - math.lgamma(1 / self.beta)
-    return log_coeff - np.abs((x - self.loc) / self.scale) ** self.beta
