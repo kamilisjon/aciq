@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -31,13 +32,11 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
   fig, ax = plt.subplots(figsize=(9, 5))
   ax.hist(vec, bins=300, density=True, alpha=0.5, color="steelblue", label="Empirical")
 
-  fit_lines = []
   vec_sorted = np.sort(vec)
   for dist_type in DistributionType:
     fitted = Distribution.fit(vec_sorted, dist_type)
     ll = fitted.log_likelihood
-    fit_lines.append(f"{repr(fitted):30s} ll={ll:.3g}")
-    ax.plot(vec_sorted, fitted.pdf(), color=DIST_COLORS[dist_type], linewidth=0.7, linestyle="--", label=repr(fitted))
+    ax.plot(vec_sorted, fitted.pdf(), color=DIST_COLORS[dist_type], linewidth=0.7, linestyle="--", label=f"{repr(fitted):30s} ll={ll:.3g}")
 
   eda_lines = [
     f"n        = {vec.size:,}",
@@ -50,7 +49,7 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
   ax.text(
     0.98,
     0.96,
-    "\n".join(eda_lines + [""] + fit_lines),
+    "\n".join(eda_lines),
     transform=ax.transAxes,
     fontsize=7.5,
     va="top",
@@ -63,7 +62,7 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
   ax.set_title(f"Layer {layer_idx}: {layer_name}", fontsize=10)
   ax.set_xlabel("Weight value")
   ax.set_ylabel("Density")
-  ax.legend(fontsize=8, loc="upper left")
+  ax.legend(fontsize=7.5, loc="upper left", prop={"family": "monospace", "size": 7.5})
   ax.grid(True, alpha=0.3)
   fig.tight_layout()
   fig.savefig(save_path / f"layer_{layer_idx:03d}_{safe[:60]}.png", dpi=500)
@@ -71,6 +70,8 @@ def plot_layer_fit(vec: np.ndarray, layer_name: str, layer_idx: int, save_path: 
 
 
 def main():
+  if RESULTS_DIR.exists():
+    shutil.rmtree(RESULTS_DIR)
   for model_name, model_path in models.items():
     results_dir = RESULTS_DIR / model_name
     model = load_onnx(model_path)
