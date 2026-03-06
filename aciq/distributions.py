@@ -77,6 +77,9 @@ class Gaussian(Distribution):
     z = (x - self.mu) / self.sigma
     return np.exp(-(z**2) / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
 
+  def __repr__(self) -> str:
+    return f"Gaussian({self.mu:.1f}, {self.sigma:.1f})"
+
 
 class Laplace(Distribution):
   @property
@@ -89,6 +92,9 @@ class Laplace(Distribution):
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     return np.exp(-np.abs(x - self.mu) / self.b) / (2.0 * self.b)
+
+  def __repr__(self) -> str:
+    return f"Laplace({self.mu:.1f}, {self.b:.1f})"
 
 
 class StudentT(Distribution):
@@ -116,6 +122,9 @@ class StudentT(Distribution):
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     coeff = math.exp(math.lgamma((self.df + 1) / 2) - math.lgamma(self.df / 2)) / (math.sqrt(self.df * math.pi) * self.scale)
     return coeff * (1 + ((x - self.loc) / self.scale) ** 2 / self.df) ** (-(self.df + 1) / 2)
+
+  def __repr__(self) -> str:
+    return f"Student-t({self.df:.1f}, {self.loc:.1f}, {self.scale:.1f})"
 
 
 def _ged_kurtosis(beta: float) -> float:
@@ -154,3 +163,6 @@ class GeneralizedGaussian(Distribution):
     b = self.beta
     coeff = b / (2 * self.scale * math.exp(math.lgamma(1 / b)))
     return coeff * np.exp(-(np.abs((x - self.loc) / self.scale) ** b))
+
+  def __repr__(self) -> str:
+    return f"GED({self.beta:.1f}, {self.loc:.1f}, {self.scale:.1f})"
