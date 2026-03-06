@@ -110,6 +110,16 @@ class TestLaplace(unittest.TestCase):
 
 
 class TestStudentT(unittest.TestCase):
+  def test_fit_matches_scipy(self):
+    # Only df > 4 cases: StudentT fit uses kurtosis which is only finite for df > 4
+    for df, loc, scale in STUDENT_T_TEST_DF_LOC_SCALE:
+      data = make_student_t_data(df=df, loc=loc, scale=scale)
+      t = StudentT(data)
+      scipy_df, scipy_loc, scipy_scale = stats.t.fit(data)
+      np.testing.assert_allclose(t.df, scipy_df)
+      np.testing.assert_allclose(t.loc, scipy_loc)
+      np.testing.assert_allclose(t.scale, scipy_scale)
+
   def test_logpdf_formula_matches_scipy(self):
     for df, loc, scale in STUDENT_T_TEST_DF_LOC_SCALE:
       data = make_student_t_data(df=df, loc=loc, scale=scale)
@@ -150,6 +160,15 @@ class TestStudentT(unittest.TestCase):
 
 
 class TestGeneralizedGaussian(unittest.TestCase):
+  def test_fit_matches_scipy(self):
+    for beta, loc, scale in GED_TEST_BETA_LOC_SCALE:
+      data = make_ged_data(beta=beta, loc=loc, scale=scale)
+      g = GeneralizedGaussian(data)
+      scipy_beta, scipy_loc, scipy_scale = stats.gennorm.fit(data)
+      np.testing.assert_allclose(g.beta, scipy_beta)
+      np.testing.assert_allclose(g.loc, scipy_loc)
+      np.testing.assert_allclose(g.scale, scipy_scale)
+
   def test_logpdf_formula_matches_scipy(self):
     for beta, loc, scale in GED_TEST_BETA_LOC_SCALE:
       data = make_ged_data(beta=beta, loc=loc, scale=scale)
