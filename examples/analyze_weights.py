@@ -8,6 +8,7 @@ import onnx
 from aciq.onnx_io import load_onnx, extract_layers
 from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
 from aciq.quantization import minmax_alpha, quantize
+from aciq.mse import optimal_alpha
 
 
 RESULTS_DIR = Path("results")
@@ -27,7 +28,8 @@ DIST_COLORS = {
 }
 
 
-def plot_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save_path: Path) -> None:
+def plot_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save_path: Path):
+  """Returns (best_dist_name, alpha_star, L_star, L_minmax) for the summary table."""
   save_path.mkdir(parents=True, exist_ok=True)
 
   fig, ax = plt.subplots(figsize=(9, 5))
@@ -35,20 +37,31 @@ def plot_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save
 
   # Distribution fits
   vec_sorted = np.sort(vec)
+  fits: dict[DistributionType, Distribution] = {}
   for dist_type in DistributionType:
     # TODO: Make these two distributions fit faster.
     if vec.size > 200_000 and dist_type in (DistributionType.GENERALIZED_GAUSSIAN, DistributionType.STUDENT_T):
       continue
     fitted = Distribution.fit(vec_sorted, dist_type)
+    fits[dist_type] = fitted
     ll = fitted.log_likelihood
     ax.plot(vec_sorted, fitted.pdf(), color=DIST_COLORS[dist_type], linewidth=0.7, linestyle="--", label=f"{repr(fitted):30s} ll={ll:.3g}")
 
   # MinMax quantization
   alpha = minmax_alpha(vec)
   vec_q = quantize(vec, alpha, bits)
-  mse = float(np.mean((vec - vec_q) ** 2))
-  ax.axvline(-alpha, color="grey", linestyle=":", linewidth=1.2, label=f"MinMax α={alpha:.2f} MSE={mse:.2e}")
+  mae_val = float(np.mean(np.abs(vec - vec_q)))
+  ax.axvline(-alpha, color="grey", linestyle=":", linewidth=1.2, label=f"MinMax α={alpha:.2f} MAE={mae_val:.2e}")
   ax.axvline(alpha, color="grey", linestyle=":", linewidth=1.2)
+
+  # Optimal alpha* — Phase 3
+  best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
+  best_dist = fits[best_type]
+  a_star = optimal_alpha(best_dist, bits)
+  vec_q = quantize(vec, a_star, bits)
+  mae_val = float(np.mean(np.abs(vec - vec_q)))
+  ax.axvline(-a_star, color="purple", linestyle="--", linewidth=1.2, label=f"{repr(best_dist)} α={a_star:.2f} MAE={mae_val:.2e}")
+  ax.axvline(a_star, color="purple", linestyle="--", linewidth=1.2)
 
   eda_lines = [
     f"n        = {vec.size:,}",
