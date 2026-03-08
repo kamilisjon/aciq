@@ -29,7 +29,7 @@ DIST_COLORS = {
 }
 
 
-def plot_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save_path: Path):
+def plot_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save_path: Path) -> None:
   save_path.mkdir(parents=True, exist_ok=True)
 
   fig, ax = plt.subplots(figsize=(9, 5))
