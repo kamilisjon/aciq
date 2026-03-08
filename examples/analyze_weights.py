@@ -87,7 +87,9 @@ def plot_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save
   vec_q = quantize(vec, alpha_aciq, bits)
   mae_val = float(np.mean(np.abs(vec - vec_q)))
   if alpha_aciq != alpha:
-    ax.axvline(-alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7, label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_val:.2e}")
+    ax.axvline(
+      -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7, label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_val:.2e}"
+    )
     ax.axvline(alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7)
 
   eda_lines = [
