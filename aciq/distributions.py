@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from enum import Enum, auto
 from typing import Any
 
+from scipy import stats
 import numpy as np
 
 
@@ -31,6 +32,9 @@ class Distribution(ABC):
 
   @abstractmethod
   def pdf_at(self, x: np.ndarray) -> np.ndarray: ...
+
+  @abstractmethod
+  def cdf_at(self, x: np.ndarray) -> np.ndarray: ...
 
   @abstractmethod
   def __repr__(self) -> str: ...
@@ -76,6 +80,9 @@ class Gaussian(Distribution):
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     return np.exp(-(((x - self.mu) / self.sigma) ** 2) / 2.0) / np.sqrt(2.0 * np.pi) / self.sigma
 
+  def cdf_at(self, x: np.ndarray) -> np.ndarray:
+    return stats.norm.cdf(x, loc=self.mu, scale=self.sigma)
+
 
 class Laplace(Distribution):
   def __repr__(self) -> str:
@@ -92,6 +99,9 @@ class Laplace(Distribution):
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     return np.exp(-np.abs(x - self.mu) / self.b) / (2.0 * self.b)
 
+  def cdf_at(self, x: np.ndarray) -> np.ndarray:
+    return stats.laplace.cdf(x, loc=self.mu, scale=self.b)
+
 
 class StudentT(Distribution):
   def __repr__(self) -> str:
@@ -99,8 +109,6 @@ class StudentT(Distribution):
 
   @functools.cached_property
   def _fit(self) -> tuple[float, float, float]:
-    from scipy import stats
-
     return stats.t.fit(self._data)
 
   @functools.cached_property
@@ -119,6 +127,9 @@ class StudentT(Distribution):
     coeff = math.exp(math.lgamma((self.df + 1) / 2) - math.lgamma(self.df / 2)) / (math.sqrt(self.df * math.pi) * self.scale)
     return coeff * (1 + ((x - self.loc) / self.scale) ** 2 / self.df) ** (-(self.df + 1) / 2)
 
+  def cdf_at(self, x: np.ndarray) -> np.ndarray:
+    return stats.t.cdf(x, self.df, loc=self.loc, scale=self.scale)
+
 
 class GeneralizedGaussian(Distribution):
   def __repr__(self) -> str:
@@ -126,8 +137,6 @@ class GeneralizedGaussian(Distribution):
 
   @functools.cached_property
   def _fit(self) -> tuple[float, float, float]:
-    from scipy import stats
-
     return stats.gennorm.fit(self._data)
 
   @functools.cached_property
@@ -144,3 +153,6 @@ class GeneralizedGaussian(Distribution):
 
   def pdf_at(self, x: np.ndarray) -> np.ndarray:
     return self.beta / (2 * self.scale * math.exp(math.lgamma(1 / self.beta))) * np.exp(-(np.abs((x - self.loc) / self.scale) ** self.beta))
+
+  def cdf_at(self, x: np.ndarray) -> np.ndarray:
+    return stats.gennorm.cdf(x, self.beta, loc=self.loc, scale=self.scale)
