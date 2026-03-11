@@ -4,11 +4,9 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import onnx
-from scipy import stats
 
 from aciq.onnx_io import load_onnx, extract_layers
 from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
-from aciq.distributions import Gaussian, Laplace, StudentT, GeneralizedGaussian
 from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 
 
@@ -57,32 +55,7 @@ def plot_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save
   # Optimal alpha*
   best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
   best_dist = fits[best_type]
-  match best_type:
-    case DistributionType.GAUSSIAN:
-      assert isinstance(best_dist, Gaussian)
-
-      def cdf(x):
-        return stats.norm.cdf(x, loc=best_dist.mu, scale=best_dist.sigma)
-
-    case DistributionType.LAPLACE:
-      assert isinstance(best_dist, Laplace)
-
-      def cdf(x):
-        return stats.laplace.cdf(x, loc=best_dist.mu, scale=best_dist.b)
-
-    case DistributionType.STUDENT_T:
-      assert isinstance(best_dist, StudentT)
-
-      def cdf(x):
-        return stats.t.cdf(x, best_dist.df, loc=best_dist.loc, scale=best_dist.scale)
-
-    case DistributionType.GENERALIZED_GAUSSIAN:
-      assert isinstance(best_dist, GeneralizedGaussian)
-
-      def cdf(x):
-        return stats.gennorm.cdf(x, best_dist.beta, loc=best_dist.loc, scale=best_dist.scale)
-
-  alpha_aciq = solve_symmetric_mae_alpha(cdf=cdf, b=bits, alpha_max=alpha)
+  alpha_aciq = solve_symmetric_mae_alpha(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha)
   vec_q = quantize(vec, alpha_aciq, bits)
   mae_val = float(np.mean(np.abs(vec - vec_q)))
   if alpha_aciq != alpha:
