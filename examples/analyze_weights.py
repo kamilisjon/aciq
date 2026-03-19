@@ -66,6 +66,8 @@ def plot_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save
 
   eda_lines = [
     f"n        = {vec.size:,}",
+    f"Min      = {float(np.min(vec)):.5f}",
+    f"Max      = {float(np.max(vec)):.5f}",
     f"Mean     = {float(np.mean(vec)):.5f}",
     f"Variance = {float(np.var(vec)):.6f}",
     f"Skewness = {float(skewness(vec)):.4f}",
