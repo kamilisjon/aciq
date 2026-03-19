@@ -7,7 +7,7 @@ import onnx
 
 from aciq.onnx_io import load_onnx, extract_layers
 from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
-from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
+from aciq.quantization import minmax_alpha, percentile_alpha, quantize, solve_symmetric_mae_alpha
 
 
 RESULTS_DIR = Path("results")
@@ -51,6 +51,13 @@ def plot_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save
   mae_val = float(np.mean(np.abs(vec - vec_q)))
   ax.axvline(-alpha, color="grey", linestyle=":", linewidth=1.2, label=f"MinMax α={alpha:.2f} MAE={mae_val:.2e}")
   ax.axvline(alpha, color="grey", linestyle=":", linewidth=1.2)
+
+  # 99.99 percentile quantization
+  alpha_pct = percentile_alpha(vec)
+  vec_q = quantize(vec, alpha_pct, bits)
+  mae_val = float(np.mean(np.abs(vec - vec_q)))
+  ax.axvline(-alpha_pct, color="purple", linestyle="--", linewidth=0.7, label=f"P99.99 α={alpha_pct:.2f} MAE={mae_val:.2e}")
+  ax.axvline(alpha_pct, color="purple", linestyle="--", linewidth=0.7)
 
   # Optimal alpha*
   best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)

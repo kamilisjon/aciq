@@ -22,6 +22,10 @@ def solve_symmetric_mae_alpha(cdf: Callable[[float], float], b: int, alpha_max: 
   return root_scalar(g, bracket=(lo, hi), method="brentq").root
 
 
+def percentile_alpha(data: np.ndarray, percentile: float = 99.99) -> float:
+  return float(np.percentile(np.abs(data), percentile))
+
+
 def quantize(data: np.ndarray, alpha: float, bits: int) -> np.ndarray:
   """Symmetric uniform quantization with range [-alpha, alpha]. Returns dequantized values."""
   qmax = 2 ** (bits - 1) - 1
