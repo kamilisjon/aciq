@@ -38,8 +38,8 @@ def plot_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save
   fits: dict[DistributionType, Distribution] = {}
   for dist_type in DistributionType:
     # TODO: Make these two distributions fit faster.
-    if vec.size > 200_000 and dist_type in (DistributionType.GENERALIZED_GAUSSIAN, DistributionType.STUDENT_T):
-      continue
+    # if vec.size > 200_000 and dist_type in (DistributionType.GENERALIZED_GAUSSIAN, DistributionType.STUDENT_T):
+    #   continue
     fitted = Distribution.fit(vec_sorted, dist_type)
     fits[dist_type] = fitted
     ll = fitted.log_likelihood
@@ -99,6 +99,8 @@ def main():
   if RESULTS_DIR.exists():
     shutil.rmtree(RESULTS_DIR)
   for model_name, model_path in models.items():
+    if model_name == "bert":
+      continue
     results_dir = RESULTS_DIR / model_name
     model = load_onnx(model_path)
     layers = extract_layers(model)
@@ -107,6 +109,8 @@ def main():
     for idx, layer in enumerate(layers, 1):
       vec = onnx.numpy_helper.to_array(layer.tensor).flatten().astype(np.float32)
       n = len(vec)
+      if n < 2050:
+        continue
       print(f"[{idx:>3}/{len(layers)}] {layer.op_type:20} {layer.tensor.name:50} n={n:,}")
       for bits in BITS:
         plot_layer(vec, layer.tensor.name, idx, bits, results_dir / f"{bits}bit")
