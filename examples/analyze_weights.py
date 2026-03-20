@@ -11,7 +11,7 @@ from aciq.quantization import minmax_alpha, percentile_alpha, quantize, solve_sy
 
 
 RESULTS_DIR = Path("results")
-BITS = [8]
+BITS = 8
 
 # TODO: should group layers by which model block that are in. What blocks does ResNet have?
 #       Perhaps should group by what activation function is applied?
@@ -121,8 +121,8 @@ def main():
       if n < 2050:
         continue
       print(f"[{idx:>3}/{len(layers)}] {layer.op_type:20} {layer.tensor.name:50} n={n:,}")
-      for bits in BITS:
-        plot_layer(vec, layer.tensor.name, idx, bits, results_dir / f"{bits}bit")
+      
+      plot_layer(vec, layer.tensor.name, idx, BITS, results_dir)
 
 
 if __name__ == "__main__":
