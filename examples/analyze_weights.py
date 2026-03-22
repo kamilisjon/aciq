@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import onnx
 
-from aciq.onnx_io import extract_layers
+from aciq.onnx_io import extract_tensors
 from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
 from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 
@@ -104,17 +104,22 @@ def main():
       continue
     results_dir = RESULTS_DIR / model_name
     model = onnx.load(str(model_path))
-    layers = extract_layers(model)
-    print(f"[{model_name}] Total layers: {len(layers)}")
+    nodes, tensors = list(model.graph.node), extract_tensors(model)
+    print(f"[{model_name}] Total nodes: {len(nodes)}")
 
-    for idx, layer in enumerate(layers, 1):
-      vec = onnx.numpy_helper.to_array(layer.tensor).flatten().astype(np.float32)
-      n = len(vec)
-      if n < 2050:
-        continue
-      print(f"[{idx:>3}/{len(layers)}] {layer.op_type:20} {layer.tensor.name:50} n={n:,}")
-      
-      plot_layer(vec, layer.tensor.name, idx, BITS, results_dir)
+    layer_idx = 0
+    for node in nodes:
+      match node.op_type:
+        case "Conv" | "Gemm":
+          weight_name = node.input[1]
+          weight_tensor = tensors[weight_name]
+          vec = onnx.numpy_helper.to_array(weight_tensor).flatten().astype(np.float32)
+          layer_idx += 1
+          print(f"[{layer_idx:>3}] {node.op_type:6} {weight_name:50} n={len(vec):,}")
+          plot_layer(vec, weight_name, layer_idx, BITS, results_dir)
+        case _:
+          continue
+      layer_idx += 1
 
 
 if __name__ == "__main__":
