@@ -5,9 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import onnx
 
-from aciq.onnx_io import load_onnx, extract_layers
+from aciq.onnx_io import extract_layers
 from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
-from aciq.quantization import minmax_alpha, percentile_alpha, quantize, solve_symmetric_mae_alpha
+from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 
 
 RESULTS_DIR = Path("results")
@@ -15,9 +15,8 @@ BITS = 8
 
 # TODO: should group layers by which model block that are in. What blocks does ResNet have?
 #       Perhaps should group by what activation function is applied?
-# TODO: why some layers of Bert have Add with input weights and other have encapsulated weights? How to unify?
 
-models: dict[str, Path] = {"resnet50": Path("models/resnet50_Opset18.onnx"), "bert": Path("models/bert_Opset18.onnx")}
+models: dict[str, Path] = {"resnet50": Path("models/resnet50_Opset18.onnx")}
 
 DIST_COLORS = {
   DistributionType.GAUSSIAN: "red",
@@ -51,13 +50,6 @@ def plot_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save
   mae_val = float(np.mean(np.abs(vec - vec_q)))
   ax.axvline(-alpha, color="grey", linestyle=":", linewidth=1.2, label=f"MinMax α={alpha:.2f} MAE={mae_val:.2e}")
   ax.axvline(alpha, color="grey", linestyle=":", linewidth=1.2)
-
-  # 99.99 percentile quantization
-  alpha_pct = percentile_alpha(vec)
-  vec_q = quantize(vec, alpha_pct, bits)
-  mae_val = float(np.mean(np.abs(vec - vec_q)))
-  ax.axvline(-alpha_pct, color="purple", linestyle="--", linewidth=0.7, label=f"P99.99 α={alpha_pct:.2f} MAE={mae_val:.2e}")
-  ax.axvline(alpha_pct, color="purple", linestyle="--", linewidth=0.7)
 
   # Optimal alpha*
   best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
@@ -111,7 +103,7 @@ def main():
     if model_name == "bert":
       continue
     results_dir = RESULTS_DIR / model_name
-    model = load_onnx(model_path)
+    model = onnx.load(str(model_path))
     layers = extract_layers(model)
     print(f"[{model_name}] Total layers: {len(layers)}")
 

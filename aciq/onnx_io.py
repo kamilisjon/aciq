@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from pathlib import Path
 
 import onnx
 
@@ -21,7 +20,3 @@ def extract_layers(onnx_model: onnx.ModelProto) -> list[OnnxLayer]:
     assert tensor.name in weight_to_op, f"Initializer '{tensor.name}' has no consuming node"
     result.append(OnnxLayer(tensor=tensor, op_type=weight_to_op[tensor.name]))
   return result
-
-
-def load_onnx(model_path: Path) -> onnx.ModelProto:
-  return onnx.load(str(model_path))
