@@ -52,15 +52,22 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     ax.hist(vec, bins=300, density=True, alpha=0.5, color="steelblue", label="Empirical")
 
     for dist_type, fitted in fits.items():
-      ax.plot(vec_sorted, fitted.pdf(), color=DIST_COLORS[dist_type], linewidth=0.7, linestyle="--",
-              label=f"{repr(fitted):30s} ll={fitted.log_likelihood:.3g}")
+      ax.plot(
+        vec_sorted,
+        fitted.pdf(),
+        color=DIST_COLORS[dist_type],
+        linewidth=0.7,
+        linestyle="--",
+        label=f"{repr(fitted):30s} ll={fitted.log_likelihood:.3g}",
+      )
 
     ax.axvline(-alpha, color="grey", linestyle=":", linewidth=1.2, label=f"MinMax α={alpha:.2f} MAE={mae_minmax:.2e}")
     ax.axvline(alpha, color="grey", linestyle=":", linewidth=1.2)
 
     if alpha_aciq != alpha:
-      ax.axvline(-alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7,
-                 label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_aciq:.2e}")
+      ax.axvline(
+        -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7, label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_aciq:.2e}"
+      )
       ax.axvline(alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7)
 
     eda_lines = [
@@ -72,8 +79,18 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
       f"Skewness = {float(skewness(vec)):.4f}",
       f"Kurtosis = {float(kurtosis(vec)):.4f}",
     ]
-    ax.text(0.98, 0.96, "\n".join(eda_lines), transform=ax.transAxes, fontsize=7.5,
-            va="top", ha="right", multialignment="left", bbox=dict(facecolor="lightgrey"), family="monospace")
+    ax.text(
+      0.98,
+      0.96,
+      "\n".join(eda_lines),
+      transform=ax.transAxes,
+      fontsize=7.5,
+      va="top",
+      ha="right",
+      multialignment="left",
+      bbox=dict(facecolor="lightgrey"),
+      family="monospace",
+    )
     safe = layer_name.replace("/", "_").replace(":", "_")
     ax.set_title(f"Layer {layer_idx}: {layer_name} ({bits}bit)", fontsize=10)
     ax.set_xlabel("Weight value")
@@ -136,7 +153,7 @@ def main():
           mae_ch = total_err_mm / total_n
           mae_ch_ac = total_err_ac / total_n
 
-          print(f"[{layer_idx:>3}] Conv   {weight_name:50} n={len(vec):,}  MAE: layer={mae_mm:.2e}  aciq={mae_ac:.2e}  per_ch={mae_ch:.2e}  per_ch_aciq={mae_ch_ac:.2e}")
+          print(f"[{layer_idx:>3}] Conv   {weight_name:50} n={len(vec):,}")
           writer.writerow([layer_idx, "Conv", weight_name, len(vec), mae_mm, mae_ac, mae_ch, mae_ch_ac])
 
         case "Gemm":
