@@ -16,7 +16,6 @@ def solve_symmetric_mae_alpha(cdf: Callable[[float], float], b: int, alpha_max: 
   lo, hi = 0.0, alpha_max
 
   if g(hi) <= 0:
-    print("Using alpha_max")
     return alpha_max
 
   return root_scalar(g, bracket=(lo, hi), method="brentq").root
