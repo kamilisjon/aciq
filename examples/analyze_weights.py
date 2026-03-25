@@ -21,7 +21,7 @@ BITS = 8
 # TODO: should group layers by which model block that are in. What blocks does ResNet have?
 #       Perhaps should group by what activation function is applied?
 
-models: dict[str, Path] = {"resnet50": Path("models/resnet50_Opset18.onnx")}
+models: dict[str, Path] = {"resnet50": Path("models/resnet50_Opset18_dynamic.onnx")}
 
 DIST_COLORS = {
   DistributionType.GAUSSIAN: "red",
@@ -31,7 +31,7 @@ DIST_COLORS = {
 }
 
 
-def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save_path: Path | None = None) -> tuple[float, float, float, float]:
+def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save_path: Path | None = None) -> tuple[float, float]:
   vec_sorted = np.sort(vec)
 
   # Distribution fits
@@ -40,14 +40,13 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     fits[dist_type] = Distribution.fit(vec_sorted, dist_type)
 
   # MinMax quantization
-  alpha = minmax_alpha(vec)
-  mae_minmax = float(np.mean(np.abs(vec - quantize(vec, alpha, bits))))
+  alpha_minmax = minmax_alpha(vec)
+  mae_minmax = float(np.mean(np.abs(vec - quantize(vec, alpha_minmax, bits))))
 
   # Optimal alpha*
   best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
   best_dist = fits[best_type]
-  alpha_aciq = solve_symmetric_mae_alpha(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha)
-  mae_aciq = float(np.mean(np.abs(vec - quantize(vec, alpha_aciq, bits))))
+  alpha_aciq = solve_symmetric_mae_alpha(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_minmax)
 
   if save_path is not None:
     save_path.mkdir(parents=True, exist_ok=True)
@@ -64,10 +63,11 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
         label=f"{repr(fitted):30s} ll={fitted.log_likelihood:.3g}",
       )
 
-    ax.axvline(-alpha, color="grey", linestyle=":", linewidth=1.2, label=f"MinMax α={alpha:.2f} MAE={mae_minmax:.2e}")
-    ax.axvline(alpha, color="grey", linestyle=":", linewidth=1.2)
+    ax.axvline(-alpha_minmax, color="grey", linestyle=":", linewidth=1.2, label=f"MinMax α={alpha_minmax:.2f} MAE={mae_minmax:.2e}")
+    ax.axvline(alpha_minmax, color="grey", linestyle=":", linewidth=1.2)
 
-    if alpha_aciq != alpha:
+    if alpha_aciq != alpha_minmax:
+      mae_aciq = float(np.mean(np.abs(vec - quantize(vec, alpha_aciq, bits))))
       ax.axvline(
         -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7, label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_aciq:.2e}"
       )
@@ -104,7 +104,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     fig.savefig(save_path / f"layer_{layer_idx:03d}_{safe[:60]}.png", dpi=500)
     plt.close(fig)
 
-  return mae_minmax, mae_aciq, alpha, alpha_aciq
+  return alpha_minmax, alpha_aciq
 
 
 def replace_weight(model: onnx.ModelProto, name: str, new_data: np.ndarray):
@@ -127,7 +127,6 @@ def main():
     model = onnx.load(str(model_path))
     nodes, tensors = list(model.graph.node), extract_tensors(model)
     print(f"[{model_name}] Total nodes: {len(nodes)}")
-    print(run_benchmark(model_path, DATASET_PATH))
 
     fq_models = {name: copy.deepcopy(model) for name in ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]}
 
@@ -135,7 +134,7 @@ def main():
     results_dir.mkdir(parents=True, exist_ok=True)
     csv_file = open(csv_path, "w", newline="")
     writer = csv.writer(csv_file)
-    writer.writerow(["layer_idx", "op_type", "name", "n", "mae_per_layer", "mae_aciq", "mae_per_channel", "mae_per_channel_aciq"])
+    writer.writerow(["layer_idx", "op_type", "name", "n", "err", "err_aciq", "err_channel", "err_channel_aciq"])
 
     layer_idx = 0
     for node in nodes:
@@ -149,33 +148,33 @@ def main():
           # Per-tensor
           vec = weight_arr.flatten()
           plot_dir = results_dir / "per_tensor" if args.plot else None
-          mae_mm, mae_ac, alpha_mm, alpha_ac = analyze_layer(vec, weight_name, layer_idx, BITS, plot_dir)
+          alpha_minmax, alpha_aciq = analyze_layer(vec, weight_name, layer_idx, BITS, plot_dir)
+          quant_weight_minmax = quantize(vec, alpha_minmax, BITS)
+          quant_weight_aciq = quantize(vec, alpha_aciq, BITS)
 
           # Per-channel (axis 0 = output channels)
           ch_plot_dir = results_dir / "per_channel" / f"{layer_idx:03d}_{safe_name}" if args.plot else None
-          total_err_mm = 0.0
-          total_err_ac = 0.0
-          total_n = 0
+          total_err_minmax = 0.0
+          total_err_aciq = 0.0
           fq_ch_mm = np.empty_like(weight_arr)
           fq_ch_ac = np.empty_like(weight_arr)
           for ch in range(weight_arr.shape[0]):
             ch_vec = weight_arr[ch].flatten()
-            ch_mae_mm, ch_mae_ac, ch_alpha_mm, ch_alpha_ac = analyze_layer(ch_vec, f"{weight_name}/ch{ch}", ch, BITS, ch_plot_dir)
-            total_err_mm += ch_mae_mm * ch_vec.size
-            total_err_ac += ch_mae_ac * ch_vec.size
-            total_n += ch_vec.size
-            fq_ch_mm[ch] = quantize(ch_vec, ch_alpha_mm, BITS).reshape(weight_arr[ch].shape)
-            fq_ch_ac[ch] = quantize(ch_vec, ch_alpha_ac, BITS).reshape(weight_arr[ch].shape)
-          mae_ch = total_err_mm / total_n
-          mae_ch_ac = total_err_ac / total_n
+            ch_alpha_minmax, ch_alpha_aciq = analyze_layer(ch_vec, f"{weight_name}/ch{ch}", ch, BITS, ch_plot_dir)
+            quant_weight_minmax_ch = quantize(ch_vec, ch_alpha_minmax, BITS)
+            quant_weight_aciq_ch = quantize(ch_vec, ch_alpha_aciq, BITS)
+            total_err_minmax += np.sum(np.abs(ch_vec - quant_weight_minmax_ch))
+            total_err_aciq += np.sum(np.abs(ch_vec - quant_weight_aciq_ch))
+            fq_ch_mm[ch] = quant_weight_minmax_ch.reshape(weight_arr[ch].shape)
+            fq_ch_ac[ch] = quant_weight_aciq_ch.reshape(weight_arr[ch].shape)
 
-          replace_weight(fq_models["per_tensor_minmax"], weight_name, quantize(vec, alpha_mm, BITS).reshape(weight_arr.shape))
-          replace_weight(fq_models["per_tensor_aciq"], weight_name, quantize(vec, alpha_ac, BITS).reshape(weight_arr.shape))
+          replace_weight(fq_models["per_tensor_minmax"], weight_name, quant_weight_minmax.reshape(weight_arr.shape))
+          replace_weight(fq_models["per_tensor_aciq"], weight_name, quant_weight_aciq.reshape(weight_arr.shape))
           replace_weight(fq_models["per_channel_minmax"], weight_name, fq_ch_mm)
           replace_weight(fq_models["per_channel_aciq"], weight_name, fq_ch_ac)
 
           print(f"[{layer_idx:>3}] Conv   {weight_name:50} n={len(vec):,}")
-          writer.writerow([layer_idx, "Conv", weight_name, len(vec), mae_mm, mae_ac, mae_ch, mae_ch_ac])
+          writer.writerow([layer_idx, "Conv", weight_name, len(vec), np.sum(np.abs(vec - quant_weight_minmax)), np.sum(np.abs(vec - quant_weight_aciq)), total_err_minmax, total_err_aciq])
 
         case "Gemm":
           weight_name = node.input[1]
@@ -183,22 +182,30 @@ def main():
           vec = weight_arr.flatten()
           layer_idx += 1
           plot_dir = results_dir / "per_tensor" if args.plot else None
-          mae_mm, mae_ac, alpha_mm, alpha_ac = analyze_layer(vec, weight_name, layer_idx, BITS, plot_dir)
+          alpha_minmax, alpha_aciq = analyze_layer(vec, weight_name, layer_idx, BITS, plot_dir)
+          quant_weight_minmax = quantize(vec, alpha_minmax, BITS)
+          quant_weight_aciq = quantize(vec, alpha_aciq, BITS)
 
-          replace_weight(fq_models["per_tensor_minmax"], weight_name, quantize(vec, alpha_mm, BITS).reshape(weight_arr.shape))
-          replace_weight(fq_models["per_tensor_aciq"], weight_name, quantize(vec, alpha_ac, BITS).reshape(weight_arr.shape))
+          replace_weight(fq_models["per_tensor_minmax"], weight_name, quant_weight_minmax.reshape(weight_arr.shape))
+          replace_weight(fq_models["per_tensor_aciq"], weight_name, quant_weight_aciq.reshape(weight_arr.shape))
+          total_err_minmax = 0.0
+          total_err_aciq = 0.0
           fq_ch_mm = np.empty_like(weight_arr)
           fq_ch_ac = np.empty_like(weight_arr)
           for ch in range(weight_arr.shape[0]):
             ch_vec = weight_arr[ch].flatten()
-            _, _, ch_alpha_mm, ch_alpha_ac = analyze_layer(ch_vec, f"{weight_name}/ch{ch}", ch, BITS)
-            fq_ch_mm[ch] = quantize(ch_vec, ch_alpha_mm, BITS).reshape(weight_arr[ch].shape)
-            fq_ch_ac[ch] = quantize(ch_vec, ch_alpha_ac, BITS).reshape(weight_arr[ch].shape)
+            ch_alpha_minmax, ch_alpha_aciq = analyze_layer(ch_vec, f"{weight_name}/ch{ch}", ch, BITS)
+            quant_weight_minmax_ch = quantize(ch_vec, ch_alpha_minmax, BITS)
+            quant_weight_aciq_ch = quantize(ch_vec, ch_alpha_aciq, BITS)
+            total_err_minmax += np.sum(np.abs(ch_vec - quant_weight_minmax_ch))
+            total_err_aciq += np.sum(np.abs(ch_vec - quant_weight_aciq_ch))
+            fq_ch_mm[ch] = quant_weight_minmax_ch.reshape(weight_arr[ch].shape)
+            fq_ch_ac[ch] = quant_weight_aciq_ch.reshape(weight_arr[ch].shape)
           replace_weight(fq_models["per_channel_minmax"], weight_name, fq_ch_mm)
           replace_weight(fq_models["per_channel_aciq"], weight_name, fq_ch_ac)
 
-          print(f"[{layer_idx:>3}] Gemm   {weight_name:50} n={len(vec):,}  MAE: layer={mae_mm:.2e}  aciq={mae_ac:.2e}")
-          writer.writerow([layer_idx, "Gemm", weight_name, len(vec), mae_mm, mae_ac, "", ""])
+          print(f"[{layer_idx:>3}] Gemm   {weight_name:50} n={len(vec):,}")
+          writer.writerow([layer_idx, "Gemm", weight_name, len(vec), np.sum(np.abs(vec - quant_weight_minmax)), np.sum(np.abs(vec - quant_weight_aciq)), total_err_minmax, total_err_aciq])
 
         case _:
           continue
@@ -206,12 +213,14 @@ def main():
     csv_file.close()
     print(f"CSV written to {csv_path}")
 
+    if args.benchmark:
+      print(run_benchmark(model_path, DATASET_PATH, batch_size=32))
     for name, fq_model in fq_models.items():
       save_path = results_dir / f"{model_name}_{name}_{BITS}bit.onnx"
       onnx.save(fq_model, str(save_path))
-
-      print(f"Saved {save_path}. Starting benchmark.")
-      print(run_benchmark(save_path, DATASET_PATH))
+      print(f"Saved {save_path}.")
+      if args.benchmark:
+        print(run_benchmark(save_path, DATASET_PATH, batch_size=32))
 
 if __name__ == "__main__":
   main()

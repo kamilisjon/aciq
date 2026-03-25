@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 WARMUP_RUNS_COUNT = 300
 BENCHMARK_RUNS_COUNT = 100
-IMAGENET_LABELS_FILEPATH = "imagenet_class_index.json"
+IMAGENET_LABELS_FILEPATH = "aciq/imagenet_class_index.json"
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
@@ -127,7 +127,6 @@ def benchmark_speed(session: onnxruntime.InferenceSession, batch_size: int):
     session.run_with_iobinding(iobinding)
     batch_duration = (time.perf_counter() - start) * 1000
     total_duration += batch_duration
-    print(f"{batch_duration:.2f}ms")
   return total_duration / BENCHMARK_RUNS_COUNT
 
 
