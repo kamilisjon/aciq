@@ -8,7 +8,7 @@ pip install -e .
 ```
 
 ## Usage
-1. Download imagenet validation dataset from https://www.kaggle.com/datasets/titericz/imagenet1k-val 
+1. Download imagenet validation dataset from https://www.kaggle.com/competitions/imagenet-object-localization-challenge/overview
 
 ## Local testing
 ### Install extra dependencies
