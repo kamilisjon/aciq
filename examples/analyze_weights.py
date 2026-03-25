@@ -21,8 +21,8 @@ BITS = 8
 # TODO: should group layers by which model block that are in. What blocks does ResNet have?
 #       Perhaps should group by what activation function is applied?
 
-models: dict[str, Path] = {"resnet18": Path("models/resnet18_Opset18_dynamic.onnx"),
-                           "resnet50": Path("models/resnet50_Opset18_dynamic.onnx")}
+models: dict[str, Path] = {"resnet18": Path("models/resnet18_Opset18.onnx"),
+                           "resnet50": Path("models/resnet50_Opset18.onnx")}
 
 DIST_COLORS = {
   DistributionType.GAUSSIAN: "red",
@@ -215,13 +215,13 @@ def main():
     print(f"CSV written to {csv_path}")
 
     if args.benchmark:
-      print(run_benchmark(model_path, DATASET_PATH, batch_size=32))
+      print(run_benchmark(model_path, DATASET_PATH, batch_size=1))
     for name, fq_model in fq_models.items():
       save_path = results_dir / f"{model_name}_{name}_{BITS}bit.onnx"
       onnx.save(fq_model, str(save_path))
       print(f"Saved {save_path}.")
       if args.benchmark:
-        print(run_benchmark(save_path, DATASET_PATH, batch_size=32))
+        print(run_benchmark(save_path, DATASET_PATH, batch_size=1))
 
 if __name__ == "__main__":
   main()
