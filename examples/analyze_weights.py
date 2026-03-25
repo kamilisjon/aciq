@@ -1,4 +1,5 @@
 import argparse
+import copy
 import csv
 import shutil
 from pathlib import Path
@@ -10,8 +11,10 @@ import onnx
 from aciq.onnx_io import extract_tensors
 from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
 from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
+from aciq.benchmark import run_benchmark
 
 
+DATASET_PATH = Path("/home/kamilis/Downloads/imagenet-object-localization-challenge")
 RESULTS_DIR = Path("results")
 BITS = 8
 
@@ -28,7 +31,7 @@ DIST_COLORS = {
 }
 
 
-def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save_path: Path | None = None) -> tuple[float, float]:
+def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save_path: Path | None = None) -> tuple[float, float, float, float]:
   vec_sorted = np.sort(vec)
 
   # Distribution fits
@@ -101,23 +104,32 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     fig.savefig(save_path / f"layer_{layer_idx:03d}_{safe[:60]}.png", dpi=500)
     plt.close(fig)
 
-  return mae_minmax, mae_aciq
+  return mae_minmax, mae_aciq, alpha, alpha_aciq
+
+
+def replace_weight(model: onnx.ModelProto, name: str, new_data: np.ndarray):
+  for i, init in enumerate(model.graph.initializer):
+    if init.name == name:
+      model.graph.initializer[i].CopyFrom(onnx.numpy_helper.from_array(new_data, name=name))
+      return
 
 
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("--plot", action="store_true", help="Generate distribution plots")
+  parser.add_argument("--benchmark", action="store_true", help="Benchmark onnx models")
   args = parser.parse_args()
 
   if RESULTS_DIR.exists():
     shutil.rmtree(RESULTS_DIR)
   for model_name, model_path in models.items():
-    if model_name == "bert":
-      continue
     results_dir = RESULTS_DIR / model_name
     model = onnx.load(str(model_path))
     nodes, tensors = list(model.graph.node), extract_tensors(model)
     print(f"[{model_name}] Total nodes: {len(nodes)}")
+    print(run_benchmark(model_path, DATASET_PATH))
+
+    fq_models = {name: copy.deepcopy(model) for name in ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]}
 
     csv_path = results_dir / "mae_comparison.csv"
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -137,31 +149,53 @@ def main():
           # Per-tensor
           vec = weight_arr.flatten()
           plot_dir = results_dir / "per_tensor" if args.plot else None
-          mae_mm, mae_ac = analyze_layer(vec, weight_name, layer_idx, BITS, plot_dir)
+          mae_mm, mae_ac, alpha_mm, alpha_ac = analyze_layer(vec, weight_name, layer_idx, BITS, plot_dir)
 
           # Per-channel (axis 0 = output channels)
           ch_plot_dir = results_dir / "per_channel" / f"{layer_idx:03d}_{safe_name}" if args.plot else None
           total_err_mm = 0.0
           total_err_ac = 0.0
           total_n = 0
+          fq_ch_mm = np.empty_like(weight_arr)
+          fq_ch_ac = np.empty_like(weight_arr)
           for ch in range(weight_arr.shape[0]):
             ch_vec = weight_arr[ch].flatten()
-            ch_mae_mm, ch_mae_ac = analyze_layer(ch_vec, f"{weight_name}/ch{ch}", ch, BITS, ch_plot_dir)
+            ch_mae_mm, ch_mae_ac, ch_alpha_mm, ch_alpha_ac = analyze_layer(ch_vec, f"{weight_name}/ch{ch}", ch, BITS, ch_plot_dir)
             total_err_mm += ch_mae_mm * ch_vec.size
             total_err_ac += ch_mae_ac * ch_vec.size
             total_n += ch_vec.size
+            fq_ch_mm[ch] = quantize(ch_vec, ch_alpha_mm, BITS).reshape(weight_arr[ch].shape)
+            fq_ch_ac[ch] = quantize(ch_vec, ch_alpha_ac, BITS).reshape(weight_arr[ch].shape)
           mae_ch = total_err_mm / total_n
           mae_ch_ac = total_err_ac / total_n
+
+          replace_weight(fq_models["per_tensor_minmax"], weight_name, quantize(vec, alpha_mm, BITS).reshape(weight_arr.shape))
+          replace_weight(fq_models["per_tensor_aciq"], weight_name, quantize(vec, alpha_ac, BITS).reshape(weight_arr.shape))
+          replace_weight(fq_models["per_channel_minmax"], weight_name, fq_ch_mm)
+          replace_weight(fq_models["per_channel_aciq"], weight_name, fq_ch_ac)
 
           print(f"[{layer_idx:>3}] Conv   {weight_name:50} n={len(vec):,}")
           writer.writerow([layer_idx, "Conv", weight_name, len(vec), mae_mm, mae_ac, mae_ch, mae_ch_ac])
 
         case "Gemm":
           weight_name = node.input[1]
-          vec = onnx.numpy_helper.to_array(tensors[weight_name]).flatten().astype(np.float32)
+          weight_arr = onnx.numpy_helper.to_array(tensors[weight_name]).astype(np.float32)
+          vec = weight_arr.flatten()
           layer_idx += 1
           plot_dir = results_dir / "per_tensor" if args.plot else None
-          mae_mm, mae_ac = analyze_layer(vec, weight_name, layer_idx, BITS, plot_dir)
+          mae_mm, mae_ac, alpha_mm, alpha_ac = analyze_layer(vec, weight_name, layer_idx, BITS, plot_dir)
+
+          replace_weight(fq_models["per_tensor_minmax"], weight_name, quantize(vec, alpha_mm, BITS).reshape(weight_arr.shape))
+          replace_weight(fq_models["per_tensor_aciq"], weight_name, quantize(vec, alpha_ac, BITS).reshape(weight_arr.shape))
+          fq_ch_mm = np.empty_like(weight_arr)
+          fq_ch_ac = np.empty_like(weight_arr)
+          for ch in range(weight_arr.shape[0]):
+            ch_vec = weight_arr[ch].flatten()
+            _, _, ch_alpha_mm, ch_alpha_ac = analyze_layer(ch_vec, f"{weight_name}/ch{ch}", ch, BITS)
+            fq_ch_mm[ch] = quantize(ch_vec, ch_alpha_mm, BITS).reshape(weight_arr[ch].shape)
+            fq_ch_ac[ch] = quantize(ch_vec, ch_alpha_ac, BITS).reshape(weight_arr[ch].shape)
+          replace_weight(fq_models["per_channel_minmax"], weight_name, fq_ch_mm)
+          replace_weight(fq_models["per_channel_aciq"], weight_name, fq_ch_ac)
 
           print(f"[{layer_idx:>3}] Gemm   {weight_name:50} n={len(vec):,}  MAE: layer={mae_mm:.2e}  aciq={mae_ac:.2e}")
           writer.writerow([layer_idx, "Gemm", weight_name, len(vec), mae_mm, mae_ac, "", ""])
@@ -172,6 +206,12 @@ def main():
     csv_file.close()
     print(f"CSV written to {csv_path}")
 
+    for name, fq_model in fq_models.items():
+      save_path = results_dir / f"{model_name}_{name}_{BITS}bit.onnx"
+      onnx.save(fq_model, str(save_path))
+
+      print(f"Saved {save_path}. Starting benchmark.")
+      print(run_benchmark(save_path, DATASET_PATH))
 
 if __name__ == "__main__":
   main()

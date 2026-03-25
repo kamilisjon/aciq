@@ -20,7 +20,6 @@ IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
 
-
 def load_and_preprocess(image_paths: list[Path], pad_to_batch_size: int | None = None):
   # timm style ImageNet pre-process
   images = [Image.open(p).convert("RGB") for p in image_paths]
