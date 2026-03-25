@@ -12,15 +12,24 @@ dependencies = [
   "numpy",
   "scipy",
   "matplotlib",
-  "torch",
-  "torchvision",
-  "onnxruntime-gpu",
+  "torch==2.6.0",
+  "torchvision==0.21.0",
+  "onnxruntime-gpu==1.20.1",
   "tqdm"
 ]
 
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
 
 [tool.setuptools]
 include-package-data = true
