@@ -133,16 +133,10 @@ def benchmark_speed(session: onnxruntime.InferenceSession, batch_size: int):
   return total_duration / BENCHMARK_RUNS_COUNT
 
 
-if __name__ == "__main__":
-  parser = argparse.ArgumentParser()
-  parser.add_argument("batch_size", type=int)
-  parser.add_argument("model_path", type=Path)
-  parser.add_argument("benchmark_data_path", type=Path)
-  parser.add_argument("calib_data_path", type=Path)
-  args = parser.parse_args()
-  results = {}
-  session = setup_session(args.model_path, ExecProvider.CUDA)
-  speed = benchmark_speed(session, args.batch_size)
-  top1_acc, top5_acc = benchmark_accuracy(session, args.benchmark_data_path, args.batch_size)
-  results[ExecProvider.CUDA] = {"top1_acc": top1_acc, "top5_acc": top5_acc, "speed": round(speed, 3)}
-  print(results)
+def run_benchmark(
+  model_path: Path, benchmark_data_path: Path, batch_size: int = 16, exec_provider: ExecProvider = ExecProvider.CUDA
+) -> tuple[float, float, float]:
+  session = setup_session(model_path, exec_provider)
+  speed = benchmark_speed(session, batch_size)
+  top1_acc, top5_acc = benchmark_accuracy(session, benchmark_data_path, batch_size)
+  return top1_acc, top5_acc, speed

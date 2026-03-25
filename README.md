@@ -7,6 +7,9 @@ conda activate aciq
 pip install -e .
 ```
 
+## Usage
+1. Download imagenet validation dataset from https://www.kaggle.com/datasets/titericz/imagenet1k-val 
+
 ## Local testing
 ### Install extra dependencies
 ```sh
