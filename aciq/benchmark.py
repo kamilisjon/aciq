@@ -24,7 +24,7 @@ def load_and_preprocess(image_paths: list[Path], pad_to_batch_size: int | None =
   # timm style ImageNet pre-process
   images = [Image.open(p).convert("RGB") for p in image_paths]
   transform = transforms.Compose([
-    transforms.Resize(256, interpolation=pil_image.BICUBIC),
+    transforms.Resize(256, interpolation=pil_image.Resampling.BICUBIC),
     transforms.CenterCrop(224),
     transforms.ToTensor(),
     transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
