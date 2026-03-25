@@ -12,6 +12,9 @@ dependencies = [
   "numpy",
   "scipy",
   "matplotlib",
+  "torch",
+  "torchvision",
+  "onnxruntime"
 ]
 
 [build-system]
