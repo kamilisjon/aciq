@@ -21,8 +21,7 @@ BITS = 8
 # TODO: should group layers by which model block that are in. What blocks does ResNet have?
 #       Perhaps should group by what activation function is applied?
 
-models: dict[str, Path] = {"resnet18": Path("models/resnet18_Opset18.onnx"),
-                           "resnet50": Path("models/resnet50_Opset18.onnx")}
+models: dict[str, Path] = {"resnet18": Path("models/resnet18_Opset18.onnx"), "resnet50": Path("models/resnet50_Opset18.onnx")}
 
 DIST_COLORS = {
   DistributionType.GAUSSIAN: "red",
@@ -135,7 +134,7 @@ def main():
     results_dir.mkdir(parents=True, exist_ok=True)
     csv_file = open(csv_path, "w", newline="")
     writer = csv.writer(csv_file)
-    writer.writerow(["layer_idx", "op_type", "name", "n", "err", "err_aciq", "err_channel", "err_channel_aciq"])
+    writer.writerow(["layer_idx", "op_type", "name", "n", "n_ch", "err", "err_aciq", "err_channel", "err_channel_aciq"])
 
     layer_idx = 0
     for node in nodes:
@@ -175,7 +174,17 @@ def main():
           replace_weight(fq_models["per_channel_aciq"], weight_name, fq_ch_ac)
 
           print(f"[{layer_idx:>3}] Conv   {weight_name:50} n={len(vec):,}")
-          writer.writerow([layer_idx, "Conv", weight_name, len(vec), np.sum(np.abs(vec - quant_weight_minmax)), np.sum(np.abs(vec - quant_weight_aciq)), total_err_minmax, total_err_aciq])
+          writer.writerow([
+            layer_idx,
+            "Conv",
+            weight_name,
+            len(vec),
+            len(ch_vec),
+            np.sum(np.abs(vec - quant_weight_minmax)),
+            np.sum(np.abs(vec - quant_weight_aciq)),
+            total_err_minmax,
+            total_err_aciq,
+          ])
 
         case "Gemm":
           weight_name = node.input[1]
@@ -206,7 +215,17 @@ def main():
           replace_weight(fq_models["per_channel_aciq"], weight_name, fq_ch_ac)
 
           print(f"[{layer_idx:>3}] Gemm   {weight_name:50} n={len(vec):,}")
-          writer.writerow([layer_idx, "Gemm", weight_name, len(vec), np.sum(np.abs(vec - quant_weight_minmax)), np.sum(np.abs(vec - quant_weight_aciq)), total_err_minmax, total_err_aciq])
+          writer.writerow([
+            layer_idx,
+            "Gemm",
+            weight_name,
+            len(vec),
+            len(ch_vec),
+            np.sum(np.abs(vec - quant_weight_minmax)),
+            np.sum(np.abs(vec - quant_weight_aciq)),
+            total_err_minmax,
+            total_err_aciq,
+          ])
 
         case _:
           continue
@@ -222,6 +241,7 @@ def main():
       print(f"Saved {save_path}.")
       if args.benchmark:
         print(run_benchmark(save_path, DATASET_PATH, batch_size=1))
+
 
 if __name__ == "__main__":
   main()
