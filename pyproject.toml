@@ -14,7 +14,8 @@ dependencies = [
   "matplotlib",
   "torch",
   "torchvision",
-  "onnxruntime"
+  "onnxruntime-gpu",
+  "tqdm"
 ]
 
 [build-system]
