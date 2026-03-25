@@ -21,7 +21,8 @@ BITS = 8
 # TODO: should group layers by which model block that are in. What blocks does ResNet have?
 #       Perhaps should group by what activation function is applied?
 
-models: dict[str, Path] = {"resnet50": Path("models/resnet50_Opset18_dynamic.onnx")}
+models: dict[str, Path] = {"resnet18": Path("models/resnet18_Opset18_dynamic.onnx"),
+                           "resnet50": Path("models/resnet50_Opset18_dynamic.onnx")}
 
 DIST_COLORS = {
   DistributionType.GAUSSIAN: "red",
