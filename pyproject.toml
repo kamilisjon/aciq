@@ -15,7 +15,7 @@ dependencies = [
   "torch==2.6.0",
   "torchvision==0.21.0",
   "onnxruntime-gpu==1.20.1",
-  "tqdm"
+  "tinygrad==0.12.0",
 ]
 
 [build-system]

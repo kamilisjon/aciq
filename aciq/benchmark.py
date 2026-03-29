@@ -10,7 +10,7 @@ import torch
 from PIL import Image
 import torchvision.transforms as transforms
 import PIL.Image as pil_image
-from tqdm import tqdm
+from tinygrad.helpers import tqdm
 
 
 WARMUP_RUNS_COUNT = 300
@@ -92,10 +92,14 @@ def benchmark_accuracy(session: onnxruntime.InferenceSession, imagenet_data_path
   gt_label_to_idx = {v[0]: int(k) for k, v in class_idx.items()}
 
   # Benchmark
+  inputs = session.get_inputs()
+  assert len(inputs) == 1, f"Expected 1 input, got {len(inputs)}"
+  input_name = inputs[0].name
+
   correct_top1 = correct_top5 = 0
   for start in tqdm(range(0, len(images), batch_size), desc="Benchmarking Accuracy"):
     batch_paths = images[start : min(start + batch_size, len(images))]
-    outputs = session.run(None, {"x": load_and_preprocess(batch_paths, batch_size)})[0]
+    outputs = session.run(None, {input_name: load_and_preprocess(batch_paths, batch_size)})[0]
     for i in range(len(batch_paths)):
       pred = np.argsort(outputs[i])[-5:][::-1]
       gt_label_idx = gt_label_to_idx[imageid_to_label[batch_paths[i].stem]]
