@@ -3,9 +3,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.nn as nn
 import torchvision
 from tinygrad.helpers import ContextVar, tqdm
+
+from aciq.batch_norm import collect_conv_bn_pairs, fuse_bn_into_conv
 
 
 MODELS_DIR = Path("models")
@@ -13,19 +14,6 @@ RESULTS_DIR = Path("results/bn_fusion_effects")
 OPSET_VERSION = 18
 BATCH_SIZE = ContextVar("BATCH_SIZE", 16)
 IMAGE_H_W = ContextVar("IMAGE_H_W", 224)
-
-
-def collect_conv_bn_pairs(model: nn.Module) -> list[tuple[str, nn.Conv2d, str, nn.BatchNorm2d]]:
-  convs = [(n, m) for n, m in model.named_modules() if isinstance(m, nn.Conv2d)]
-  bns = [(n, m) for n, m in model.named_modules() if isinstance(m, nn.BatchNorm2d)]
-  assert len(convs) == len(bns), f"Conv/BN count mismatch: {len(convs)} vs {len(bns)}"
-  return [(cn, cm, bn, bm) for (cn, cm), (bn, bm) in zip(convs, bns)]
-
-
-def fuse_bn_into_conv(conv_weight: np.ndarray, bn: nn.BatchNorm2d) -> np.ndarray:
-  assert bn.running_var is not None
-  scale = bn.weight.data.numpy() / np.sqrt(bn.running_var.data.numpy() + bn.eps)
-  return conv_weight * scale[:, None, None, None]
 
 
 def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, post_weight: np.ndarray, save_dir: Path):
