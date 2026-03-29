@@ -45,13 +45,13 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
   fits = fit_distributions(vec_sorted)
 
   # MinMax quantization
-  alpha = minmax_alpha(vec)
-  mae_minmax = mae(vec, quantize(vec, alpha, bits))
+  alpha_minmax = minmax_alpha(vec)
+  mae_minmax = mae(vec, quantize(vec, alpha_minmax, bits))
 
   # Optimal alpha*
   best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
   best_dist = fits[best_type]
-  alpha_aciq = solve_symmetric_mae_alpha(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha)
+  alpha_aciq = solve_symmetric_mae_alpha(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_minmax)
   mae_aciq = mae(vec, quantize(vec, alpha_aciq, bits))
 
   if save_path is not None:
