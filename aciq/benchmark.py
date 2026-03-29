@@ -10,7 +10,7 @@ import torch
 from PIL import Image
 import torchvision.transforms as transforms
 import PIL.Image as pil_image
-from tqdm import tqdm
+from tinygrad.helpers import tqdm
 
 
 WARMUP_RUNS_COUNT = 300
