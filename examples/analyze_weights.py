@@ -21,7 +21,7 @@ BITS = 8
 # TODO: should group layers by which model block that are in. What blocks does ResNet have?
 #       Perhaps should group by what activation function is applied?
 
-models: dict[str, Path] = {"resnet18": Path("models/resnet18_Opset18.onnx"), "resnet50": Path("models/resnet50_Opset18.onnx")}
+models: dict[str, Path] = {"resnet18": Path("models/resnet18_Opset18.onnx")}
 
 DIST_COLORS = {
   DistributionType.GAUSSIAN: "red",
@@ -31,17 +31,22 @@ DIST_COLORS = {
 }
 
 
+def fit_distributions(data_array: np.ndarray) -> dict[DistributionType, Distribution]:
+  return {dist_type: Distribution.fit(data_array, dist_type) for dist_type in DistributionType}
+
+
+def mae(data_array_1: np.ndarray, data_array_2: np.ndarray) -> float:
+  return float(np.mean(np.abs(data_array_1 - data_array_2)))
+
+
 def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save_path: Path | None = None) -> tuple[float, float]:
   vec_sorted = np.sort(vec)
 
-  # Distribution fits
-  fits: dict[DistributionType, Distribution] = {}
-  for dist_type in DistributionType:
-    fits[dist_type] = Distribution.fit(vec_sorted, dist_type)
+  fits = fit_distributions(vec_sorted)
 
   # MinMax quantization
   alpha_minmax = minmax_alpha(vec)
-  mae_minmax = float(np.mean(np.abs(vec - quantize(vec, alpha_minmax, bits))))
+  mae_minmax = mae(vec, quantize(vec, alpha_minmax, bits))
 
   # Optimal alpha*
   best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
@@ -67,7 +72,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     ax.axvline(alpha_minmax, color="grey", linestyle=":", linewidth=1.2)
 
     if alpha_aciq != alpha_minmax:
-      mae_aciq = float(np.mean(np.abs(vec - quantize(vec, alpha_aciq, bits))))
+      mae_aciq = mae(vec, quantize(vec, alpha_aciq, bits))
       ax.axvline(
         -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7, label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_aciq:.2e}"
       )
@@ -134,7 +139,7 @@ def main():
     results_dir.mkdir(parents=True, exist_ok=True)
     csv_file = open(csv_path, "w", newline="")
     writer = csv.writer(csv_file)
-    writer.writerow(["layer_idx", "op_type", "name", "n", "n_ch", "err", "err_aciq", "err_channel", "err_channel_aciq"])
+    writer.writerow(["layer_idx", "op_type", "name", "n", "n_per_ch", "ch_count", "err", "err_aciq", "err_channel", "err_channel_aciq"])
 
     layer_idx = 0
     for node in nodes:
@@ -180,6 +185,7 @@ def main():
             weight_name,
             len(vec),
             len(ch_vec),
+            int(len(vec) / len(ch_vec)),
             np.sum(np.abs(vec - quant_weight_minmax)),
             np.sum(np.abs(vec - quant_weight_aciq)),
             total_err_minmax,
@@ -221,6 +227,7 @@ def main():
             weight_name,
             len(vec),
             len(ch_vec),
+            int(len(vec) / len(ch_vec)),
             np.sum(np.abs(vec - quant_weight_minmax)),
             np.sum(np.abs(vec - quant_weight_aciq)),
             total_err_minmax,
