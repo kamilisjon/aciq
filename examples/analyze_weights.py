@@ -139,7 +139,7 @@ def main():
     results_dir.mkdir(parents=True, exist_ok=True)
     csv_file = open(csv_path, "w", newline="")
     writer = csv.writer(csv_file)
-    writer.writerow(["layer_idx", "op_type", "name", "n", "n_ch", "err", "err_aciq", "err_channel", "err_channel_aciq"])
+    writer.writerow(["layer_idx", "op_type", "name", "n", "n_per_ch", "ch_count", "err", "err_aciq", "err_channel", "err_channel_aciq"])
 
     layer_idx = 0
     for node in nodes:
@@ -185,6 +185,7 @@ def main():
             weight_name,
             len(vec),
             len(ch_vec),
+            int(len(vec) / len(ch_vec)),
             np.sum(np.abs(vec - quant_weight_minmax)),
             np.sum(np.abs(vec - quant_weight_aciq)),
             total_err_minmax,
@@ -226,6 +227,7 @@ def main():
             weight_name,
             len(vec),
             len(ch_vec),
+            int(len(vec) / len(ch_vec)),
             np.sum(np.abs(vec - quant_weight_minmax)),
             np.sum(np.abs(vec - quant_weight_aciq)),
             total_err_minmax,
