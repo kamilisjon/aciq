@@ -52,7 +52,6 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
   best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
   best_dist = fits[best_type]
   alpha_aciq = solve_symmetric_mae_alpha(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_minmax)
-  mae_aciq = mae(vec, quantize(vec, alpha_aciq, bits))
 
   if save_path is not None:
     save_path.mkdir(parents=True, exist_ok=True)
@@ -73,7 +72,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     ax.axvline(alpha_minmax, color="grey", linestyle=":", linewidth=1.2)
 
     if alpha_aciq != alpha_minmax:
-      mae_aciq = float(np.mean(np.abs(vec - quantize(vec, alpha_aciq, bits))))
+      mae_aciq = mae(vec, quantize(vec, alpha_aciq, bits))
       ax.axvline(
         -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7, label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_aciq:.2e}"
       )
