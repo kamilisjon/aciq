@@ -18,7 +18,7 @@ BITS = 8
 # TODO: should group layers by which model block that are in. What blocks does ResNet have?
 #       Perhaps should group by what activation function is applied?
 
-models: dict[str, Path] = {"resnet50": Path("models/resnet50_Opset18.onnx")}
+models: dict[str, Path] = {"resnet18": Path("models/resnet18_Opset18.onnx")}
 
 DIST_COLORS = {
   DistributionType.GAUSSIAN: "red",
@@ -28,23 +28,28 @@ DIST_COLORS = {
 }
 
 
+def fit_distributions(data_array: np.ndarray) -> dict[DistributionType, Distribution]:
+  return {dist_type: Distribution.fit(data_array, dist_type) for dist_type in DistributionType}
+
+
+def mae(data_array_1: np.ndarray, data_array_2: np.ndarray) -> float:
+  return float(np.mean(np.abs(data_array_1 - data_array_2)))
+
+
 def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save_path: Path | None = None) -> tuple[float, float]:
   vec_sorted = np.sort(vec)
 
-  # Distribution fits
-  fits: dict[DistributionType, Distribution] = {}
-  for dist_type in DistributionType:
-    fits[dist_type] = Distribution.fit(vec_sorted, dist_type)
+  fits = fit_distributions(vec_sorted)
 
   # MinMax quantization
   alpha = minmax_alpha(vec)
-  mae_minmax = float(np.mean(np.abs(vec - quantize(vec, alpha, bits))))
+  mae_minmax = mae(vec, quantize(vec, alpha, bits))
 
   # Optimal alpha*
   best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
   best_dist = fits[best_type]
   alpha_aciq = solve_symmetric_mae_alpha(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha)
-  mae_aciq = float(np.mean(np.abs(vec - quantize(vec, alpha_aciq, bits))))
+  mae_aciq = mae(vec, quantize(vec, alpha_aciq, bits))
 
   if save_path is not None:
     save_path.mkdir(parents=True, exist_ok=True)
