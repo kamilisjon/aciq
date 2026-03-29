@@ -117,8 +117,6 @@ def main():
   if RESULTS_DIR.exists():
     shutil.rmtree(RESULTS_DIR)
   for model_name, model_path in models.items():
-    if model_name == "bert":
-      continue
     results_dir = RESULTS_DIR / model_name
     model = onnx.load(str(model_path))
     nodes, tensors = list(model.graph.node), extract_tensors(model)
