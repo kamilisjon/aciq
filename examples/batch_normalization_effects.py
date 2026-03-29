@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torchvision
-from tinygrad.helpers import ContextVar
+from tinygrad.helpers import ContextVar, tqdm
 
 
 MODELS_DIR = Path("models")
@@ -72,27 +72,19 @@ def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, 
 def main():
   MODELS_DIR.mkdir(exist_ok=True)
 
-  model = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT)
+  model = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1)
   model.eval()
 
   dummy_input = (torch.randn(BATCH_SIZE.value, 3, IMAGE_H_W.value, IMAGE_H_W.value),)
   for name, fold in [("not_fused", False), ("fused", True)]:
-    save_path = MODELS_DIR / f"resnet50_Opset{OPSET_VERSION}_{name}.onnx"
+    save_path = MODELS_DIR / f"resnet50_v1_Opset{OPSET_VERSION}_{name}.onnx"
     torch.onnx.export(model, dummy_input, str(save_path), opset_version=OPSET_VERSION, do_constant_folding=fold)
     print(f"Saved {save_path}")
 
   pairs = collect_conv_bn_pairs(model)
-  for idx, (conv_name, conv, bn_name, bn) in enumerate(pairs):
+  for idx, (conv_name, conv, bn_name, bn) in tqdm(enumerate(pairs)):
     pre_weight = conv.weight.data.numpy()
     post_weight = fuse_bn_into_conv(pre_weight, bn)
-
-    pre_range = np.abs(pre_weight).max()
-    post_range = np.abs(post_weight).max()
-    print(
-      f"[{idx:>3}] {conv_name:40s} pre=[{-pre_range:.4f}, {pre_range:.4f}]  "
-      f"post=[{-post_range:.4f}, {post_range:.4f}]  ratio={post_range / pre_range:.2f}x"
-    )
-
     plot_channel_ranges(idx, conv_name, pre_weight, post_weight, RESULTS_DIR)
 
 
