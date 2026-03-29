@@ -64,9 +64,9 @@ class TestFuseBnIntoConv(unittest.TestCase):
       onnx_unfused_weight, onnx_unfused_bias = onnx_unfused[i]
 
       assert onnx_unfused_bias is None, f"Expected unfused ONNX Conv to have no bias at {conv_name}"
+      assert onnx_fused_bias is not None, f"Expected fused ONNX Conv to have bias at {conv_name}"
       np.testing.assert_allclose(onnx_unfused_weight, pre_weight, atol=1e-7, err_msg=f"Unfused weight mismatch at {conv_name}")
       np.testing.assert_allclose(manual_fused_weight, onnx_fused_weight, atol=1e-7, err_msg=f"Fused weight mismatch at {conv_name}")
-      assert onnx_fused_bias is not None, f"Expected fused ONNX Conv to have bias at {conv_name}"
       np.testing.assert_allclose(manual_fused_bias, onnx_fused_bias, atol=1e-7, err_msg=f"Fused bias mismatch at {conv_name}")
 
 
