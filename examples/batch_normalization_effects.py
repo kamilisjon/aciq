@@ -2,7 +2,6 @@ from pathlib import Path
 
 import torch
 import torchvision
-
 from tinygrad.helpers import ContextVar
 
 
@@ -18,7 +17,7 @@ def main():
   model = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT)
   model.eval()
 
-  dummy_input = torch.randn(BATCH_SIZE.value, 3, IMAGE_H_W.value, IMAGE_H_W.value)
+  dummy_input = (torch.randn(BATCH_SIZE.value, 3, IMAGE_H_W.value, IMAGE_H_W.value),)
 
   for name, fold in [("not_fused", False), ("fused", True)]:
     save_path = MODELS_DIR / f"resnet50_Opset{OPSET_VERSION}_{name}.onnx"
