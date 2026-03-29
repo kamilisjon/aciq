@@ -14,6 +14,10 @@ RESULTS_DIR = Path("results/bn_fusion_effects")
 OPSET_VERSION = 18
 BATCH_SIZE = ContextVar("BATCH_SIZE", 16)
 IMAGE_H_W = ContextVar("IMAGE_H_W", 224)
+MODELS = {
+  "resnet18": torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.DEFAULT),
+  "resnet50": torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT),
+}
 
 
 def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, post_weight: np.ndarray, save_dir: Path):
@@ -21,11 +25,10 @@ def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, 
   pre_flat = pre_weight.reshape(out_ch, -1)
   post_flat = post_weight.reshape(out_ch, -1)
 
-  # Symmetric per-channel alpha: max(|w|) per channel -> range is [-alpha, alpha]
-  pre_alpha = np.abs(pre_flat).max(axis=1)
-  post_alpha = np.abs(post_flat).max(axis=1)
+  pre_min, pre_max = pre_flat.min(axis=1), pre_flat.max(axis=1)
+  post_min, post_max = post_flat.min(axis=1), post_flat.max(axis=1)
 
-  # Symmetric per-tensor alpha
+  # Symmetric per-tensor alpha for quantization clip
   pre_tensor_alpha = float(np.abs(pre_weight).max())
   post_tensor_alpha = float(np.abs(post_weight).max())
 
@@ -33,12 +36,12 @@ def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, 
 
   fig, ax = plt.subplots(figsize=(12, 5))
 
-  ax.vlines(channels - 0.15, -pre_alpha, pre_alpha, colors="steelblue", linewidth=0.8, alpha=0.7, label="Before BN fusion")
-  ax.vlines(channels + 0.15, -post_alpha, post_alpha, colors="firebrick", linewidth=0.8, alpha=0.7, label="After BN fusion")
+  ax.vlines(channels - 0.15, pre_min, pre_max, colors="steelblue", linewidth=0.8, alpha=0.7, label="Per-channel [min,max] before BN fusion")
+  ax.vlines(channels + 0.15, post_min, post_max, colors="firebrick", linewidth=0.8, alpha=0.7, label="Per-channel [min,max] after BN fusion")
 
-  ax.axhline(y=-pre_tensor_alpha, color="steelblue", linestyle="--", linewidth=1, label=f"Pre-fusion per-tensor α={pre_tensor_alpha:.4f}")
+  ax.axhline(y=-pre_tensor_alpha, color="steelblue", linestyle="--", linewidth=1, label=f"Per-tensor clip α={pre_tensor_alpha:.4f} before BN fusion")
   ax.axhline(y=pre_tensor_alpha, color="steelblue", linestyle="--", linewidth=1)
-  ax.axhline(y=-post_tensor_alpha, color="firebrick", linestyle="--", linewidth=1, label=f"Post-fusion per-tensor α={post_tensor_alpha:.4f}")
+  ax.axhline(y=-post_tensor_alpha, color="firebrick", linestyle="--", linewidth=1, label=f"Per-tensor clip α={post_tensor_alpha:.4f} after BN fusion")
   ax.axhline(y=post_tensor_alpha, color="firebrick", linestyle="--", linewidth=1)
   ax.axhline(y=0, color="black", linewidth=0.5)
 
@@ -55,24 +58,25 @@ def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, 
   plt.close(fig)
 
 
-def main():
-  MODELS_DIR.mkdir(exist_ok=True)
-
-  model = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1)
+def analyze_model(model_name: str, model: torch.nn.Module):
   model.eval()
 
   dummy_input = (torch.randn(BATCH_SIZE.value, 3, IMAGE_H_W.value, IMAGE_H_W.value),)
   for name, fold in [("not_fused", False), ("fused", True)]:
-    save_path = MODELS_DIR / f"resnet50_v1_Opset{OPSET_VERSION}_{name}.onnx"
+    save_path = MODELS_DIR / f"{model_name}_Opset{OPSET_VERSION}_{name}.onnx"
     torch.onnx.export(model, dummy_input, str(save_path), opset_version=OPSET_VERSION, do_constant_folding=fold)
     print(f"Saved {save_path}")
 
+  save_dir = RESULTS_DIR / model_name
   pairs = collect_conv_bn_pairs(model)
   for idx, (conv_name, conv, bn_name, bn) in tqdm(enumerate(pairs)):
     pre_weight = conv.weight.data.numpy()
     post_weight = fuse_bn_into_conv(pre_weight, bn)
-    plot_channel_ranges(idx, conv_name, pre_weight, post_weight, RESULTS_DIR)
+    plot_channel_ranges(idx, conv_name, pre_weight, post_weight, save_dir)
 
 
 if __name__ == "__main__":
-  main()
+  MODELS_DIR.mkdir(exist_ok=True)
+  for model_name, model in MODELS.items():
+    print(f"=== {model_name} ===")
+    analyze_model(model_name, model)
