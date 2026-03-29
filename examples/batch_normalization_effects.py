@@ -24,6 +24,7 @@ def collect_conv_bn_pairs(model: nn.Module) -> list[tuple[str, nn.Conv2d, str, n
 
 def fuse_bn_into_conv(conv_weight: np.ndarray, bn: nn.BatchNorm2d) -> np.ndarray:
   gamma = bn.weight.data.numpy()
+  assert bn.running_var is not None
   var = bn.running_var.data.numpy()
   eps = bn.eps
   scale = gamma / np.sqrt(var + eps)
