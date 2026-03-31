@@ -47,7 +47,7 @@ def main() -> None:
   RESULTS_DIR.mkdir(parents=True, exist_ok=True)
   weights = load_weights()
 
-  alpha = float(np.percentile(np.abs(weights), 99.99  ))
+  alpha = float(np.percentile(np.abs(weights), 99.99))
   qmax = 2 ** (BITS - 1) - 1
   scale = alpha / qmax
 
