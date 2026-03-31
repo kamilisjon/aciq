@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-from scipy.stats import pearsonr
+from scipy.stats import spearmanr
 
 from aciq.batch_norm import collect_conv_bn_pairs, fuse_bn_into_conv, fuse_bn_into_bias
 from aciq.distributions import Distribution, DistributionType
@@ -98,7 +98,7 @@ def compute_shift(fp32_outputs: dict[str, np.ndarray], quant_outputs: dict[str, 
   return {name: float(np.abs(fp32_outputs[name] - quant_outputs[name])) for name in fp32_outputs}
 
 
-# --- Correlation analysis ---
+# --- Training + measurement ---
 
 
 @dataclass
@@ -111,7 +111,7 @@ class ModelResult:
   aciq_shifts: dict[str, float]
 
 
-def run_analysis(n_models: int, epochs: int, device: str) -> list[ModelResult]:
+def run_training(n_models: int, epochs: int, device: str) -> list[ModelResult]:
   _, test_loader = get_mnist_loaders()
 
   results: list[ModelResult] = []
@@ -139,81 +139,79 @@ def run_analysis(n_models: int, epochs: int, device: str) -> list[ModelResult]:
   return results
 
 
-# --- Plotting ---
+# --- CSV I/O ---
 
 
-def plot_shift_vs_accuracy(results: list[ModelResult], save_dir: Path) -> None:
+def save_results_csv(results: list[ModelResult], save_path: Path) -> None:
+  save_path.parent.mkdir(parents=True, exist_ok=True)
+  header = ["seed", "fp32_acc", "minmax_acc", "aciq_acc"]
+  for layer in BLOCK_NAMES:
+    header += [f"minmax_{layer}_mean_shift", f"aciq_{layer}_mean_shift"]
+
+  with open(save_path, "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(header)
+    for r in results:
+      row: list[float | int] = [r.seed, r.fp32_accuracy, r.minmax_accuracy, r.aciq_accuracy]
+      for layer in BLOCK_NAMES:
+        row += [r.minmax_shifts[layer], r.aciq_shifts[layer]]
+      writer.writerow(row)
+
+
+def load_results_csv(path: Path) -> list[dict[str, float]]:
+  with open(path) as f:
+    return [{k: float(v) for k, v in row.items()} for row in csv.DictReader(f)]
+
+
+# --- Analysis (from CSV rows) ---
+
+
+def plot_scatter(rows: list[dict[str, float]], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
-  layer_names = list(results[0].minmax_shifts.keys())
+  fig, axes = plt.subplots(2, len(BLOCK_NAMES) + 1, figsize=(4 * (len(BLOCK_NAMES) + 1), 8))
+  for row_idx, (method, color) in enumerate([("minmax", "steelblue"), ("aciq", "indianred")]):
+    acc_drops = np.array([r["fp32_acc"] - r[f"{method}_acc"] for r in rows])
 
-  for layer_name in layer_names:
-    fig, ax = plt.subplots(figsize=(8, 5))
-    for color, label, get_shifts, get_acc in [
-      ("steelblue", "MinMax", lambda r: r.minmax_shifts, lambda r: r.fp32_accuracy - r.minmax_accuracy),
-      ("indianred", "ACIQ", lambda r: r.aciq_shifts, lambda r: r.fp32_accuracy - r.aciq_accuracy),
-    ]:
-      xs = [get_shifts(r)[layer_name] for r in results]
-      ys = [get_acc(r) for r in results]
-      ax.scatter(xs, ys, color=color, alpha=0.7, label=label, s=30)
-      if len(set(xs)) > 1:
-        r_val, p_val = pearsonr(xs, ys)
-        ax.annotate(f"{label}: r={r_val:.3f} p={p_val:.3f}", xy=(0.02, 0.98 if label == "MinMax" else 0.92),
-                    xycoords="axes fraction", fontsize=8, va="top", family="monospace")
+    for col_idx, block in enumerate(BLOCK_NAMES):
+      ax = axes[row_idx, col_idx]
+      shifts = np.array([r[f"{method}_{block}_mean_shift"] for r in rows])
+      ax.scatter(shifts, acc_drops, color=color, alpha=0.6, s=20)
+      rho, p = spearmanr(shifts, acc_drops)
+      ax.set_title(f"{method.upper()} {block}\nrho={rho:.3f} p={p:.3g}", fontsize=9)
+      ax.set_xlabel("Mean shift", fontsize=8)
+      ax.set_ylabel("Accuracy drop", fontsize=8)
+      ax.grid(True, alpha=0.3)
 
-    ax.set_xlabel("Output mean shift |E[fp32] - E[quant]|")
-    ax.set_ylabel("Accuracy drop (FP32 - quantized)")
-    ax.set_title(f"{layer_name}: output mean shift vs accuracy drop")
-    ax.legend(fontsize=8, prop={"family": "monospace", "size": 8})
+    ax = axes[row_idx, len(BLOCK_NAMES)]
+    total_shifts = np.array([sum(r[f"{method}_{b}_mean_shift"] for b in BLOCK_NAMES) for r in rows])
+    ax.scatter(total_shifts, acc_drops, color=color, alpha=0.6, s=20)
+    rho, p = spearmanr(total_shifts, acc_drops)
+    ax.set_title(f"{method.upper()} total\nrho={rho:.3f} p={p:.3g}", fontsize=9)
+    ax.set_xlabel("Total mean shift", fontsize=8)
+    ax.set_ylabel("Accuracy drop", fontsize=8)
     ax.grid(True, alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(save_dir / f"shift_vs_accuracy_{layer_name}.png", dpi=500)
-    plt.close(fig)
 
-  # Aggregate plot (sum of mean shifts across layers)
-  fig, ax = plt.subplots(figsize=(8, 5))
-  for color, label, get_shifts, get_acc in [
-    ("steelblue", "MinMax", lambda r: r.minmax_shifts, lambda r: r.fp32_accuracy - r.minmax_accuracy),
-    ("indianred", "ACIQ", lambda r: r.aciq_shifts, lambda r: r.fp32_accuracy - r.aciq_accuracy),
-  ]:
-    xs = [sum(get_shifts(r).values()) for r in results]
-    ys = [get_acc(r) for r in results]
-    ax.scatter(xs, ys, color=color, alpha=0.7, label=label, s=30)
-    if len(set(xs)) > 1:
-      r_val, p_val = pearsonr(xs, ys)
-      ax.annotate(f"{label}: r={r_val:.3f} p={p_val:.3f}", xy=(0.02, 0.98 if label == "MinMax" else 0.92),
-                  xycoords="axes fraction", fontsize=8, va="top", family="monospace")
-
-  ax.set_xlabel("Total output mean shift (sum across layers)")
-  ax.set_ylabel("Accuracy drop (FP32 - quantized)")
-  ax.set_title("Aggregate output mean shift vs accuracy drop")
-  ax.legend(fontsize=8, prop={"family": "monospace", "size": 8})
-  ax.grid(True, alpha=0.3)
   fig.tight_layout()
-  fig.savefig(save_dir / "shift_vs_accuracy_aggregate.png", dpi=500)
+  fig.savefig(save_dir / "scatter_shift_vs_accuracy.png", dpi=300)
   plt.close(fig)
 
 
-def plot_shift_accumulation(results: list[ModelResult], save_dir: Path) -> None:
-  """Plot how distribution shifts accumulate across layers (mean over all models)."""
+def plot_shift_accumulation(rows: list[dict[str, float]], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
-  layer_names = list(results[0].minmax_shifts.keys())
-
   fig, ax = plt.subplots(figsize=(10, 5))
-  for color, label, get_shifts in [
-    ("steelblue", "MinMax", lambda r: r.minmax_shifts),
-    ("indianred", "ACIQ", lambda r: r.aciq_shifts),
-  ]:
-    per_layer_means = [np.mean([get_shifts(r)[name] for r in results]) for name in layer_names]
-    per_layer_stds = [np.std([get_shifts(r)[name] for r in results]) for name in layer_names]
+  for color, method in [("steelblue", "minmax"), ("indianred", "aciq")]:
+    per_layer_means = [np.mean([r[f"{method}_{b}_mean_shift"] for r in rows]) for b in BLOCK_NAMES]
+    per_layer_stds = [np.std([r[f"{method}_{b}_mean_shift"] for r in rows]) for b in BLOCK_NAMES]
     cumulative = np.cumsum(per_layer_means)
 
-    x_pos = np.arange(len(layer_names))
-    ax.bar(x_pos + (-0.2 if label == "MinMax" else 0.2), per_layer_means, width=0.35,
+    x_pos = np.arange(len(BLOCK_NAMES))
+    label = method.upper()
+    ax.bar(x_pos + (-0.2 if method == "minmax" else 0.2), per_layer_means, width=0.35,
            color=color, alpha=0.5, label=f"{label} per-layer shift", yerr=per_layer_stds, capsize=3)
     ax.plot(x_pos, cumulative, color=color, marker="o", linewidth=2, linestyle="--", label=f"{label} cumulative shift")
 
-  ax.set_xticks(np.arange(len(layer_names)))
-  ax.set_xticklabels(layer_names)
+  ax.set_xticks(np.arange(len(BLOCK_NAMES)))
+  ax.set_xticklabels(BLOCK_NAMES)
   ax.set_xlabel("Layer")
   ax.set_ylabel("Output mean shift |E[fp32] - E[quant]|")
   ax.set_title("Distribution shift accumulation across layers")
@@ -224,68 +222,29 @@ def plot_shift_accumulation(results: list[ModelResult], save_dir: Path) -> None:
   plt.close(fig)
 
 
-def plot_layer_correlation(results: list[ModelResult], save_dir: Path) -> None:
-  save_dir.mkdir(parents=True, exist_ok=True)
-  layer_names = list(results[0].minmax_shifts.keys())
-  first_layer, last_layer = layer_names[0], layer_names[-1]
-
-  fig, ax = plt.subplots(figsize=(8, 5))
-  for color, label, get_shifts in [
-    ("steelblue", "MinMax", lambda r: r.minmax_shifts),
-    ("indianred", "ACIQ", lambda r: r.aciq_shifts),
-  ]:
-    xs = [get_shifts(r)[first_layer] for r in results]
-    ys = [get_shifts(r)[last_layer] for r in results]
-    ax.scatter(xs, ys, color=color, alpha=0.7, label=label, s=30)
-    if len(set(xs)) > 1:
-      r_val, p_val = pearsonr(xs, ys)
-      ax.annotate(f"{label}: r={r_val:.3f} p={p_val:.3f}", xy=(0.02, 0.98 if label == "MinMax" else 0.92),
-                  xycoords="axes fraction", fontsize=8, va="top", family="monospace")
-
-  ax.set_xlabel(f"{first_layer} output mean shift")
-  ax.set_ylabel(f"{last_layer} output mean shift")
-  ax.set_title(f"Layer correlation: {first_layer} vs {last_layer}")
-  ax.legend(fontsize=8, prop={"family": "monospace", "size": 8})
-  ax.grid(True, alpha=0.3)
-  fig.tight_layout()
-  fig.savefig(save_dir / "layer_correlation.png", dpi=500)
-  plt.close(fig)
-
-
-# --- CSV export ---
-
-
-def save_results_csv(results: list[ModelResult], save_path: Path) -> None:
-  save_path.parent.mkdir(parents=True, exist_ok=True)
-  layer_names = list(results[0].minmax_shifts.keys())
-  header = ["seed", "fp32_acc", "minmax_acc", "aciq_acc"]
-  for layer in layer_names:
-    header += [f"minmax_{layer}_mean_shift", f"aciq_{layer}_mean_shift"]
-
-  with open(save_path, "w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerow(header)
-    for r in results:
-      row: list[float | int] = [r.seed, r.fp32_accuracy, r.minmax_accuracy, r.aciq_accuracy]
-      for layer in layer_names:
-        row += [r.minmax_shifts[layer], r.aciq_shifts[layer]]
-      writer.writerow(row)
-
-
 # --- Main ---
+
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="MNIST quantization distribution shift analysis")
   parser.add_argument("--n-models", type=int, default=30, help="Number of models to train")
   parser.add_argument("--epochs", type=int, default=10, help="Training epochs per model")
   parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+  parser.add_argument("--from-csv", type=Path, default=None, help="Load results from CSV instead of training")
   args = parser.parse_args()
 
   save_dir = RESULTS_DIR
-  print(f"Running correlation analysis with {args.n_models} models, {args.epochs} epochs each...")
-  results = run_analysis(args.n_models, args.epochs, args.device)
-  save_results_csv(results, save_dir / "results.csv")
-  plot_shift_vs_accuracy(results, save_dir)
-  plot_shift_accumulation(results, save_dir)
-  plot_layer_correlation(results, save_dir)
-  print(f"Results saved to {save_dir}/")
+
+  if args.from_csv:
+    rows = load_results_csv(args.from_csv)
+    print(f"Loaded {len(rows)} models from {args.from_csv}\n")
+  else:
+    print(f"Running training with {args.n_models} models, {args.epochs} epochs each...")
+    results = run_training(args.n_models, args.epochs, args.device)
+    csv_path = save_dir / "results.csv"
+    save_results_csv(results, csv_path)
+    rows = load_results_csv(csv_path)
+
+  plot_scatter(rows, save_dir)
+  plot_shift_accumulation(rows, save_dir)
+  print(f"Plots saved to {save_dir}/")
