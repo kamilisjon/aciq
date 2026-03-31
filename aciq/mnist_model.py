@@ -51,6 +51,8 @@ def train_model(seed: int, epochs: int = 10, lr: float = 1e-3, batch_size: int =
   torch.manual_seed(seed)
   if device == "cuda":
     torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
   model = MNISTModel().to(device)
   train_loader, test_loader = get_mnist_loaders(batch_size)
