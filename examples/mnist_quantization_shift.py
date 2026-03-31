@@ -25,7 +25,6 @@ BLOCK_NAMES = ["block1", "block2", "block3", "block4", "block5"]
 
 
 def quantize_model(model: MNISTModel, method: str) -> MNISTModel:
-  """Quantize model weights (INT8). Method: 'minmax' or 'aciq'."""
   device = next(model.parameters()).device
   qmodel = copy.deepcopy(model).cpu()
   qmodel.eval()
@@ -56,7 +55,6 @@ def _compute_alpha(vec: np.ndarray, method: str) -> float:
   alpha_mm = minmax_alpha(vec)
   if method == "minmax":
     return alpha_mm
-  # ACIQ: find best distribution, solve for optimal alpha
   sorted_vec = np.sort(vec)
   fits = {dt: Distribution.fit(sorted_vec, dt) for dt in DistributionType}
   best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
@@ -68,15 +66,22 @@ def _compute_alpha(vec: np.ndarray, method: str) -> float:
 
 
 def collect_layer_outputs(model: MNISTModel, test_loader: torch.utils.data.DataLoader, device: str) -> dict[str, np.ndarray]:
-  """Run all test images through model, capture mean output of each block per batch, then average."""
+  """Collect per-channel output means for each block, averaged over all test images."""
   model.eval()
-  sums: dict[str, float] = {name: 0.0 for name in BLOCK_NAMES}
-  n_batches = 0
+  sums: dict[str, torch.Tensor] = {}
+  counts: dict[str, int] = {name: 0 for name in BLOCK_NAMES}
   hooks = []
 
   def make_hook(name: str):
     def hook_fn(module: nn.Module, inp: tuple[torch.Tensor, ...], out: torch.Tensor) -> None:
-      sums[name] += float(out.detach().mean().cpu())
+      # out: (B, C, H, W) — sum over B, H, W for per-channel totals
+      batch_sum = out.detach().sum(dim=[0, 2, 3])  # (C,)
+      if name not in sums:
+        sums[name] = torch.zeros_like(batch_sum, device="cpu")
+      sums[name] += batch_sum.cpu()
+      b, _, h, w = out.shape
+      counts[name] += b * h * w
+
     return hook_fn
 
   for name in BLOCK_NAMES:
@@ -86,16 +91,15 @@ def collect_layer_outputs(model: MNISTModel, test_loader: torch.utils.data.DataL
   with torch.no_grad():
     for images, _ in test_loader:
       model(images.to(device))
-      n_batches += 1
 
   for h in hooks:
     h.remove()
-  return {name: np.asarray(sums[name] / n_batches) for name in BLOCK_NAMES}
+  return {name: (sums[name] / counts[name]).numpy() for name in BLOCK_NAMES}
 
 
 def compute_shift(fp32_outputs: dict[str, np.ndarray], quant_outputs: dict[str, np.ndarray]) -> dict[str, float]:
-  """Compute output mean shift |E[out_fp32] - E[out_quant]| per layer."""
-  return {name: float(np.abs(fp32_outputs[name] - quant_outputs[name])) for name in fp32_outputs}
+  """Mean of absolute per-channel shifts."""
+  return {name: float(np.mean(np.abs(fp32_outputs[name] - quant_outputs[name]))) for name in fp32_outputs}
 
 
 # --- Training + measurement ---
@@ -163,7 +167,7 @@ def load_results_csv(path: Path) -> list[dict[str, float]]:
     return [{k: float(v) for k, v in row.items()} for row in csv.DictReader(f)]
 
 
-# --- Analysis (from CSV rows) ---
+# --- Analysis ---
 
 
 def plot_scatter(rows: list[dict[str, float]], save_dir: Path) -> None:
@@ -192,7 +196,7 @@ def plot_scatter(rows: list[dict[str, float]], save_dir: Path) -> None:
     ax.grid(True, alpha=0.3)
 
   fig.tight_layout()
-  fig.savefig(save_dir / "scatter_shift_vs_accuracy.png", dpi=300)
+  fig.savefig(save_dir / "scatter_shift_vs_accuracy.png", dpi=700)
   plt.close(fig)
 
 
@@ -206,8 +210,16 @@ def plot_shift_accumulation(rows: list[dict[str, float]], save_dir: Path) -> Non
 
     x_pos = np.arange(len(BLOCK_NAMES))
     label = method.upper()
-    ax.bar(x_pos + (-0.2 if method == "minmax" else 0.2), per_layer_means, width=0.35,
-           color=color, alpha=0.5, label=f"{label} per-layer shift", yerr=per_layer_stds, capsize=3)
+    ax.bar(
+      x_pos + (-0.2 if method == "minmax" else 0.2),
+      per_layer_means,
+      width=0.35,
+      color=color,
+      alpha=0.5,
+      label=f"{label} per-layer shift",
+      yerr=per_layer_stds,
+      capsize=3,
+    )
     ax.plot(x_pos, cumulative, color=color, marker="o", linewidth=2, linestyle="--", label=f"{label} cumulative shift")
 
   ax.set_xticks(np.arange(len(BLOCK_NAMES)))
@@ -218,7 +230,7 @@ def plot_shift_accumulation(rows: list[dict[str, float]], save_dir: Path) -> Non
   ax.legend(fontsize=8, prop={"family": "monospace", "size": 8})
   ax.grid(True, alpha=0.3, axis="y")
   fig.tight_layout()
-  fig.savefig(save_dir / "shift_accumulation.png", dpi=500)
+  fig.savefig(save_dir / "shift_accumulation.png", dpi=700)
   plt.close(fig)
 
 
