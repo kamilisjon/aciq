@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
+from tqdm import tqdm
 
 
 class MNISTModel(nn.Module):
@@ -57,7 +58,7 @@ def train_model(seed: int, epochs: int = 10, lr: float = 1e-3, batch_size: int =
 
   model.train()
   for epoch in range(epochs):
-    for images, labels in train_loader:
+    for images, labels in tqdm(train_loader):
       images, labels = images.to(device), labels.to(device)
       loss = F.cross_entropy(model(images), labels)
       optimizer.zero_grad()

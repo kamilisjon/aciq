@@ -17,7 +17,7 @@ from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 
 
 RESULTS_DIR = Path("results/mnist_quantization_shift")
-BITS = 8
+BITS = 4
 BLOCK_NAMES = ["block1", "block2", "block3", "block4", "block5"]
 
 
