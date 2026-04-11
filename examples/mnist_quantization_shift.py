@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from scipy.stats import spearmanr
 
+from aciq.analysis import LayerStats, ShiftResult, compute_shift
 from aciq.batch_norm import collect_conv_bn_pairs, fuse_bn_into_conv, fuse_bn_into_bias
 from aciq.distributions import Distribution, DistributionType
 from aciq.mnist_model import MNISTModel, get_mnist_loaders, train_model, evaluate_model
@@ -65,12 +66,6 @@ def _compute_alpha(vec: np.ndarray, method: str) -> float:
 # --- Distribution shift measurement ---
 
 
-@dataclass
-class LayerStats:
-  mean: np.ndarray  # per-channel means, shape (C,)
-  var: np.ndarray  # per-channel variances, shape (C,)
-
-
 def collect_layer_outputs(model: MNISTModel, test_loader: torch.utils.data.DataLoader, device: str) -> dict[str, LayerStats]:
   """Collect per-channel output means and variances for each block, over all test images."""
   model.eval()
@@ -113,18 +108,6 @@ def collect_layer_outputs(model: MNISTModel, test_loader: torch.utils.data.DataL
     result[name] = LayerStats(mean=mean, var=var)
   return result
 
-
-@dataclass
-class ShiftResult:
-  mean_shift: dict[str, float]  # mean of |per-channel mean difference|
-  var_shift: dict[str, float]  # mean of |per-channel variance difference|
-
-
-def compute_shift(fp32_outputs: dict[str, LayerStats], quant_outputs: dict[str, LayerStats]) -> ShiftResult:
-  """Mean of absolute per-channel mean and variance shifts."""
-  mean_shift = {name: float(np.mean(np.abs(fp32_outputs[name].mean - quant_outputs[name].mean))) for name in fp32_outputs}
-  var_shift = {name: float(np.mean(np.abs(fp32_outputs[name].var - quant_outputs[name].var))) for name in fp32_outputs}
-  return ShiftResult(mean_shift=mean_shift, var_shift=var_shift)
 
 
 # --- Training + measurement ---
