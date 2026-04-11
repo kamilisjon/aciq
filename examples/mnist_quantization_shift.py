@@ -109,7 +109,6 @@ def collect_layer_outputs(model: MNISTModel, test_loader: torch.utils.data.DataL
   return result
 
 
-
 # --- Training + measurement ---
 
 
@@ -254,16 +253,20 @@ def _plot_accumulation(rows: list[dict[str, float]], shift_key: str, ylabel: str
 
 def plot_shift_accumulation(rows: list[dict[str, float]], save_dir: Path) -> None:
   _plot_accumulation(
-    rows, "mean_shift",
+    rows,
+    "mean_shift",
     ylabel="Output mean shift |E[fp32] - E[quant]|",
     title="Mean shift accumulation across layers",
-    save_dir=save_dir, filename="mean_shift_accumulation.png",
+    save_dir=save_dir,
+    filename="mean_shift_accumulation.png",
   )
   _plot_accumulation(
-    rows, "var_shift",
+    rows,
+    "var_shift",
     ylabel="Output variance shift |Var[fp32] - Var[quant]|",
     title="Variance shift accumulation across layers",
-    save_dir=save_dir, filename="var_shift_accumulation.png",
+    save_dir=save_dir,
+    filename="var_shift_accumulation.png",
   )
 
 

@@ -34,7 +34,9 @@ def add_intermediate_outputs(model: onnx.ModelProto, output_names: list[str]) ->
 
 
 def create_session_with_intermediates(
-  model_path: Path, output_names: list[str], cuda: bool = False,
+  model_path: Path,
+  output_names: list[str],
+  cuda: bool = False,
 ) -> tuple[ort.InferenceSession, list[str]]:
   """Create an ONNX Runtime session that returns intermediate layer outputs.
 

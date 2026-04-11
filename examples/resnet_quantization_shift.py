@@ -2,11 +2,10 @@ import argparse
 import csv
 from pathlib import Path
 
-import numpy as np
 import onnx
 from tinygrad.helpers import tqdm
 
-from aciq.analysis import ShiftResult, StatsAccumulator, compute_shift
+from aciq.analysis import LayerStats, ShiftResult, StatsAccumulator, compute_shift
 from aciq.benchmark import load_and_preprocess
 from aciq.onnx_session import create_session_with_intermediates, get_block_output_names
 from aciq.plotting import plot_shift
@@ -35,7 +34,9 @@ MODELS: dict[str, dict[str, Path]] = {
 METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]
 
 
-def collect_layer_stats(model_path: Path, layer_names: list[str], image_paths: list[Path], batch_size: int = 1, cuda: bool = False) -> dict[str, np.ndarray]:
+def collect_layer_stats(
+  model_path: Path, layer_names: list[str], image_paths: list[Path], batch_size: int = 1, cuda: bool = False
+) -> dict[str, LayerStats]:
   """Run inference and accumulate per-channel statistics for tracked layers."""
   session, all_output_names = create_session_with_intermediates(model_path, layer_names, cuda=cuda)
   input_name = session.get_inputs()[0].name
