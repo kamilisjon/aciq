@@ -74,44 +74,10 @@ def benchmark_accuracy(model: nn.Module, device: str, imagenet_data_path: Path, 
   return correct_top1 / len(images) * 100, correct_top5 / len(images) * 100
 
 
-def benchmark_speed(model: nn.Module, device: str, batch_size: int):
-  model.eval()
-  input_data = torch.zeros((batch_size, 3, 224, 224), device=device)
-
-  if device == "cuda":
-    starter = torch.cuda.Event(enable_timing=True)
-    ender = torch.cuda.Event(enable_timing=True)
-    with torch.no_grad():
-      for _ in range(WARMUP_RUNS_COUNT):
-        model(input_data)
-    torch.cuda.synchronize()
-
-    total_duration = 0.0
-    with torch.no_grad():
-      for _ in range(BENCHMARK_RUNS_COUNT):
-        starter.record()
-        model(input_data)
-        ender.record()
-        torch.cuda.synchronize()
-        total_duration += starter.elapsed_time(ender)
-    return total_duration / BENCHMARK_RUNS_COUNT
-
-  with torch.no_grad():
-    for _ in range(WARMUP_RUNS_COUNT):
-      model(input_data)
-    total_duration = 0.0
-    for _ in range(BENCHMARK_RUNS_COUNT):
-      start = time.perf_counter()
-      model(input_data)
-      total_duration += (time.perf_counter() - start) * 1000
-  return total_duration / BENCHMARK_RUNS_COUNT
-
-
 def run_benchmark(
   model: nn.Module, benchmark_data_path: Path, batch_size: int = 16, exec_provider: ExecProvider = ExecProvider.CUDA
 ) -> tuple[float, float, float]:
   device = "cuda" if exec_provider == ExecProvider.CUDA else "cpu"
   model = model.to(device)
-  speed = benchmark_speed(model, device, batch_size)
   top1_acc, top5_acc = benchmark_accuracy(model, device, benchmark_data_path, batch_size)
-  return top1_acc, top5_acc, speed
+  return top1_acc, top5_acc
