@@ -1,6 +1,12 @@
+import csv
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
+from tinygrad.helpers import tqdm
+
+from aciq.benchmark import load_and_preprocess
+from aciq.onnx_session import create_session_with_intermediates
 
 
 @dataclass
@@ -55,3 +61,61 @@ class StatsAccumulator:
       var = ((self._sq_sums[name] / n) - (self._sums[name] / n) ** 2).astype(np.float32)
       result[name] = LayerStats(mean=mean, var=var)
     return result
+
+
+def collect_layer_stats(
+  model_path: Path, layer_names: list[str], image_paths: list[Path], batch_size: int = 1, cuda: bool = False
+) -> dict[str, LayerStats]:
+  """Run inference and accumulate per-channel statistics for tracked layers."""
+  session, all_output_names = create_session_with_intermediates(model_path, layer_names, cuda=cuda)
+  input_name = session.get_inputs()[0].name
+
+  acc = StatsAccumulator()
+  for start in tqdm(range(0, len(image_paths), batch_size), desc=f"  {model_path.name}"):
+    batch_paths = image_paths[start : start + batch_size]
+    batch = load_and_preprocess(batch_paths)
+    results = session.run(all_output_names, {input_name: batch})
+
+    # results[0] is the model logits, results[1:] are the intermediate outputs
+    for i, name in enumerate(layer_names):
+      acc.update(name, results[i + 1])
+
+  return acc.finalize()
+
+
+def save_shifts_csv(shifts: dict[str, ShiftResult], layer_names: list[str], save_path: Path) -> None:
+  save_path.parent.mkdir(parents=True, exist_ok=True)
+  header = ["method"]
+  for name in layer_names:
+    header += [f"{name}__mean_shift", f"{name}__var_shift"]
+
+  with open(save_path, "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(header)
+    for method, shift in shifts.items():
+      row: list[str | float] = [method]
+      for name in layer_names:
+        row += [shift.mean_shift[name], shift.var_shift[name]]
+      writer.writerow(row)
+
+
+def load_shifts_csv(path: Path) -> tuple[dict[str, ShiftResult], list[str]]:
+  with open(path) as f:
+    reader = csv.DictReader(f)
+    columns = reader.fieldnames
+    assert columns is not None
+
+    # Extract layer names from column headers
+    layer_names: list[str] = []
+    for col in columns:
+      if col.endswith("__mean_shift"):
+        layer_names.append(col.removesuffix("__mean_shift"))
+
+    shifts: dict[str, ShiftResult] = {}
+    for row in reader:
+      method = row["method"]
+      mean_shift = {name: float(row[f"{name}__mean_shift"]) for name in layer_names}
+      var_shift = {name: float(row[f"{name}__var_shift"]) for name in layer_names}
+      shifts[method] = ShiftResult(mean_shift=mean_shift, var_shift=var_shift)
+
+  return shifts, layer_names
