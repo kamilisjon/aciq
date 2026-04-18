@@ -32,6 +32,7 @@ class PipelineConfig:
   dataset_path: Path
   n_images: int | None
   plot: bool
+  plot_per_channel: bool
   benchmark: bool
   cuda: bool
   output_dir: Path
@@ -136,7 +137,7 @@ def stage_weight_analysis(config: PipelineConfig) -> None:
     replace_weight(fq_models["per_tensor_aciq"], weight_name, quant_weight_aciq.reshape(weight_arr.shape))
 
     # Per-channel (axis 0 = output channels)
-    ch_plot_dir = config.weight_results_dir / "per_channel" / f"{layer_idx:03d}_{safe_name}" if config.plot else None
+    ch_plot_dir = config.weight_results_dir / "per_channel" / f"{layer_idx:03d}_{safe_name}" if config.plot_per_channel else None
     total_err_minmax = 0.0
     total_err_aciq = 0.0
     fq_ch_mm = np.empty_like(weight_arr)
@@ -238,6 +239,7 @@ def main() -> None:
   parser.add_argument("--dataset-path", type=Path, required=True, help="Path to ImageNet dataset root")
   parser.add_argument("--n-images", type=int, default=None, help="Limit validation images for shift analysis (default: all)")
   parser.add_argument("--plot", action="store_true", help="Generate distribution and BN fusion plots")
+  parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
   parser.add_argument("--benchmark", action="store_true", help="Run accuracy/speed benchmarks")
   parser.add_argument("--cuda", action="store_true", help="Use CUDA for inference")
   parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Root results directory")
@@ -250,6 +252,7 @@ def main() -> None:
     dataset_path=args.dataset_path,
     n_images=args.n_images,
     plot=args.plot,
+    plot_per_channel=args.plot_per_channel,
     benchmark=args.benchmark,
     cuda=args.cuda,
     output_dir=args.output_dir / f"{args.model}_{timestamp}",
