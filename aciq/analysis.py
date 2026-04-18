@@ -3,10 +3,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from tinygrad.helpers import tqdm
-
-from aciq.benchmark import load_and_preprocess
-from aciq.onnx_session import create_session_with_intermediates
 
 
 @dataclass
@@ -38,7 +34,6 @@ class StatsAccumulator:
 
   def update(self, name: str, activation: np.ndarray) -> None:
     """Accumulate statistics from a (B, C, H, W) activation tensor."""
-    # Sum over batch, height, width — keep channels
     ch_sum = activation.sum(axis=(0, 2, 3)).astype(np.float64)
     ch_sq_sum = (activation.astype(np.float64) ** 2).sum(axis=(0, 2, 3))
     b, _, h, w = activation.shape
@@ -63,26 +58,6 @@ class StatsAccumulator:
     return result
 
 
-def collect_layer_stats(
-  model_path: Path, layer_names: list[str], image_paths: list[Path], batch_size: int = 1, cuda: bool = False
-) -> dict[str, LayerStats]:
-  """Run inference and accumulate per-channel statistics for tracked layers."""
-  session, all_output_names = create_session_with_intermediates(model_path, layer_names, cuda=cuda)
-  input_name = session.get_inputs()[0].name
-
-  acc = StatsAccumulator()
-  for start in tqdm(range(0, len(image_paths), batch_size), desc=f"  {model_path.name}"):
-    batch_paths = image_paths[start : start + batch_size]
-    batch = load_and_preprocess(batch_paths)
-    results = session.run(all_output_names, {input_name: batch})
-
-    # results[0] is the model logits, results[1:] are the intermediate outputs
-    for i, name in enumerate(layer_names):
-      acc.update(name, results[i + 1])
-
-  return acc.finalize()
-
-
 def save_shifts_csv(shifts: dict[str, ShiftResult], layer_names: list[str], save_path: Path) -> None:
   save_path.parent.mkdir(parents=True, exist_ok=True)
   header = ["method"]
@@ -105,7 +80,6 @@ def load_shifts_csv(path: Path) -> tuple[dict[str, ShiftResult], list[str]]:
     columns = reader.fieldnames
     assert columns is not None
 
-    # Extract layer names from column headers
     layer_names: list[str] = []
     for col in columns:
       if col.endswith("__mean_shift"):

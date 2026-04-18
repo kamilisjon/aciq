@@ -4,9 +4,9 @@ from enum import Enum
 import csv
 import json
 
-import onnxruntime
 import numpy as np
 import torch
+import torch.nn as nn
 from PIL import Image
 import torchvision.transforms as transforms
 import PIL.Image as pil_image
@@ -20,7 +20,7 @@ IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
 
-def load_and_preprocess(image_paths: list[Path], pad_to_batch_size: int | None = None):
+def load_and_preprocess(image_paths: list[Path]) -> torch.Tensor:
   # timm style ImageNet pre-process
   images = [Image.open(p).convert("RGB") for p in image_paths]
   transform = transforms.Compose([
@@ -29,21 +29,7 @@ def load_and_preprocess(image_paths: list[Path], pad_to_batch_size: int | None =
     transforms.ToTensor(),
     transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
   ])
-  processed = [transform(img) for img in images]
-
-  # Handle batch padding logic
-  if pad_to_batch_size is not None:
-    n = len(processed)
-    if n > pad_to_batch_size:
-      raise ValueError(f"Received {n} images, but batch size is {pad_to_batch_size}. Cannot exceed batch size.")
-
-    if n < pad_to_batch_size:
-      c, h, w = processed[0].shape
-      num_pad = pad_to_batch_size - n
-      pad_images = [torch.zeros((c, h, w)) for _ in range(num_pad)]
-      processed.extend(pad_images)
-
-  return torch.stack(processed).numpy()
+  return torch.stack([transform(img) for img in images])
 
 
 class ExecProvider(Enum):
@@ -54,20 +40,7 @@ class ExecProvider(Enum):
     return self.name
 
 
-def setup_session(model_path: Path, exec_provider: ExecProvider) -> onnxruntime.InferenceSession:
-  session_options = onnxruntime.SessionOptions()
-  session_options.log_severity_level = 0
-  session_options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
-
-  match exec_provider:
-    case ExecProvider.CPU:
-      provider = ["CPUExecutionProvider"]
-    case ExecProvider.CUDA:
-      provider = ["CUDAExecutionProvider"]
-  return onnxruntime.InferenceSession(str(model_path), sess_options=session_options, providers=provider)
-
-
-def benchmark_accuracy(session: onnxruntime.InferenceSession, imagenet_data_path: Path, batch_size: int):
+def benchmark_accuracy(model: nn.Module, device: str, imagenet_data_path: Path, batch_size: int):
   val_dir = imagenet_data_path / "ILSVRC" / "Data" / "CLS-LOC" / "val"
   images = sorted([f for f in val_dir.iterdir() if f.suffix.upper() == ".JPEG"])
 
@@ -91,53 +64,63 @@ def benchmark_accuracy(session: onnxruntime.InferenceSession, imagenet_data_path
     class_idx = json.load(f)
   gt_label_to_idx = {v[0]: int(k) for k, v in class_idx.items()}
 
-  # Benchmark
-  inputs = session.get_inputs()
-  assert len(inputs) == 1, f"Expected 1 input, got {len(inputs)}"
-  input_name = inputs[0].name
-
+  model.eval()
   correct_top1 = correct_top5 = 0
-  for start in tqdm(range(0, len(images), batch_size), desc="Benchmarking Accuracy"):
-    batch_paths = images[start : min(start + batch_size, len(images))]
-    outputs = session.run(None, {input_name: load_and_preprocess(batch_paths, batch_size)})[0]
-    for i in range(len(batch_paths)):
-      pred = np.argsort(outputs[i])[-5:][::-1]
-      gt_label_idx = gt_label_to_idx[imageid_to_label[batch_paths[i].stem]]
+  with torch.no_grad():
+    for start in tqdm(range(0, len(images), batch_size), desc="Benchmarking Accuracy"):
+      batch_paths = images[start : start + batch_size]
+      batch = load_and_preprocess(batch_paths).to(device)
+      outputs = model(batch).cpu().numpy()
+      for i in range(len(batch_paths)):
+        pred = np.argsort(outputs[i])[-5:][::-1]
+        gt_label_idx = gt_label_to_idx[imageid_to_label[batch_paths[i].stem]]
 
-      if pred[0] == gt_label_idx:
-        correct_top1 += 1
-      if any(p == gt_label_idx for p in pred):
-        correct_top5 += 1
+        if pred[0] == gt_label_idx:
+          correct_top1 += 1
+        if any(p == gt_label_idx for p in pred):
+          correct_top5 += 1
 
   return correct_top1 / len(images) * 100, correct_top5 / len(images) * 100
 
 
-def benchmark_speed(session: onnxruntime.InferenceSession, batch_size: int):
-  input_data = np.zeros((batch_size, 3, 224, 224), np.float32)
-  input_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(input_data, "cuda", 0)
+def benchmark_speed(model: nn.Module, device: str, batch_size: int):
+  model.eval()
+  input_data = torch.zeros((batch_size, 3, 224, 224), device=device)
 
-  iobinding = session.io_binding()
-  iobinding.bind_ortvalue_input(session.get_inputs()[0].name, input_ortvalue)
-  for output in session.get_outputs():
-    iobinding.bind_output(output.name, "cuda")
+  if device == "cuda":
+    starter = torch.cuda.Event(enable_timing=True)
+    ender = torch.cuda.Event(enable_timing=True)
+    with torch.no_grad():
+      for _ in range(WARMUP_RUNS_COUNT):
+        model(input_data)
+    torch.cuda.synchronize()
 
-  # Warm up
-  for _ in range(WARMUP_RUNS_COUNT):
-    session.run_with_iobinding(iobinding)
+    total_duration = 0.0
+    with torch.no_grad():
+      for _ in range(BENCHMARK_RUNS_COUNT):
+        starter.record()
+        model(input_data)
+        ender.record()
+        torch.cuda.synchronize()
+        total_duration += starter.elapsed_time(ender)
+    return total_duration / BENCHMARK_RUNS_COUNT
 
-  total_duration = 0.0
-  for _ in range(BENCHMARK_RUNS_COUNT):
-    start = time.perf_counter()
-    session.run_with_iobinding(iobinding)
-    batch_duration = (time.perf_counter() - start) * 1000
-    total_duration += batch_duration
+  with torch.no_grad():
+    for _ in range(WARMUP_RUNS_COUNT):
+      model(input_data)
+    total_duration = 0.0
+    for _ in range(BENCHMARK_RUNS_COUNT):
+      start = time.perf_counter()
+      model(input_data)
+      total_duration += (time.perf_counter() - start) * 1000
   return total_duration / BENCHMARK_RUNS_COUNT
 
 
 def run_benchmark(
-  model_path: Path, benchmark_data_path: Path, batch_size: int = 16, exec_provider: ExecProvider = ExecProvider.CUDA
+  model: nn.Module, benchmark_data_path: Path, batch_size: int = 16, exec_provider: ExecProvider = ExecProvider.CUDA
 ) -> tuple[float, float, float]:
-  session = setup_session(model_path, exec_provider)
-  speed = benchmark_speed(session, batch_size)
-  top1_acc, top5_acc = benchmark_accuracy(session, benchmark_data_path, batch_size)
+  device = "cuda" if exec_provider == ExecProvider.CUDA else "cpu"
+  model = model.to(device)
+  speed = benchmark_speed(model, device, batch_size)
+  top1_acc, top5_acc = benchmark_accuracy(model, device, benchmark_data_path, batch_size)
   return top1_acc, top5_acc, speed
