@@ -3,6 +3,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+from tinygrad.helpers import tqdm
+
+from aciq.benchmark import load_and_preprocess
+from aciq.onnx_session import create_session_with_intermediates
 
 
 @dataclass
