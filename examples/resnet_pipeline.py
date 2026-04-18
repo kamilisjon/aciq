@@ -242,10 +242,10 @@ def stage_shift_analysis(config: PipelineConfig) -> None:
 def stage_benchmark(config: PipelineConfig) -> None:
   device = config.device
   fp32_model = torch.load(config.fused_model_path, weights_only=False).to(device)
-  print(f"  FP32: {benchmark_accuracy(fp32_model, device, config.dataset_path, batch_size=1)}")
+  print(f"  FP32: {benchmark_accuracy(fp32_model, device, config.dataset_path, batch_size=32)}")
   for method in METHOD_NAMES:
     model = torch.load(config.quantized_model_path(method), weights_only=False).to(device)
-    print(f"  {method}: {benchmark_accuracy(model, device, config.dataset_path, batch_size=1)}")
+    print(f"  {method}: {benchmark_accuracy(model, device, config.dataset_path, batch_size=32)}")
 
 
 # ---------------------------------------------------------------------------
