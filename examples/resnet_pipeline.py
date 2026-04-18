@@ -2,7 +2,6 @@ import argparse
 import copy
 import csv
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +14,7 @@ from tinygrad.helpers import tqdm
 from aciq.analysis import ShiftResult, compute_shift, save_shifts_csv
 from aciq.batch_norm import collect_conv_bn_pairs
 from aciq.benchmark import benchmark_accuracy
+from aciq.helpers import get_output_dir
 from aciq.plotting import plot_channel_ranges, plot_shift
 from aciq.quantization import quantize
 from aciq.torch_hooks import collect_activations, get_resnet_block_modules
@@ -22,6 +22,7 @@ from aciq.weight_analysis import analyze_layer
 
 
 METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]
+RESULTS_DIR = Path("results")
 
 
 @dataclass
@@ -259,16 +260,14 @@ def main() -> None:
   parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Root results directory")
   args = parser.parse_args()
 
-  timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
   config = PipelineConfig(
     model_name=args.model,
     bits=args.bits,
     dataset_path=args.dataset_path,
     plot_per_channel=args.plot_per_channel,
     device="cuda" if torch.cuda.is_available() else "cpu",
-    output_dir=args.output_dir / f"{args.model}_{timestamp}",
+    output_dir=get_output_dir(RESULTS_DIR, args.model),
   )
-  config.output_dir.mkdir(parents=True, exist_ok=True)
   print(f"Output directory: {config.output_dir}")
 
   pytorch_model = load_pytorch_model(config.model_name)

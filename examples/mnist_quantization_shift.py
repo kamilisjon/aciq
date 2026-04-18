@@ -13,12 +13,13 @@ from scipy.stats import spearmanr
 
 from aciq.analysis import LayerStats, ShiftResult, compute_shift
 from aciq.batch_norm import collect_conv_bn_pairs
+from aciq.helpers import get_output_dir
 from aciq.distributions import Distribution, DistributionType
 from aciq.mnist_model import MNISTModel, get_mnist_loaders, train_model, evaluate_model
 from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 
 
-RESULTS_DIR = Path("results/mnist_quantization_shift")
+RESULTS_DIR = Path("results")
 BITS = 4
 BLOCK_NAMES = ["block1", "block2", "block3", "block4", "block5"]
 
@@ -275,18 +276,17 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="MNIST quantization distribution shift analysis")
   parser.add_argument("--n-models", type=int, default=30, help="Number of models to train")
   parser.add_argument("--epochs", type=int, default=10, help="Training epochs per model")
-  parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
   parser.add_argument("--from-csv", type=Path, default=None, help="Load results from CSV instead of training")
   args = parser.parse_args()
-
-  save_dir = RESULTS_DIR
+  save_dir = get_output_dir(RESULTS_DIR, "mnist")
+  device = "cuda" if torch.cuda.is_available() else "cpu"
 
   if args.from_csv:
     rows = load_results_csv(args.from_csv)
     print(f"Loaded {len(rows)} models from {args.from_csv}\n")
   else:
     print(f"Running training with {args.n_models} models, {args.epochs} epochs each...")
-    results = run_training(args.n_models, args.epochs, args.device)
+    results = run_training(args.n_models, args.epochs, device)
     csv_path = save_dir / "results.csv"
     save_results_csv(results, csv_path)
     rows = load_results_csv(csv_path)
