@@ -29,7 +29,6 @@ class PipelineConfig:
   model_name: str
   bits: int
   dataset_path: Path
-  n_images: int | None
   plot_per_channel: bool
   device: str
   output_dir: Path
@@ -211,8 +210,6 @@ def stage_shift_analysis(config: PipelineConfig) -> None:
 
   val_dir = config.dataset_path / "ILSVRC" / "Data" / "CLS-LOC" / "val"
   image_paths = sorted([f for f in val_dir.iterdir() if f.suffix.upper() == ".JPEG"])
-  if config.n_images is not None:
-    image_paths = image_paths[: config.n_images]
   print(f"  Using {len(image_paths)} images from {val_dir}")
 
   print("  Collecting FP32 stats...")
@@ -258,7 +255,6 @@ def main() -> None:
   parser.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet50"])
   parser.add_argument("--bits", type=int, default=8)
   parser.add_argument("--dataset-path", type=Path, required=True, help="Path to ImageNet dataset root")
-  parser.add_argument("--n-images", type=int, default=None, help="Limit validation images for shift analysis (default: all)")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
   parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Root results directory")
   args = parser.parse_args()
@@ -268,7 +264,6 @@ def main() -> None:
     model_name=args.model,
     bits=args.bits,
     dataset_path=args.dataset_path,
-    n_images=args.n_images,
     plot_per_channel=args.plot_per_channel,
     device="cuda" if torch.cuda.is_available() else "cpu",
     output_dir=args.output_dir / f"{args.model}_{timestamp}",
