@@ -14,7 +14,7 @@ from tinygrad.helpers import tqdm
 
 from aciq.analysis import ShiftResult, compute_shift, save_shifts_csv
 from aciq.batch_norm import collect_conv_bn_pairs
-from aciq.benchmark import run_benchmark
+from aciq.benchmark import benchmark_accuracy
 from aciq.plotting import plot_channel_ranges, plot_shift
 from aciq.quantization import quantize
 from aciq.torch_hooks import collect_activations, get_resnet_block_modules
@@ -31,7 +31,7 @@ class PipelineConfig:
   dataset_path: Path
   n_images: int | None
   plot_per_channel: bool
-  cuda: bool
+  device: str
   output_dir: Path
 
   @property
@@ -212,7 +212,7 @@ def stage_weight_analysis(config: PipelineConfig) -> None:
 
 
 def stage_shift_analysis(config: PipelineConfig) -> None:
-  device = "cuda" if config.cuda else "cpu"
+  device = config.device
   fp32_model = torch.load(config.fused_model_path, weights_only=False).to(device)
 
   block_modules = get_resnet_block_modules(fp32_model)
@@ -250,11 +250,12 @@ def stage_shift_analysis(config: PipelineConfig) -> None:
 
 
 def stage_benchmark(config: PipelineConfig) -> None:
-  fp32_model = torch.load(config.fused_model_path, weights_only=False)
-  print(f"  FP32: {run_benchmark(fp32_model, config.dataset_path, batch_size=1)}")
+  device = config.device
+  fp32_model = torch.load(config.fused_model_path, weights_only=False).to(device)
+  print(f"  FP32: {benchmark_accuracy(fp32_model, device, config.dataset_path, batch_size=1)}")
   for method in METHOD_NAMES:
-    model = torch.load(config.quantized_model_path(method), weights_only=False)
-    print(f"  {method}: {run_benchmark(model, config.dataset_path, batch_size=1)}")
+    model = torch.load(config.quantized_model_path(method), weights_only=False).to(device)
+    print(f"  {method}: {benchmark_accuracy(model, device, config.dataset_path, batch_size=1)}")
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +270,6 @@ def main() -> None:
   parser.add_argument("--dataset-path", type=Path, required=True, help="Path to ImageNet dataset root")
   parser.add_argument("--n-images", type=int, default=None, help="Limit validation images for shift analysis (default: all)")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
-  parser.add_argument("--cuda", action="store_true", help="Use CUDA for inference")
   parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Root results directory")
   args = parser.parse_args()
 
@@ -280,7 +280,7 @@ def main() -> None:
     dataset_path=args.dataset_path,
     n_images=args.n_images,
     plot_per_channel=args.plot_per_channel,
-    cuda=args.cuda,
+    device="cuda" if torch.cuda.is_available() else "cpu",
     output_dir=args.output_dir / f"{args.model}_{timestamp}",
   )
   config.output_dir.mkdir(parents=True, exist_ok=True)

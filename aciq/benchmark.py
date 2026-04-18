@@ -1,6 +1,4 @@
-import time
 from pathlib import Path
-from enum import Enum
 import csv
 import json
 
@@ -12,8 +10,6 @@ from torchvision.transforms._presets import ImageClassification
 from tinygrad.helpers import tqdm
 
 
-WARMUP_RUNS_COUNT = 300
-BENCHMARK_RUNS_COUNT = 100
 IMAGENET_LABELS_FILEPATH = "aciq/imagenet_class_index.json"
 
 _PREPROCESS = ImageClassification(crop_size=224)
@@ -21,14 +17,6 @@ _PREPROCESS = ImageClassification(crop_size=224)
 
 def load_and_preprocess(image_paths: list[Path]) -> torch.Tensor:
   return torch.stack([_PREPROCESS(Image.open(p).convert("RGB")) for p in image_paths])
-
-
-class ExecProvider(Enum):
-  CPU = 0
-  CUDA = 1
-
-  def __repr__(self):
-    return self.name
 
 
 def benchmark_accuracy(model: nn.Module, device: str, imagenet_data_path: Path, batch_size: int):
@@ -72,12 +60,3 @@ def benchmark_accuracy(model: nn.Module, device: str, imagenet_data_path: Path, 
           correct_top5 += 1
 
   return correct_top1 / len(images) * 100, correct_top5 / len(images) * 100
-
-
-def run_benchmark(
-  model: nn.Module, benchmark_data_path: Path, batch_size: int = 16, exec_provider: ExecProvider = ExecProvider.CUDA
-) -> tuple[float, float, float]:
-  device = "cuda" if exec_provider == ExecProvider.CUDA else "cpu"
-  model = model.to(device)
-  top1_acc, top5_acc = benchmark_accuracy(model, device, benchmark_data_path, batch_size)
-  return top1_acc, top5_acc
