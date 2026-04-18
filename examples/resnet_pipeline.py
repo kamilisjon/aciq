@@ -30,9 +30,7 @@ class PipelineConfig:
   bits: int
   dataset_path: Path
   n_images: int | None
-  plot: bool
   plot_per_channel: bool
-  benchmark: bool
   cuda: bool
   output_dir: Path
 
@@ -116,12 +114,11 @@ def stage_bn_analysis(config: PipelineConfig, model: nn.Module) -> None:
   torch.save(fused_model, config.fused_model_path)
   print(f"  Saved {config.fused_model_path}")
 
-  if config.plot:
-    pairs = collect_conv_bn_pairs(model)
-    for idx, (conv_name, conv, bn_name, bn) in tqdm(enumerate(pairs)):
-      pre_weight = conv.weight.data.numpy()
-      post_weight = fuse_bn_into_conv(pre_weight, bn)
-      plot_channel_ranges(idx, conv_name, pre_weight, post_weight, config.bn_results_dir)
+  pairs = collect_conv_bn_pairs(model)
+  for idx, (conv_name, conv, bn_name, bn) in tqdm(enumerate(pairs)):
+    pre_weight = conv.weight.data.numpy()
+    post_weight = fuse_bn_into_conv(pre_weight, bn)
+    plot_channel_ranges(idx, conv_name, pre_weight, post_weight, config.bn_results_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +146,7 @@ def stage_weight_analysis(config: PipelineConfig) -> None:
     safe_name = weight_name.replace("/", "_").replace(":", "_")[:60]
 
     # Per-tensor
-    plot_dir = config.weight_results_dir / "per_tensor" if config.plot else None
+    plot_dir = config.weight_results_dir / "per_tensor"
     alpha_minmax, alpha_aciq = analyze_layer(vec, weight_name, layer_idx, config.bits, plot_dir)
     quant_weight_minmax = quantize(vec, alpha_minmax, config.bits)
     quant_weight_aciq = quantize(vec, alpha_aciq, config.bits)
@@ -261,9 +258,7 @@ def main() -> None:
   parser.add_argument("--bits", type=int, default=8)
   parser.add_argument("--dataset-path", type=Path, required=True, help="Path to ImageNet dataset root")
   parser.add_argument("--n-images", type=int, default=None, help="Limit validation images for shift analysis (default: all)")
-  parser.add_argument("--plot", action="store_true", help="Generate distribution and BN fusion plots")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
-  parser.add_argument("--benchmark", action="store_true", help="Run accuracy/speed benchmarks")
   parser.add_argument("--cuda", action="store_true", help="Use CUDA for inference")
   parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Root results directory")
   args = parser.parse_args()
@@ -274,9 +269,7 @@ def main() -> None:
     bits=args.bits,
     dataset_path=args.dataset_path,
     n_images=args.n_images,
-    plot=args.plot,
     plot_per_channel=args.plot_per_channel,
-    benchmark=args.benchmark,
     cuda=args.cuda,
     output_dir=args.output_dir / f"{args.model}_{timestamp}",
   )
@@ -294,9 +287,8 @@ def main() -> None:
   print(f"\n=== Stage 3: Quantization Shift Analysis ({config.model_name}) ===")
   stage_shift_analysis(config)
 
-  if config.benchmark:
-    print(f"\n=== Stage 4: Benchmarking ({config.model_name}) ===")
-    stage_benchmark(config)
+  print(f"\n=== Stage 4: Benchmarking ({config.model_name}) ===")
+  stage_benchmark(config)
 
   print(f"\nDone. All results in {config.output_dir}")
 
