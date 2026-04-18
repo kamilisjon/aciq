@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-from torch.nn.utils.fusion import fuse_conv_bn_weights
+from torch.nn.utils.fusion import fuse_conv_bn_eval
 from scipy.stats import spearmanr
 
 from aciq.analysis import LayerStats, ShiftResult, compute_shift
@@ -32,20 +32,11 @@ def quantize_model(model: MNISTModel, method: str) -> MNISTModel:
   qmodel.eval()
 
   for conv_name, conv, bn_name, bn in collect_conv_bn_pairs(qmodel):
-    assert bn.running_mean is not None and bn.running_var is not None
-    fused_w, fused_b = fuse_conv_bn_weights(
-      conv.weight,
-      conv.bias,
-      bn.running_mean,
-      bn.running_var,
-      bn.eps,
-      bn.weight,
-      bn.bias,
-    )
-    fused_w_np = fused_w.data.numpy()
+    fused = fuse_conv_bn_eval(conv, bn)
+    fused_w_np = fused.weight.data.numpy()
     alpha = _compute_alpha(fused_w_np.flatten(), method)
     conv.weight.data = torch.from_numpy(quantize(fused_w_np, alpha, BITS))
-    conv.bias = fused_b
+    conv.bias = fused.bias
 
     # BN is fused into conv — remove it
     parent, idx = bn_name.rsplit(".", 1)

@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torchvision
-from torch.nn.utils.fusion import fuse_conv_bn_eval, fuse_conv_bn_weights
+from torch.nn.utils.fusion import fuse_conv_bn_eval
 from tinygrad.helpers import tqdm
 
 from aciq.analysis import ShiftResult, compute_shift, save_shifts_csv
@@ -116,18 +116,8 @@ def stage_bn_analysis(config: PipelineConfig, model: nn.Module) -> None:
 
   pairs = collect_conv_bn_pairs(model)
   for idx, (conv_name, conv, bn_name, bn) in tqdm(enumerate(pairs)):
-    assert bn.running_mean is not None and bn.running_var is not None
     pre_weight = conv.weight.data.numpy()
-    fused_w, _ = fuse_conv_bn_weights(
-      conv.weight,
-      conv.bias,
-      bn.running_mean,
-      bn.running_var,
-      bn.eps,
-      bn.weight,
-      bn.bias,
-    )
-    post_weight = fused_w.data.numpy()
+    post_weight = fuse_conv_bn_eval(conv, bn).weight.data.numpy()
     plot_channel_ranges(idx, conv_name, pre_weight, post_weight, config.bn_results_dir)
 
 
