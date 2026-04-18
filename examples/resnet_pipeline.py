@@ -119,7 +119,13 @@ def stage_bn_analysis(config: PipelineConfig, model: nn.Module) -> None:
     assert bn.running_mean is not None and bn.running_var is not None
     pre_weight = conv.weight.data.numpy()
     fused_w, _ = fuse_conv_bn_weights(
-      conv.weight, conv.bias, bn.running_mean, bn.running_var, bn.eps, bn.weight, bn.bias,
+      conv.weight,
+      conv.bias,
+      bn.running_mean,
+      bn.running_var,
+      bn.eps,
+      bn.weight,
+      bn.bias,
     )
     post_weight = fused_w.data.numpy()
     plot_channel_ranges(idx, conv_name, pre_weight, post_weight, config.bn_results_dir)
