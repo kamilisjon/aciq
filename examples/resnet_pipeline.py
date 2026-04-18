@@ -84,20 +84,20 @@ def build_bn_fused_model(model: nn.Module) -> nn.Module:
   """Return a deep copy of model with each (Conv, BN) pair fused into one Conv; BN replaced by Identity."""
   fused = copy.deepcopy(model)
   fused.eval()
-  for conv_name, _, bn_name, _ in collect_conv_bn_pairs(fused):
-    conv = fused.get_submodule(conv_name)
-    bn = fused.get_submodule(bn_name)
+  for conv_name, conv, bn_name, bn in collect_conv_bn_pairs(fused):
     _set_submodule(fused, conv_name, fuse_conv_bn_eval(conv, bn))
     _set_submodule(fused, bn_name, nn.Identity())
   return fused
 
 
-def iter_weight_modules(model: nn.Module) -> list[tuple[str, nn.Module]]:
+def iter_weight_modules(model: nn.Module) -> list[tuple[str, nn.Conv2d | nn.Linear]]:
   return [(n, m) for n, m in model.named_modules() if isinstance(m, (nn.Conv2d, nn.Linear))]
 
 
 def _assign_weight(model: nn.Module, name: str, new_weight: np.ndarray) -> None:
-  model.get_submodule(name).weight.data = torch.from_numpy(new_weight).float()
+  target = model.get_submodule(name)
+  assert isinstance(target, (nn.Conv2d, nn.Linear))
+  target.weight.data = torch.from_numpy(new_weight).float()
 
 
 # ---------------------------------------------------------------------------

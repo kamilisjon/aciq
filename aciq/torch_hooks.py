@@ -16,9 +16,10 @@ def get_resnet_block_modules(model: nn.Module) -> list[tuple[str, nn.Module]]:
   Stem ReLU (post conv1/bn1/relu) plus each BasicBlock/Bottleneck — their forward output is the
   post-residual-add post-ReLU tensor, matching the ONNX `/act1/`, `/act2/`, `/act3/` semantics.
   """
-  modules: list[tuple[str, nn.Module]] = [("stem", model.relu)]
+  modules: list[tuple[str, nn.Module]] = [("stem", model.get_submodule("relu"))]
   for i in range(1, 5):
-    layer = getattr(model, f"layer{i}")
+    layer = model.get_submodule(f"layer{i}")
+    assert isinstance(layer, nn.Sequential)
     for j, block in enumerate(layer):
       modules.append((f"layer{i}.{j}", block))
   return modules
