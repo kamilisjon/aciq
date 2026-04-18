@@ -8,28 +8,19 @@ import numpy as np
 import torch
 import torch.nn as nn
 from PIL import Image
-import torchvision.transforms as transforms
-import PIL.Image as pil_image
+from torchvision.transforms._presets import ImageClassification
 from tinygrad.helpers import tqdm
 
 
 WARMUP_RUNS_COUNT = 300
 BENCHMARK_RUNS_COUNT = 100
 IMAGENET_LABELS_FILEPATH = "aciq/imagenet_class_index.json"
-IMAGENET_MEAN = [0.485, 0.456, 0.406]
-IMAGENET_STD = [0.229, 0.224, 0.225]
+
+_PREPROCESS = ImageClassification(crop_size=224)
 
 
 def load_and_preprocess(image_paths: list[Path]) -> torch.Tensor:
-  # timm style ImageNet pre-process
-  images = [Image.open(p).convert("RGB") for p in image_paths]
-  transform = transforms.Compose([
-    transforms.Resize(256, interpolation=pil_image.Resampling.BICUBIC),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
-  ])
-  return torch.stack([transform(img) for img in images])
+  return torch.stack([_PREPROCESS(Image.open(p).convert("RGB")) for p in image_paths])
 
 
 class ExecProvider(Enum):
