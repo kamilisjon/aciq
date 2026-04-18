@@ -5,7 +5,7 @@ import numpy as np
 from aciq.distributions import Gaussian
 
 
-# Weights from ResNet50 layer onnx::Conv_648 (n=512).
+# Weights from a ResNet50 Conv layer (n=512).
 # Contains extreme outlier at -9.84 (z-score ~15) which causes
 # exp(-z^2/2) to underflow to 0, making log(pdf) = -inf.
 RESNET50_CONV_648 = np.array(

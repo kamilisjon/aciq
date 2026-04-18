@@ -8,13 +8,11 @@ license = 'MIT'
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "onnx",
   "numpy",
   "scipy",
   "matplotlib",
   "torch==2.6.0",
   "torchvision==0.21.0",
-  "onnxruntime-gpu==1.20.1",
   "tinygrad==0.12.0",
 ]
 
