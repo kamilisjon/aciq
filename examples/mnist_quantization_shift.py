@@ -8,10 +8,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
+from torch.nn.utils.fusion import fuse_conv_bn_weights
 from scipy.stats import spearmanr
 
 from aciq.analysis import LayerStats, ShiftResult, compute_shift
-from aciq.batch_norm import collect_conv_bn_pairs, fuse_bn_into_conv, fuse_bn_into_bias
+from aciq.batch_norm import collect_conv_bn_pairs
 from aciq.distributions import Distribution, DistributionType
 from aciq.mnist_model import MNISTModel, get_mnist_loaders, train_model, evaluate_model
 from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
@@ -31,14 +32,14 @@ def quantize_model(model: MNISTModel, method: str) -> MNISTModel:
   qmodel.eval()
 
   for conv_name, conv, bn_name, bn in collect_conv_bn_pairs(qmodel):
-    weight = conv.weight.data.numpy()
-    fused_w = fuse_bn_into_conv(weight, bn)
-    fused_b = fuse_bn_into_bias(conv.bias.data.numpy() if conv.bias is not None else None, bn)
-
-    vec = fused_w.flatten()
-    alpha = _compute_alpha(vec, method)
-    conv.weight.data = torch.from_numpy(quantize(fused_w, alpha, BITS))
-    conv.bias = nn.Parameter(torch.from_numpy(fused_b))
+    assert bn.running_mean is not None and bn.running_var is not None
+    fused_w, fused_b = fuse_conv_bn_weights(
+      conv.weight, conv.bias, bn.running_mean, bn.running_var, bn.eps, bn.weight, bn.bias,
+    )
+    fused_w_np = fused_w.data.numpy()
+    alpha = _compute_alpha(fused_w_np.flatten(), method)
+    conv.weight.data = torch.from_numpy(quantize(fused_w_np, alpha, BITS))
+    conv.bias = fused_b
 
     # BN is fused into conv — remove it
     parent, idx = bn_name.rsplit(".", 1)
