@@ -1,13 +1,6 @@
 # Vendored from tinygrad/extra/models/resnet.py @ commit f28ea84de235cdeaa7e028a2034b34f27b67d30f
-# Modifications vs upstream:
-#   - removed the (50, 32, 4) ResNeXt URL from model_urls
-#   - removed the ResNeXt50_32X4D factory
-#   - removed the __main__ demo block
-# Otherwise identical to upstream.
-
 import tinygrad.nn as nn
 from tinygrad import Tensor, dtypes
-from tinygrad.nn.state import torch_load
 from tinygrad.helpers import fetch, get_child
 
 # allow monkeypatching in layer implementations
@@ -19,8 +12,7 @@ Linear = nn.Linear
 class BasicBlock:
   expansion = 1
 
-  def __init__(self, in_planes, planes, stride=1, groups=1, base_width=64):
-    assert groups == 1 and base_width == 64, "BasicBlock only supports groups=1 and base_width=64"
+  def __init__(self, in_planes, planes, stride=1):
     self.conv1 = Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
     self.bn1 = BatchNorm(planes)
     self.conv2 = Conv2d(planes, planes, kernel_size=3, padding=1, stride=1, bias=False)
@@ -38,17 +30,14 @@ class BasicBlock:
 
 
 class Bottleneck:
-  # NOTE: stride_in_1x1=False, this is the v1.5 variant
   expansion = 4
 
-  def __init__(self, in_planes, planes, stride=1, stride_in_1x1=False, groups=1, base_width=64):
-    width = int(planes * (base_width / 64.0)) * groups
-    # NOTE: the original implementation places stride at the first convolution (self.conv1), control with stride_in_1x1
-    self.conv1 = Conv2d(in_planes, width, kernel_size=1, stride=stride if stride_in_1x1 else 1, bias=False)
-    self.bn1 = BatchNorm(width)
-    self.conv2 = Conv2d(width, width, kernel_size=3, padding=1, stride=1 if stride_in_1x1 else stride, groups=groups, bias=False)
-    self.bn2 = BatchNorm(width)
-    self.conv3 = Conv2d(width, self.expansion * planes, kernel_size=1, bias=False)
+  def __init__(self, in_planes, planes, stride=1):
+    self.conv1 = Conv2d(in_planes, planes, kernel_size=1, stride=stride, bias=False)
+    self.bn1 = BatchNorm(planes)
+    self.conv2 = Conv2d(planes, planes, kernel_size=3, padding=1, stride=1, bias=False)
+    self.bn2 = BatchNorm(planes)
+    self.conv3 = Conv2d(planes, self.expansion * planes, kernel_size=1, bias=False)
     self.bn3 = BatchNorm(self.expansion * planes)
     self.downsample = []
     if stride != 1 or in_planes != self.expansion * planes:
@@ -64,7 +53,8 @@ class Bottleneck:
 
 
 class ResNet:
-  def __init__(self, num, num_classes=None, groups=1, width_per_group=64, stride_in_1x1=False):
+  def __init__(self, num, num_classes=None):
+    assert num in [18, 34, 50, 101, 152]
     self.num = num
     self.block = {18: BasicBlock, 34: BasicBlock, 50: Bottleneck, 101: Bottleneck, 152: Bottleneck}[num]
 
@@ -72,24 +62,24 @@ class ResNet:
 
     self.in_planes = 64
 
-    self.groups = groups
-    self.base_width = width_per_group
+    # Kept as hardcoded attributes (not constructor args) so `resnet_fused.fused_from` and
+    # `resnet_capture.capture_from` can still read `src.groups` / `src.base_width`.
+    self.groups = 1
+    self.base_width = 64
+
     self.conv1 = Conv2d(3, 64, kernel_size=7, stride=2, bias=False, padding=3)
     self.bn1 = BatchNorm(64)
-    self.layer1 = self._make_layer(self.block, 64, self.num_blocks[0], stride=1, stride_in_1x1=stride_in_1x1)
-    self.layer2 = self._make_layer(self.block, 128, self.num_blocks[1], stride=2, stride_in_1x1=stride_in_1x1)
-    self.layer3 = self._make_layer(self.block, 256, self.num_blocks[2], stride=2, stride_in_1x1=stride_in_1x1)
-    self.layer4 = self._make_layer(self.block, 512, self.num_blocks[3], stride=2, stride_in_1x1=stride_in_1x1)
+    self.layer1 = self._make_layer(self.block, 64, self.num_blocks[0], stride=1)
+    self.layer2 = self._make_layer(self.block, 128, self.num_blocks[1], stride=2)
+    self.layer3 = self._make_layer(self.block, 256, self.num_blocks[2], stride=2)
+    self.layer4 = self._make_layer(self.block, 512, self.num_blocks[3], stride=2)
     self.fc = Linear(512 * self.block.expansion, num_classes) if num_classes is not None else None
 
-  def _make_layer(self, block, planes, num_blocks, stride, stride_in_1x1):
+  def _make_layer(self, block, planes, num_blocks, stride):
     strides = [stride] + [1] * (num_blocks - 1)
     layers = []
     for stride in strides:
-      if block == Bottleneck:
-        layers.append(block(self.in_planes, planes, stride, stride_in_1x1, self.groups, self.base_width))
-      else:
-        layers.append(block(self.in_planes, planes, stride, self.groups, self.base_width))
+      layers.append(block(self.in_planes, planes, stride))
       self.in_planes = planes * block.expansion
     return layers
 
@@ -121,16 +111,19 @@ class ResNet:
     return self.forward(x)
 
   def load_from_pretrained(self):
+    import torch  # one-shot torch dep at weight-load time; see header note
+
     model_urls = {
-      (18, 1, 64): "https://download.pytorch.org/models/resnet18-f37072fd.pth",
-      (34, 1, 64): "https://download.pytorch.org/models/resnet34-b627a593.pth",
-      (50, 1, 64): "https://download.pytorch.org/models/resnet50-0676ba61.pth",
-      (101, 1, 64): "https://download.pytorch.org/models/resnet101-63fe2227.pth",
-      (152, 1, 64): "https://download.pytorch.org/models/resnet152-394f9c45.pth",
+      18: "https://download.pytorch.org/models/resnet18-f37072fd.pth",
+      34: "https://download.pytorch.org/models/resnet34-b627a593.pth",
+      50: "https://download.pytorch.org/models/resnet50-0676ba61.pth",
+      101: "https://download.pytorch.org/models/resnet101-63fe2227.pth",
+      152: "https://download.pytorch.org/models/resnet152-394f9c45.pth",
     }
 
-    self.url = model_urls[(self.num, self.groups, self.base_width)]
-    for k, dat in torch_load(fetch(self.url)).items():
+    self.url = model_urls[self.num]
+    state = torch.load(str(fetch(self.url)), map_location="cpu", weights_only=True)
+    for k, dat_t in state.items():
       try:
         obj: Tensor = get_child(self, k)
       except AttributeError as e:
@@ -139,17 +132,11 @@ class ResNet:
 
         raise e
 
-      if "fc." in k and obj.shape != dat.shape:
+      dat_shape = tuple(dat_t.shape)
+      if "fc." in k and tuple(obj.shape) != dat_shape:
         print("skipping fully connected layer")
         continue  # Skip FC if transfer learning
 
       if "bn" not in k and "downsample" not in k:
-        assert obj.shape == dat.shape, (k, obj.shape, dat.shape)
-      obj.assign(dat.to(obj.device).cast(obj.dtype).reshape(obj.shape))
-
-
-ResNet18 = lambda num_classes=1000: ResNet(18, num_classes=num_classes)
-ResNet34 = lambda num_classes=1000: ResNet(34, num_classes=num_classes)
-ResNet50 = lambda num_classes=1000: ResNet(50, num_classes=num_classes)
-ResNet101 = lambda num_classes=1000: ResNet(101, num_classes=num_classes)
-ResNet152 = lambda num_classes=1000: ResNet(152, num_classes=num_classes)
+        assert tuple(obj.shape) == dat_shape, (k, obj.shape, dat_shape)
+      obj.assign(Tensor(dat_t.detach().numpy()).to(obj.device).cast(obj.dtype).reshape(obj.shape))
