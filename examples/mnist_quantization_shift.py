@@ -6,16 +6,14 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
-import torch
-import torch.nn as nn
-from torch.nn.utils.fusion import fuse_conv_bn_eval
+from tinygrad import Tensor, TinyJit
+from tinygrad.nn import Conv2d, Linear
 from scipy.stats import spearmanr
 
-from aciq.analysis import LayerStats, ShiftResult, compute_shift
-from aciq.batch_norm import collect_conv_bn_pairs
-from aciq.helpers import get_output_dir
+from aciq.analysis import LayerStats, ShiftResult, StatsAccumulator, compute_shift
 from aciq.distributions import Distribution, DistributionType
-from aciq.mnist_model import MNISTModel, get_mnist_loaders, train_model, evaluate_model
+from aciq.helpers import get_output_dir
+from aciq.mnist_model import MNISTModel, _load_normalized, evaluate_model, train_model
 from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 
 
@@ -27,28 +25,26 @@ BLOCK_NAMES = ["block1", "block2", "block3", "block4", "block5"]
 # --- Quantization ---
 
 
+def _weight_modules(model: MNISTModel) -> list[tuple[str, Conv2d | Linear]]:
+  return [
+    ("conv1", model.conv1),
+    ("conv2", model.conv2),
+    ("conv3", model.conv3),
+    ("conv4", model.conv4),
+    ("conv5", model.conv5),
+    ("classifier", model.classifier),
+  ]
+
+
 def quantize_model(model: MNISTModel, method: str) -> MNISTModel:
-  device = next(model.parameters()).device
-  qmodel = copy.deepcopy(model).cpu()
-  qmodel.eval()
+  qmodel = copy.deepcopy(model)
+  qmodel.fuse()
 
-  for conv_name, conv, bn_name, bn in collect_conv_bn_pairs(qmodel):
-    fused = fuse_conv_bn_eval(conv, bn)
-    fused_w_np = fused.weight.data.numpy()
-    alpha = _compute_alpha(fused_w_np.flatten(), method)
-    conv.weight.data = torch.from_numpy(quantize(fused_w_np, alpha, BITS))
-    conv.bias = fused.bias
-
-    # BN is fused into conv — remove it
-    parent, idx = bn_name.rsplit(".", 1)
-    del getattr(qmodel, parent)[int(idx)]
-
-  # Quantize classifier
-  w = qmodel.classifier.weight.data.numpy()
-  alpha = _compute_alpha(w.flatten(), method)
-  qmodel.classifier.weight.data = torch.from_numpy(quantize(w, alpha, BITS))
-
-  return qmodel.to(device)
+  for _, mod in _weight_modules(qmodel):
+    w = mod.weight.numpy()
+    alpha = _compute_alpha(w.flatten(), method)
+    mod.weight = Tensor(quantize(w.flatten(), alpha, BITS).reshape(w.shape).astype(np.float32))
+  return qmodel
 
 
 def _compute_alpha(vec: np.ndarray, method: str) -> float:
@@ -65,47 +61,25 @@ def _compute_alpha(vec: np.ndarray, method: str) -> float:
 # --- Distribution shift measurement ---
 
 
-def collect_layer_outputs(model: MNISTModel, test_loader: torch.utils.data.DataLoader, device: str) -> dict[str, LayerStats]:
-  """Collect per-channel output means and variances for each block, over all test images."""
-  model.eval()
-  sums: dict[str, torch.Tensor] = {}
-  sq_sums: dict[str, torch.Tensor] = {}
-  counts: dict[str, int] = {name: 0 for name in BLOCK_NAMES}
-  hooks = []
+def collect_layer_outputs(model: MNISTModel, x_test: Tensor) -> dict[str, LayerStats]:
+  """Collect per-channel output means and variances for each block over the test set.
 
-  def make_hook(name: str):
-    def hook_fn(module: nn.Module, inp: tuple[torch.Tensor, ...], out: torch.Tensor) -> None:
-      # out: (B, C, H, W) — sum over B, H, W for per-channel totals
-      batch_sum = out.detach().sum(dim=[0, 2, 3])  # (C,)
-      batch_sq_sum = (out.detach() ** 2).sum(dim=[0, 2, 3])  # (C,)
-      if name not in sums:
-        sums[name] = torch.zeros_like(batch_sum, device="cpu")
-        sq_sums[name] = torch.zeros_like(batch_sq_sum, device="cpu")
-      sums[name] += batch_sum.cpu()
-      sq_sums[name] += batch_sq_sum.cpu()
-      b, _, h, w = out.shape
-      counts[name] += b * h * w
+  Runs the full test set through one JIT'd forward and returns the block activations as a
+  tuple. Explicit outputs avoid the stale-attribute pitfall of reading `model.activations`
+  after JIT replay (side-effect assignments only fire during the two warmup traces)."""
 
-    return hook_fn
+  @TinyJit
+  def get_activations(X: Tensor) -> tuple[Tensor, ...]:
+    model(X)
+    return tuple(model.activations[k].realize() for k in BLOCK_NAMES)
 
-  for name in BLOCK_NAMES:
-    block = getattr(model, name)
-    hooks.append(block.register_forward_hook(make_hook(name)))
+  get_activations(x_test)  # warmup 1 (capture)
+  acts = get_activations(x_test)  # warmup 2 — steady-state, use these buffers
 
-  with torch.no_grad():
-    for images, _ in test_loader:
-      model(images.to(device))
-
-  for h in hooks:
-    h.remove()
-
-  result: dict[str, LayerStats] = {}
-  for name in BLOCK_NAMES:
-    n = counts[name]
-    mean = (sums[name] / n).numpy()
-    var = ((sq_sums[name] / n) - (sums[name] / n) ** 2).numpy()
-    result[name] = LayerStats(mean=mean, var=var)
-  return result
+  acc = StatsAccumulator()
+  for name, act in zip(BLOCK_NAMES, acts):
+    acc.update(name, act.numpy())
+  return acc.finalize()
 
 
 # --- Training + measurement ---
@@ -121,27 +95,26 @@ class ModelResult:
   aciq_shifts: ShiftResult
 
 
-def run_training(n_models: int, epochs: int, device: str) -> list[ModelResult]:
-  _, test_loader = get_mnist_loaders()
+def run_training(n_models: int, epochs: int) -> list[ModelResult]:
+  _, _, x_test, y_test = _load_normalized()
 
   results: list[ModelResult] = []
   for seed in range(n_models):
     print(f"[{seed + 1}/{n_models}] Training model (seed={seed})...")
-    model, fp32_acc = train_model(seed=seed, epochs=epochs, device=device)
-    model.eval()
+    model, fp32_acc = train_model(seed=seed, epochs=epochs)
 
-    fp32_outputs = collect_layer_outputs(model, test_loader, device)
+    fp32_outputs = collect_layer_outputs(model, x_test)
 
     # MinMax quantization
     mm_model = quantize_model(model, "minmax")
-    mm_acc = evaluate_model(mm_model, test_loader, device)
-    mm_outputs = collect_layer_outputs(mm_model, test_loader, device)
+    mm_acc = evaluate_model(mm_model, x_test, y_test)
+    mm_outputs = collect_layer_outputs(mm_model, x_test)
     mm_shift = compute_shift(fp32_outputs, mm_outputs)
 
     # ACIQ quantization
     aciq_model = quantize_model(model, "aciq")
-    aciq_acc = evaluate_model(aciq_model, test_loader, device)
-    aciq_outputs = collect_layer_outputs(aciq_model, test_loader, device)
+    aciq_acc = evaluate_model(aciq_model, x_test, y_test)
+    aciq_outputs = collect_layer_outputs(aciq_model, x_test)
     aciq_shift = compute_shift(fp32_outputs, aciq_outputs)
 
     print(f"  FP32={fp32_acc:.4f}  MinMax={mm_acc:.4f}  ACIQ={aciq_acc:.4f}")
@@ -279,14 +252,13 @@ if __name__ == "__main__":
   parser.add_argument("--from-csv", type=Path, default=None, help="Load results from CSV instead of training")
   args = parser.parse_args()
   save_dir = get_output_dir(RESULTS_DIR, "mnist")
-  device = "cuda" if torch.cuda.is_available() else "cpu"
 
   if args.from_csv:
     rows = load_results_csv(args.from_csv)
     print(f"Loaded {len(rows)} models from {args.from_csv}\n")
   else:
     print(f"Running training with {args.n_models} models, {args.epochs} epochs each...")
-    results = run_training(args.n_models, args.epochs, device)
+    results = run_training(args.n_models, args.epochs)
     csv_path = save_dir / "results.csv"
     save_results_csv(results, csv_path)
     rows = load_results_csv(csv_path)
