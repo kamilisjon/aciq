@@ -8,15 +8,15 @@ from tinygrad import Tensor
 from aciq.models.resnet import ResNet
 
 
-def _assert_v1(tv_model: torchvision.models.ResNet) -> None:
-  """Assert each torchvision Bottleneck is arranged as v1: downsampling stride on the 1x1 `conv1`,
-  the 3x3 `conv2` always at stride (1, 1). No-op for BasicBlock (v1 and v1.5 coincide there)."""
+def _force_v1(tv_model: torchvision.models.ResNet) -> None:
+  """Mutate each torchvision Bottleneck so the downsampling stride moves from conv2 → conv1
+  (v1.5 → v1). No-op for BasicBlock blocks."""
   for layer in (tv_model.layer1, tv_model.layer2, tv_model.layer3, tv_model.layer4):
     for block in layer:
       if hasattr(block, "conv3"):  # Bottleneck has conv3; BasicBlock does not.
-        assert block.conv2.stride == (1, 1), (
-          f"expected v1 Bottleneck (stride on conv1, conv2 stride (1, 1)); got conv1.stride={block.conv1.stride} conv2.stride={block.conv2.stride}"
-        )
+        s = block.conv2.stride
+        block.conv1.stride = s
+        block.conv2.stride = (1, 1)
 
 
 class TestResNetParity(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestResNetParity(unittest.TestCase):
     tv = tv_factory(weights=None)
     tv.load_state_dict(state, strict=False)
     tv.eval()
-    _assert_v1(tv)
+    _force_v1(tv)
 
     np.random.seed(0)
     x = np.random.randn(2, 3, 224, 224).astype(np.float32)
