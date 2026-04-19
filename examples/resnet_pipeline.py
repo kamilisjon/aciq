@@ -2,7 +2,6 @@ import argparse
 import copy
 import csv
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -13,8 +12,9 @@ from torch.nn.utils.fusion import fuse_conv_bn_eval
 from tinygrad.helpers import tqdm
 
 from aciq.analysis import ShiftResult, compute_shift, save_shifts_csv
-from aciq.batch_norm import collect_conv_bn_pairs, fuse_bn_into_conv
-from aciq.benchmark import run_benchmark
+from aciq.batch_norm import collect_conv_bn_pairs
+from aciq.benchmark import benchmark_accuracy, sample_imagenet_val
+from aciq.helpers import get_output_dir
 from aciq.plotting import plot_channel_ranges, plot_shift
 from aciq.quantization import quantize
 from aciq.torch_hooks import collect_activations, get_resnet_block_modules
@@ -22,6 +22,7 @@ from aciq.weight_analysis import analyze_layer
 
 
 METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]
+RESULTS_DIR = Path("results")
 
 
 @dataclass
@@ -29,10 +30,10 @@ class PipelineConfig:
   model_name: str
   bits: int
   dataset_path: Path
-  n_images: int | None
   plot_per_channel: bool
-  cuda: bool
+  device: str
   output_dir: Path
+  n_per_class: int | None = None
 
   @property
   def models_dir(self) -> Path:
@@ -65,9 +66,9 @@ class PipelineConfig:
 def load_pytorch_model(model_name: str) -> nn.Module:
   match model_name:
     case "resnet18":
-      return torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.DEFAULT)
+      return torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1)
     case "resnet50":
-      return torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT)
+      return torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1)
     case _:
       raise ValueError(f"Unknown model: {model_name}")
 
@@ -117,7 +118,7 @@ def stage_bn_analysis(config: PipelineConfig, model: nn.Module) -> None:
   pairs = collect_conv_bn_pairs(model)
   for idx, (conv_name, conv, bn_name, bn) in tqdm(enumerate(pairs)):
     pre_weight = conv.weight.data.numpy()
-    post_weight = fuse_bn_into_conv(pre_weight, bn)
+    post_weight = fuse_conv_bn_eval(conv, bn).weight.data.numpy()
     plot_channel_ranges(idx, conv_name, pre_weight, post_weight, config.bn_results_dir)
 
 
@@ -202,18 +203,15 @@ def stage_weight_analysis(config: PipelineConfig) -> None:
 
 
 def stage_shift_analysis(config: PipelineConfig) -> None:
-  device = "cuda" if config.cuda else "cpu"
+  device = config.device
   fp32_model = torch.load(config.fused_model_path, weights_only=False).to(device)
 
   block_modules = get_resnet_block_modules(fp32_model)
   layer_names = [n for n, _ in block_modules]
   print(f"  Tracking {len(layer_names)} layers")
 
-  val_dir = config.dataset_path / "ILSVRC" / "Data" / "CLS-LOC" / "val"
-  image_paths = sorted([f for f in val_dir.iterdir() if f.suffix.upper() == ".JPEG"])
-  if config.n_images is not None:
-    image_paths = image_paths[: config.n_images]
-  print(f"  Using {len(image_paths)} images from {val_dir}")
+  image_paths = sample_imagenet_val(config.dataset_path, config.n_per_class)
+  print(f"  Using {len(image_paths)} images")
 
   print("  Collecting FP32 stats...")
   fp32_stats = collect_activations(fp32_model, block_modules, image_paths, device=device)
@@ -240,11 +238,12 @@ def stage_shift_analysis(config: PipelineConfig) -> None:
 
 
 def stage_benchmark(config: PipelineConfig) -> None:
-  fp32_model = torch.load(config.fused_model_path, weights_only=False)
-  print(f"  FP32: {run_benchmark(fp32_model, config.dataset_path, batch_size=1)}")
+  device = config.device
+  fp32_model = torch.load(config.fused_model_path, weights_only=False).to(device)
+  print(f"  FP32: {benchmark_accuracy(fp32_model, device, config.dataset_path, batch_size=32)}")
   for method in METHOD_NAMES:
-    model = torch.load(config.quantized_model_path(method), weights_only=False)
-    print(f"  {method}: {run_benchmark(model, config.dataset_path, batch_size=1)}")
+    model = torch.load(config.quantized_model_path(method), weights_only=False).to(device)
+    print(f"  {method}: {benchmark_accuracy(model, device, config.dataset_path, batch_size=32)}")
 
 
 # ---------------------------------------------------------------------------
@@ -257,23 +256,20 @@ def main() -> None:
   parser.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet50"])
   parser.add_argument("--bits", type=int, default=8)
   parser.add_argument("--dataset-path", type=Path, required=True, help="Path to ImageNet dataset root")
-  parser.add_argument("--n-images", type=int, default=None, help="Limit validation images for shift analysis (default: all)")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
-  parser.add_argument("--cuda", action="store_true", help="Use CUDA for inference")
+  parser.add_argument("--n-per-class", type=int, default=None, help="Sample N ImageNet val images per class for some analysis stages.")
   parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Root results directory")
   args = parser.parse_args()
 
-  timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
   config = PipelineConfig(
     model_name=args.model,
     bits=args.bits,
     dataset_path=args.dataset_path,
-    n_images=args.n_images,
     plot_per_channel=args.plot_per_channel,
-    cuda=args.cuda,
-    output_dir=args.output_dir / f"{args.model}_{timestamp}",
+    device="cuda" if torch.cuda.is_available() else "cpu",
+    output_dir=get_output_dir(RESULTS_DIR, args.model),
+    n_per_class=args.n_per_class,
   )
-  config.output_dir.mkdir(parents=True, exist_ok=True)
   print(f"Output directory: {config.output_dir}")
 
   pytorch_model = load_pytorch_model(config.model_name)
