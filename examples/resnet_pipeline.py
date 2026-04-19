@@ -246,8 +246,8 @@ def main() -> None:
   print(f"\n=== Stage 2: Weight Distribution Analysis ({config.model_name}) ===")
   stage_weight_analysis(config, model, fq_models)
 
-  # print(f"\n=== Stage 3: Quantization Shift Analysis ({config.model_name}) ===")
-  # stage_shift_analysis(config, model, fq_models)
+  print(f"\n=== Stage 3: Quantization Shift Analysis ({config.model_name}) ===")
+  stage_shift_analysis(config, model, fq_models)
 
   print(f"\n=== Stage 4: Benchmarking ({config.model_name}) ===")
   print(f"  FP32: {benchmark_accuracy(model, config.dataset_path)}")
