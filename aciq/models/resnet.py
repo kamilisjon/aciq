@@ -155,11 +155,11 @@ class ResNet:
 
   def load_from_pretrained(self):
     model_urls = {
-      18: "https://download.pytorch.org/models/resnet18-f37072fd.pth",
-      34: "https://download.pytorch.org/models/resnet34-b627a593.pth",
-      50: "https://download.pytorch.org/models/resnet50-0676ba61.pth",
-      101: "https://download.pytorch.org/models/resnet101-63fe2227.pth",
-      152: "https://download.pytorch.org/models/resnet152-394f9c45.pth",
+      18: "https://download.pytorch.org/models/resnet18-5c106cde.pth",
+      34: "https://download.pytorch.org/models/resnet34-333f7ec4.pth",
+      50: "https://download.pytorch.org/models/resnet50-19c8e357.pth",
+      101: "https://download.pytorch.org/models/resnet101-5d3b4d8f.pth",
+      152: "https://download.pytorch.org/models/resnet152-b121ed2d.pth",
     }
 
     self.url = model_urls[self.num]
