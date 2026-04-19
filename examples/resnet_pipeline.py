@@ -92,12 +92,10 @@ def _weight_modules(model: ResNet) -> list[tuple[str, Conv2d | Linear]]:
 
 
 def stage_bn_analysis(config: PipelineConfig, model: ResNet) -> None:
-  """Plot pre-vs-post-fusion channel ranges per (Conv, BN) pair, then fuse `model` in place."""
   for idx, (name, conv, bn) in enumerate(tqdm(_conv_bn_pairs(model))):
     pre_weight = conv.weight.numpy()
     post_weight, _ = fuse_conv_bn(conv, bn)
     plot_channel_ranges(idx, name, pre_weight, post_weight.numpy(), config.bn_results_dir)
-  model.fuse()
 
 
 # ---------------------------------------------------------------------------
@@ -105,13 +103,9 @@ def stage_bn_analysis(config: PipelineConfig, model: ResNet) -> None:
 # ---------------------------------------------------------------------------
 
 
-def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet) -> dict[str, ResNet]:
-  """Quantize every Conv/Linear weight on a deepcopy of the fused model per method. Writes the
-  MAE comparison CSV and returns the four quantized variants keyed by `METHOD_NAMES`."""
+def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet, fq_models: dict[str, ResNet]) -> None:
   weight_modules = _weight_modules(fused_model)
   print(f"  Total Conv/Linear layers: {len(weight_modules)}")
-
-  fq_models = {m: copy.deepcopy(fused_model) for m in METHOD_NAMES}
   fq_lookups: dict[str, dict[str, Conv2d | Linear]] = {m: dict(_weight_modules(fq_models[m])) for m in METHOD_NAMES}
 
   config.weight_results_dir.mkdir(parents=True, exist_ok=True)
@@ -169,7 +163,6 @@ def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet) -> dict[s
       ])
 
   print(f"  CSV written to {csv_path}")
-  return fq_models
 
 
 # ---------------------------------------------------------------------------
@@ -251,8 +244,11 @@ def main() -> None:
   print(f"\n=== Stage 1: BN Fusion Analysis ({config.model_name}) ===")
   stage_bn_analysis(config, model)
 
+  model.fuse()
+  fq_models = {m: copy.deepcopy(model) for m in METHOD_NAMES}
+
   print(f"\n=== Stage 2: Weight Distribution Analysis ({config.model_name}) ===")
-  fq_models = stage_weight_analysis(config, model)
+  stage_weight_analysis(config, model, fq_models)
 
   print(f"\n=== Stage 3: Quantization Shift Analysis ({config.model_name}) ===")
   stage_shift_analysis(config, model, fq_models)
