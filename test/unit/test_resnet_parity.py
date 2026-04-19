@@ -1,18 +1,3 @@
-"""Parity tests for all five vendored ResNet depths.
-
-Each test exercises `load_from_pretrained()` (download path on first run, cache hit on
-subsequent runs) and asserts the tinygrad model's logits match a torchvision reference to
-fp32 tolerance on a fixed synthetic input.
-
-Why `_force_v1` exists: our Bottleneck is ResNet v1 (downsampling stride lives on the 1x1
-`conv1`); torchvision's Bottleneck is v1.5 (stride on the 3x3 `conv2`). To get a torchvision
-reference that agrees with ours numerically on the shared pretrained weights, we mutate each
-Bottleneck's stride placement in place after construction. BasicBlock (resnet18/34) is
-identical in v1 and v1.5, so the patch is a no-op for those depths.
-
-First run across all five depths downloads ~630 MB of checkpoints into tinygrad's fetch cache.
-"""
-
 import unittest
 
 import numpy as np
@@ -23,15 +8,15 @@ from tinygrad import Tensor
 from aciq.models.resnet import ResNet
 
 
-def _force_v1(tv_model: torchvision.models.ResNet) -> None:
-  """Mutate each torchvision Bottleneck so the downsampling stride moves from conv2 → conv1
-  (v1.5 → v1). No-op for BasicBlock blocks."""
+def _assert_v1(tv_model: torchvision.models.ResNet) -> None:
+  """Assert each torchvision Bottleneck is arranged as v1: downsampling stride on the 1x1 `conv1`,
+  the 3x3 `conv2` always at stride (1, 1). No-op for BasicBlock (v1 and v1.5 coincide there)."""
   for layer in (tv_model.layer1, tv_model.layer2, tv_model.layer3, tv_model.layer4):
     for block in layer:
       if hasattr(block, "conv3"):  # Bottleneck has conv3; BasicBlock does not.
-        s = block.conv2.stride
-        block.conv1.stride = s
-        block.conv2.stride = (1, 1)
+        assert block.conv2.stride == (1, 1), (
+          f"expected v1 Bottleneck (stride on conv1, conv2 stride (1, 1)); got conv1.stride={block.conv1.stride} conv2.stride={block.conv2.stride}"
+        )
 
 
 class TestResNetParity(unittest.TestCase):
@@ -42,7 +27,7 @@ class TestResNetParity(unittest.TestCase):
     tv = tv_factory(weights=None)
     tv.load_state_dict(state, strict=False)
     tv.eval()
-    _force_v1(tv)
+    _assert_v1(tv)
 
     np.random.seed(0)
     x = np.random.randn(2, 3, 224, 224).astype(np.float32)
