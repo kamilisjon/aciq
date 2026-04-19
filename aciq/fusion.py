@@ -21,3 +21,9 @@ def fuse_conv_bn(conv: Conv2d, bn: BatchNorm) -> tuple[Tensor, Tensor]:
   conv_b = conv.bias if conv.bias is not None else Tensor.zeros(conv.weight.shape[0])
   fused_b = scale * (conv_b - bn.running_mean) + bn.bias
   return fused_w, fused_b
+
+
+def fuse_inplace(conv: Conv2d, bn: BatchNorm) -> None:
+  """Fold `bn` into `conv` in place: overwrites `conv.weight` and attaches `conv.bias` (even
+  when the Conv was built with `bias=False`)."""
+  conv.weight, conv.bias = fuse_conv_bn(conv, bn)

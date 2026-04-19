@@ -5,11 +5,7 @@ from tinygrad.helpers import fetch, get_child
 from tinygrad.nn.state import torch_load
 
 
-from aciq.fusion import fuse_conv_bn
-
-
-def fuse_inplace(conv: nn.Conv2d, bn: nn.BatchNorm) -> None:
-  conv.weight, conv.bias = fuse_conv_bn(conv, bn)
+from aciq.fusion import fuse_inplace
 
 
 class BasicBlock:
