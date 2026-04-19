@@ -53,7 +53,7 @@ class Bottleneck:
 
 
 class ResNet:
-  def __init__(self, num, num_classes=None):
+  def __init__(self, num, num_classes=1000):
     assert num in [18, 34, 50, 101, 152]
     self.num = num
     self.block = {18: BasicBlock, 34: BasicBlock, 50: Bottleneck, 101: Bottleneck, 152: Bottleneck}[num]
@@ -68,7 +68,7 @@ class ResNet:
     self.layer2 = self._make_layer(self.block, 128, self.num_blocks[1], stride=2)
     self.layer3 = self._make_layer(self.block, 256, self.num_blocks[2], stride=2)
     self.layer4 = self._make_layer(self.block, 512, self.num_blocks[3], stride=2)
-    self.fc = Linear(512 * self.block.expansion, num_classes) if num_classes is not None else None
+    self.fc = Linear(512 * self.block.expansion, num_classes)
 
   def _make_layer(self, block, planes, num_blocks, stride):
     strides = [stride] + [1] * (num_blocks - 1)
@@ -79,28 +79,15 @@ class ResNet:
     return layers
 
   def forward(self, x):
-    is_feature_only = self.fc is None
-    if is_feature_only:
-      features = []
     out = self.bn1(self.conv1(x)).relu()
     out = out.pad([1, 1, 1, 1]).max_pool2d((3, 3), 2)
     out = out.sequential(self.layer1)
-    if is_feature_only:
-      features.append(out)
     out = out.sequential(self.layer2)
-    if is_feature_only:
-      features.append(out)
     out = out.sequential(self.layer3)
-    if is_feature_only:
-      features.append(out)
     out = out.sequential(self.layer4)
-    if is_feature_only:
-      features.append(out)
-    if not is_feature_only:
-      out = out.mean([2, 3])
-      out = self.fc(out.cast(dtypes.float32))
-      return out
-    return features
+    out = out.mean([2, 3])
+    out = self.fc(out.cast(dtypes.float32))
+    return out
 
   def __call__(self, x: Tensor) -> Tensor:
     return self.forward(x)
