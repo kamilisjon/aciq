@@ -170,7 +170,7 @@ def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet, fq_models
 # ---------------------------------------------------------------------------
 
 
-def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int = 1) -> dict[str, LayerStats]:
+def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int = 32) -> dict[str, LayerStats]:
   acc = StatsAccumulator()
   for start in tqdm(range(0, len(image_paths), batch_size), desc="  activations"):
     batch_paths = image_paths[start : start + batch_size]
@@ -208,9 +208,9 @@ def stage_shift_analysis(config: PipelineConfig, fp32_model: ResNet, fq_models: 
 
 
 def stage_benchmark(config: PipelineConfig, fp32_model: ResNet, fq_models: dict[str, ResNet]) -> None:
-  print(f"  FP32: {benchmark_accuracy(fp32_model, config.dataset_path, batch_size=32)}")
+  print(f"  FP32: {benchmark_accuracy(fp32_model, config.dataset_path)}")
   for method in METHOD_NAMES:
-    print(f"  {method}: {benchmark_accuracy(fq_models[method], config.dataset_path, batch_size=32)}")
+    print(f"  {method}: {benchmark_accuracy(fq_models[method], config.dataset_path)}")
 
 
 # ---------------------------------------------------------------------------
