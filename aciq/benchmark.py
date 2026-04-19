@@ -1,6 +1,5 @@
 from pathlib import Path
 import csv
-import json
 
 import numpy as np
 import torch
@@ -9,8 +8,8 @@ from PIL import Image
 from torchvision.transforms._presets import ImageClassification
 from tinygrad.helpers import tqdm
 
+from aciq.imagenet import ImagenetClassIndex
 
-IMAGENET_LABELS_FILEPATH = "aciq/imagenet_class_index.json"
 
 _PREPROCESS = ImageClassification(crop_size=224)
 
@@ -52,9 +51,7 @@ def benchmark_accuracy(model: nn.Module, device: str, imagenet_data_path: Path, 
   images = sample_imagenet_val(imagenet_data_path)
   imageid_to_label = parse_imagenet_val_labels(imagenet_data_path)
 
-  with open(IMAGENET_LABELS_FILEPATH, "r") as f:
-    class_idx = json.load(f)
-  gt_label_to_idx = {v[0]: int(k) for k, v in class_idx.items()}
+  gt_label_to_idx = ImagenetClassIndex.load().synset_to_idx
 
   model.eval()
   correct_top1 = correct_top5 = 0
