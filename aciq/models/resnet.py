@@ -49,12 +49,13 @@ class BasicBlock:
 
 
 class Bottleneck:
+  # This is ResNet v1.5, not original. We load PyTorch weights, so there is no other option.
   expansion = 4
 
   def __init__(self, in_planes, planes, stride=1):
-    self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, stride=stride, bias=False)
+    self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, stride=1, bias=False)
     self.bn1 = nn.BatchNorm2d(planes)
-    self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, stride=1, bias=False)
+    self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, stride=stride, bias=False)
     self.bn2 = nn.BatchNorm2d(planes)
     self.conv3 = nn.Conv2d(planes, self.expansion * planes, kernel_size=1, bias=False)
     self.bn3 = nn.BatchNorm2d(self.expansion * planes)

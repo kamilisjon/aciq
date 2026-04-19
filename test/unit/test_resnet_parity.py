@@ -8,17 +8,6 @@ from tinygrad import Tensor
 from aciq.models.resnet import ResNet
 
 
-def _force_v1(tv_model: torchvision.models.ResNet) -> None:
-  """Mutate each torchvision Bottleneck so the downsampling stride moves from conv2 → conv1
-  (v1.5 → v1). No-op for BasicBlock blocks."""
-  for layer in (tv_model.layer1, tv_model.layer2, tv_model.layer3, tv_model.layer4):
-    for block in layer:
-      if hasattr(block, "conv3"):  # Bottleneck has conv3; BasicBlock does not.
-        s = block.conv2.stride
-        block.conv1.stride = s
-        block.conv2.stride = (1, 1)
-
-
 class TestResNetParity(unittest.TestCase):
   def _assert_parity(self, tg_model: ResNet, tv_factory) -> None:
     tg_model.load_from_pretrained()
@@ -27,7 +16,6 @@ class TestResNetParity(unittest.TestCase):
     tv = tv_factory(weights=None)
     tv.load_state_dict(state, strict=False)
     tv.eval()
-    _force_v1(tv)
 
     np.random.seed(0)
     x = np.random.randn(2, 3, 224, 224).astype(np.float32)
