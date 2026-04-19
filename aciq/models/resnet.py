@@ -62,11 +62,6 @@ class ResNet:
 
     self.in_planes = 64
 
-    # Kept as hardcoded attributes (not constructor args) so `resnet_fused.fused_from` and
-    # `resnet_capture.capture_from` can still read `src.groups` / `src.base_width`.
-    self.groups = 1
-    self.base_width = 64
-
     self.conv1 = Conv2d(3, 64, kernel_size=7, stride=2, bias=False, padding=3)
     self.bn1 = BatchNorm(64)
     self.layer1 = self._make_layer(self.block, 64, self.num_blocks[0], stride=1)

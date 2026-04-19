@@ -54,19 +54,19 @@ class TestResNetParity(unittest.TestCase):
     self.assertTrue(np.array_equal(tg_out.argmax(axis=1), tv_out.argmax(axis=1)))
 
   def test_resnet18(self):
-    self._assert_parity(ResNet(18), torchvision.models.resnet18)
+    self._assert_parity(ResNet(18, num_classes=1000), torchvision.models.resnet18)
 
   def test_resnet34(self):
-    self._assert_parity(ResNet(34), torchvision.models.resnet34)
+    self._assert_parity(ResNet(34, num_classes=1000), torchvision.models.resnet34)
 
   def test_resnet50(self):
-    self._assert_parity(ResNet(50), torchvision.models.resnet50)
+    self._assert_parity(ResNet(50, num_classes=1000), torchvision.models.resnet50)
 
   def test_resnet101(self):
-    self._assert_parity(ResNet(101), torchvision.models.resnet101)
+    self._assert_parity(ResNet(101, num_classes=1000), torchvision.models.resnet101)
 
   def test_resnet152(self):
-    self._assert_parity(ResNet(152), torchvision.models.resnet152)
+    self._assert_parity(ResNet(152, num_classes=1000), torchvision.models.resnet152)
 
 
 if __name__ == "__main__":
