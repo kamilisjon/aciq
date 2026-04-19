@@ -2,6 +2,7 @@ import csv
 from pathlib import Path
 
 import numpy as np
+from tinygrad import GlobalCounters, Tensor, TinyJit
 from tinygrad.helpers import tqdm
 
 from aciq.imagenet import ImagenetClassIndex
@@ -43,10 +44,15 @@ def benchmark_accuracy(model: ResNet, imagenet_data_path: Path, batch_size: int 
   id2synset = parse_imagenet_val_labels(imagenet_data_path)
   synset2idx = ImagenetClassIndex.load().synset_to_idx
 
+  jmodel = TinyJit(model)
+  jmodel(Tensor.rand(batch_size, 3, 224, 224)).realize()
+  GlobalCounters.reset()
+  jmodel(Tensor.rand(batch_size, 3, 224, 224)).realize()
+
   correct_top1 = correct_top5 = 0
   for start in tqdm(range(0, len(images), batch_size), desc="Benchmarking Accuracy"):
     batch_paths = images[start : start + batch_size]
-    logits = model(load_and_preprocess(batch_paths)).numpy()
+    logits = jmodel(load_and_preprocess(batch_paths, pad_to_batch_size=batch_size)).numpy()
     for i, p in enumerate(batch_paths):
       pred = np.argsort(logits[i])[-5:][::-1]
       gt = synset2idx[id2synset[p.stem]]

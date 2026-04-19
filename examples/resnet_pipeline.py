@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from tinygrad import Tensor
+from tinygrad import GlobalCounters, Tensor, TinyJit
 from tinygrad.helpers import tqdm
 from tinygrad.nn import BatchNorm, Conv2d, Linear
 
@@ -171,12 +171,19 @@ def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet, fq_models
 
 
 def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int = 32) -> dict[str, LayerStats]:
+  jmodel = TinyJit(model)
+  jmodel(Tensor.rand(batch_size, 3, 224, 224)).realize()
+  GlobalCounters.reset()
+  jmodel(Tensor.rand(batch_size, 3, 224, 224)).realize()
+
   acc = StatsAccumulator()
   for start in tqdm(range(0, len(image_paths), batch_size), desc="  activations"):
     batch_paths = image_paths[start : start + batch_size]
-    model(load_and_preprocess(batch_paths))
+    jmodel(load_and_preprocess(batch_paths, pad_to_batch_size=batch_size))
+    real_n = len(batch_paths)
     for name, act in model.activations.items():
-      acc.update(name, act.numpy())
+      # slice off the zero-padded tail so accumulated stats only reflect real images
+      acc.update(name, (act[:real_n] if real_n < batch_size else act).numpy())
   return acc.finalize()
 
 
@@ -200,17 +207,6 @@ def stage_shift_analysis(config: PipelineConfig, fp32_model: ResNet, fq_models: 
 
   plot_shift(shifts, layer_names, config.shift_results_dir, model_name=config.model_name)
   print(f"  Plots saved to {config.shift_results_dir}/")
-
-
-# ---------------------------------------------------------------------------
-# Stage 4: Benchmarking
-# ---------------------------------------------------------------------------
-
-
-def stage_benchmark(config: PipelineConfig, fp32_model: ResNet, fq_models: dict[str, ResNet]) -> None:
-  print(f"  FP32: {benchmark_accuracy(fp32_model, config.dataset_path)}")
-  for method in METHOD_NAMES:
-    print(f"  {method}: {benchmark_accuracy(fq_models[method], config.dataset_path)}")
 
 
 # ---------------------------------------------------------------------------
@@ -250,11 +246,13 @@ def main() -> None:
   print(f"\n=== Stage 2: Weight Distribution Analysis ({config.model_name}) ===")
   stage_weight_analysis(config, model, fq_models)
 
-  print(f"\n=== Stage 3: Quantization Shift Analysis ({config.model_name}) ===")
-  stage_shift_analysis(config, model, fq_models)
+  # print(f"\n=== Stage 3: Quantization Shift Analysis ({config.model_name}) ===")
+  # stage_shift_analysis(config, model, fq_models)
 
   print(f"\n=== Stage 4: Benchmarking ({config.model_name}) ===")
-  stage_benchmark(config, model, fq_models)
+  print(f"  FP32: {benchmark_accuracy(model, config.dataset_path)}")
+  for method in METHOD_NAMES:
+    print(f"  {method}: {benchmark_accuracy(fq_models[method], config.dataset_path)}")
 
   print(f"\nDone. All results in {config.output_dir}")
 

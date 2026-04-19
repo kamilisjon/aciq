@@ -37,6 +37,18 @@ def _preprocess_one(img: Image.Image) -> np.ndarray:
   return (arr - _IMAGENET_MEAN[:, None, None]) / _IMAGENET_STD[:, None, None]
 
 
-def load_and_preprocess(image_paths: list[Path]) -> Tensor:
-  batch = np.stack([_preprocess_one(Image.open(p).convert("RGB")) for p in image_paths])
-  return Tensor(batch)
+def load_and_preprocess(image_paths: list[Path], pad_to_batch_size: int | None = None) -> Tensor:
+  """Returns a `(N, 3, 224, 224)` tensor where `N = len(image_paths)` by default.
+
+  When `pad_to_batch_size` is set, the tail is padded with zero (normalized-black) frames
+  so the output is `(pad_to_batch_size, 3, 224, 224)`. Useful for keeping a JIT'd forward's
+  input shape stable across the final partial batch.
+  """
+  processed = [_preprocess_one(Image.open(p).convert("RGB")) for p in image_paths]
+  if pad_to_batch_size is not None:
+    n = len(processed)
+    if n > pad_to_batch_size:
+      raise ValueError(f"Received {n} images, but batch size is {pad_to_batch_size}. Cannot exceed batch size.")
+    if n < pad_to_batch_size:
+      processed.extend([np.zeros_like(processed[0]) for _ in range(pad_to_batch_size - n)])
+  return Tensor(np.stack(processed))
