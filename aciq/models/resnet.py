@@ -163,7 +163,7 @@ class ResNet:
     }
 
     self.url = model_urls[self.num]
-    for k, dat_t in torch_load(fetch(self.url)).items:
+    for k, dat_t in torch_load(fetch(self.url)).items():
       obj: Tensor = get_child(self, k)
       dat_shape = tuple(dat_t.shape)
       if "fc." in k and tuple(obj.shape) != dat_shape:
