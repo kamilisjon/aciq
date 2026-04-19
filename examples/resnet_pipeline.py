@@ -13,7 +13,7 @@ from tinygrad.helpers import tqdm
 
 from aciq.analysis import ShiftResult, compute_shift, save_shifts_csv
 from aciq.batch_norm import collect_conv_bn_pairs
-from aciq.benchmark import benchmark_accuracy
+from aciq.benchmark import benchmark_accuracy, sample_imagenet_val
 from aciq.helpers import get_output_dir
 from aciq.plotting import plot_channel_ranges, plot_shift
 from aciq.quantization import quantize
@@ -33,6 +33,7 @@ class PipelineConfig:
   plot_per_channel: bool
   device: str
   output_dir: Path
+  n_per_class: int | None = None
 
   @property
   def models_dir(self) -> Path:
@@ -65,9 +66,9 @@ class PipelineConfig:
 def load_pytorch_model(model_name: str) -> nn.Module:
   match model_name:
     case "resnet18":
-      return torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.DEFAULT)
+      return torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1)
     case "resnet50":
-      return torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT)
+      return torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1)
     case _:
       raise ValueError(f"Unknown model: {model_name}")
 
@@ -209,9 +210,8 @@ def stage_shift_analysis(config: PipelineConfig) -> None:
   layer_names = [n for n, _ in block_modules]
   print(f"  Tracking {len(layer_names)} layers")
 
-  val_dir = config.dataset_path / "ILSVRC" / "Data" / "CLS-LOC" / "val"
-  image_paths = sorted([f for f in val_dir.iterdir() if f.suffix.upper() == ".JPEG"])
-  print(f"  Using {len(image_paths)} images from {val_dir}")
+  image_paths = sample_imagenet_val(config.dataset_path, config.n_per_class)
+  print(f"  Using {len(image_paths)} images")
 
   print("  Collecting FP32 stats...")
   fp32_stats = collect_activations(fp32_model, block_modules, image_paths, device=device)
@@ -257,6 +257,7 @@ def main() -> None:
   parser.add_argument("--bits", type=int, default=8)
   parser.add_argument("--dataset-path", type=Path, required=True, help="Path to ImageNet dataset root")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
+  parser.add_argument("--n-per-class", type=int, default=None, help="Sample N ImageNet val images per class for some analysis stages.")
   parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Root results directory")
   args = parser.parse_args()
 
@@ -267,6 +268,7 @@ def main() -> None:
     plot_per_channel=args.plot_per_channel,
     device="cuda" if torch.cuda.is_available() else "cpu",
     output_dir=get_output_dir(RESULTS_DIR, args.model),
+    n_per_class=args.n_per_class,
   )
   print(f"Output directory: {config.output_dir}")
 

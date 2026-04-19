@@ -19,26 +19,39 @@ def load_and_preprocess(image_paths: list[Path]) -> torch.Tensor:
   return torch.stack([_PREPROCESS(Image.open(p).convert("RGB")) for p in image_paths])
 
 
-def benchmark_accuracy(model: nn.Module, device: str, imagenet_data_path: Path, batch_size: int):
-  val_dir = imagenet_data_path / "ILSVRC" / "Data" / "CLS-LOC" / "val"
-  images = sorted([f for f in val_dir.iterdir() if f.suffix.upper() == ".JPEG"])
-
-  # Parse labels
-  labels_csv = imagenet_data_path / "LOC_val_solution.csv"
-  imageid_to_label = {}
+def parse_imagenet_val_labels(dataset_path: Path) -> dict[str, str]:
+  """Return {image_id: synset} from LOC_val_solution.csv."""
+  labels_csv = dataset_path / "LOC_val_solution.csv"
+  imageid_to_synset: dict[str, str] = {}
   with labels_csv.open("r", newline="") as f:
-    reader = csv.DictReader(f, delimiter=",")
-    for row in reader:
-      image_id = row["ImageId"]
-      pred_str = row["PredictionString"].strip()
-      assert pred_str is not None
-      tokens = pred_str.split()
+    for row in csv.DictReader(f, delimiter=","):
+      tokens = row["PredictionString"].strip().split()
       synsets = [tokens[i] for i in range(0, len(tokens), 5)]
       assert len(set(synsets)) == 1  # if there are multiple ground-truth labels, they must be the same
-      imageid_to_label[image_id] = synsets[0]
-  assert len(imageid_to_label) == len(images)
+      imageid_to_synset[row["ImageId"]] = synsets[0]
+  return imageid_to_synset
 
-  # Map synsets
+
+def sample_imagenet_val(dataset_path: Path, n_per_class: int | None = None) -> list[Path]:
+  """Sorted val paths, optionally limited to the first N files (by path) of each synset class."""
+  val_dir = dataset_path / "ILSVRC" / "Data" / "CLS-LOC" / "val"
+  images = sorted(p for p in val_dir.iterdir() if p.suffix.upper() == ".JPEG")
+  if n_per_class is None:
+    return images
+  imageid_to_synset = parse_imagenet_val_labels(dataset_path)
+  by_class: dict[str, list[Path]] = {}
+  for p in images:
+    by_class.setdefault(imageid_to_synset[p.stem], []).append(p)
+  sampled: list[Path] = []
+  for synset in sorted(by_class):
+    sampled.extend(by_class[synset][:n_per_class])
+  return sorted(sampled)
+
+
+def benchmark_accuracy(model: nn.Module, device: str, imagenet_data_path: Path, batch_size: int):
+  images = sample_imagenet_val(imagenet_data_path)
+  imageid_to_label = parse_imagenet_val_labels(imagenet_data_path)
+
   with open(IMAGENET_LABELS_FILEPATH, "r") as f:
     class_idx = json.load(f)
   gt_label_to_idx = {v[0]: int(k) for k, v in class_idx.items()}
