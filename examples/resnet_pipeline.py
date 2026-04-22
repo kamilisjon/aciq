@@ -220,7 +220,7 @@ def main() -> None:
   parser.add_argument("--bits", type=int, default=8)
   parser.add_argument("--dataset-path", type=Path, required=True, help="Path to ImageNet dataset root")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
-  parser.add_argument("--n-per-class", type=int, default=None, help="Sample N ImageNet val images per class for shift analysis.")
+  parser.add_argument("--n-per-class", type=int, default=5, help="Sample N ImageNet val images per class for shift analysis.")
   parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Root results directory")
   args = parser.parse_args()
 

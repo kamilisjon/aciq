@@ -11,7 +11,7 @@ dependencies = [
   "numpy",
   "scipy",
   "matplotlib",
-  "tinygrad @ git+https://github.com/tinygrad/tinygrad.git@f28ea84de235cdeaa7e028a2034b34f27b67d30f",
+  "tinygrad @ git+https://github.com/tinygrad/tinygrad.git@master",
 ]
 
 [build-system]
