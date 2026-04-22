@@ -1,71 +1,104 @@
 from __future__ import annotations
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
+import numpy as np
+import tinygrad.nn as nn
+from tinygrad import Tensor, TinyJit
 from tinygrad.helpers import tqdm
+from tinygrad.nn.datasets import mnist
+from tinygrad.nn.optim import Adam
+from tinygrad.nn.state import get_parameters
+
+from aciq.fusion import fuse_inplace
 
 
-class MNISTModel(nn.Module):
+_MNIST_MEAN = 0.1307
+_MNIST_STD = 0.3081
+
+
+def _load_normalized() -> tuple[Tensor, Tensor, Tensor, Tensor]:
+  """Load MNIST, cast to float32, scale to [0,1], then apply the standard mean/std."""
+  x_train, y_train, x_test, y_test = mnist()
+  x_train = (x_train.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD
+  x_test = (x_test.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD
+  return x_train, y_train, x_test, y_test
+
+
+class MNISTModel:
   def __init__(self) -> None:
-    super().__init__()
-    self.block1 = nn.Sequential(nn.Conv2d(1, 32, 3, padding=1), nn.BatchNorm2d(32), nn.ReLU())
-    self.block2 = nn.Sequential(nn.Conv2d(32, 64, 3, padding=1, stride=2), nn.BatchNorm2d(64), nn.ReLU())
-    self.block3 = nn.Sequential(nn.Conv2d(64, 64, 3, padding=1), nn.BatchNorm2d(64), nn.ReLU())
-    self.block4 = nn.Sequential(nn.Conv2d(64, 128, 3, padding=1, stride=2), nn.BatchNorm2d(128), nn.ReLU())
-    self.block5 = nn.Sequential(nn.Conv2d(128, 128, 3, padding=1), nn.BatchNorm2d(128), nn.ReLU())
-    self.gap = nn.AdaptiveAvgPool2d(1)
+    self.conv1 = nn.Conv2d(1, 32, 3, padding=1, bias=False)
+    self.bn1 = nn.BatchNorm2d(32)
+    self.conv2 = nn.Conv2d(32, 64, 3, padding=1, stride=2, bias=False)
+    self.bn2 = nn.BatchNorm2d(64)
+    self.conv3 = nn.Conv2d(64, 64, 3, padding=1, bias=False)
+    self.bn3 = nn.BatchNorm2d(64)
+    self.conv4 = nn.Conv2d(64, 128, 3, padding=1, stride=2, bias=False)
+    self.bn4 = nn.BatchNorm2d(128)
+    self.conv5 = nn.Conv2d(128, 128, 3, padding=1, bias=False)
+    self.bn5 = nn.BatchNorm2d(128)
     self.classifier = nn.Linear(128, 10)
+    self.fused = False
 
-  def forward(self, x: torch.Tensor) -> torch.Tensor:
-    x = self.block5(self.block4(self.block3(self.block2(self.block1(x)))))
-    x = self.gap(x).flatten(1)
-    return self.classifier(x)
+  def _block(self, x: Tensor, conv: nn.Conv2d, bn: nn.BatchNorm) -> Tensor:
+    out = conv(x)
+    if not self.fused:
+      out = bn(out)
+    return out.relu()
+
+  def __call__(self, x: Tensor) -> Tensor:
+    self.block1 = self._block(x, self.conv1, self.bn1)
+    self.block2 = self._block(self.block1, self.conv2, self.bn2)
+    self.block3 = self._block(self.block2, self.conv3, self.bn3)
+    self.block4 = self._block(self.block3, self.conv4, self.bn4)
+    self.block5 = self._block(self.block4, self.conv5, self.bn5)
+    return self.classifier(self.block5.mean((2, 3)))
+
+  def fuse(self) -> None:
+    fuse_inplace(self.conv1, self.bn1)
+    fuse_inplace(self.conv2, self.bn2)
+    fuse_inplace(self.conv3, self.bn3)
+    fuse_inplace(self.conv4, self.bn4)
+    fuse_inplace(self.conv5, self.bn5)
+    self.fused = True
+
+  @property
+  def activations(self) -> dict[str, Tensor]:
+    return {
+      "block1": self.block1,
+      "block2": self.block2,
+      "block3": self.block3,
+      "block4": self.block4,
+      "block5": self.block5,
+    }
 
 
-def get_mnist_loaders(batch_size: int = 512, data_dir: str = "data") -> tuple[DataLoader[datasets.MNIST], DataLoader[datasets.MNIST]]:
-  transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
-  train_ds = datasets.MNIST(data_dir, train=True, download=True, transform=transform)
-  test_ds = datasets.MNIST(data_dir, train=False, download=True, transform=transform)
-  train_loader: DataLoader[datasets.MNIST] = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-  test_loader: DataLoader[datasets.MNIST] = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
-  return train_loader, test_loader
+def train_model(seed: int, epochs: int = 10, lr: float = 1e-3, batch_size: int = 512) -> tuple[MNISTModel, float]:
+  Tensor.manual_seed(seed)
+  np.random.seed(seed)
+
+  x_train, y_train, x_test, y_test = _load_normalized()
+  model = MNISTModel()
+  opt = Adam(get_parameters(model), lr=lr)
+
+  @TinyJit
+  @Tensor.train()
+  def train_step(X: Tensor, Y: Tensor) -> Tensor:
+    opt.zero_grad()
+    samples = Tensor.randint(batch_size, high=X.shape[0])
+    loss = model(X[samples]).sparse_categorical_crossentropy(Y[samples]).backward()
+    return loss.realize(*opt.schedule_step())
+
+  steps_per_epoch = int(x_train.shape[0]) // batch_size
+  total_steps = epochs * steps_per_epoch
+  for _ in tqdm(range(total_steps), desc="train"):
+    train_step(x_train, y_train)
+
+  return model, evaluate_model(model, x_test, y_test)
 
 
-def evaluate_model(model: MNISTModel, test_loader: DataLoader[datasets.MNIST], device: str = "cuda") -> float:
-  model.eval()
-  correct = 0
-  total = 0
-  with torch.no_grad():
-    for images, labels in test_loader:
-      images, labels = images.to(device), labels.to(device)
-      preds = model(images).argmax(dim=1)
-      correct += (preds == labels).sum().item()
-      total += labels.size(0)
-  return correct / total
+def evaluate_model(model: MNISTModel, x_test: Tensor, y_test: Tensor) -> float:
+  @TinyJit
+  def get_test_acc(X: Tensor, Y: Tensor) -> Tensor:
+    return (model(X).argmax(axis=1) == Y).mean()
 
-
-def train_model(seed: int, epochs: int = 10, lr: float = 1e-3, batch_size: int = 512, device: str = "cuda") -> tuple[MNISTModel, float]:
-  torch.manual_seed(seed)
-  if device == "cuda":
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-  model = MNISTModel().to(device)
-  train_loader, test_loader = get_mnist_loaders(batch_size)
-  optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-
-  model.train()
-  for epoch in range(epochs):
-    for images, labels in tqdm(train_loader):
-      images, labels = images.to(device), labels.to(device)
-      loss = F.cross_entropy(model(images), labels)
-      optimizer.zero_grad()
-      loss.backward()
-      optimizer.step()
-
-  accuracy = evaluate_model(model, test_loader, device)
-  return model, accuracy
+  get_test_acc(x_test, y_test).item()
+  return float(get_test_acc(x_test, y_test).item())

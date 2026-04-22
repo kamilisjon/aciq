@@ -1,22 +1,13 @@
-from pathlib import Path
 import csv
-import json
+from pathlib import Path
 
 import numpy as np
-import torch
-import torch.nn as nn
-from PIL import Image
-from torchvision.transforms._presets import ImageClassification
+from tinygrad import GlobalCounters, Tensor, TinyJit
 from tinygrad.helpers import tqdm
 
-
-IMAGENET_LABELS_FILEPATH = "aciq/imagenet_class_index.json"
-
-_PREPROCESS = ImageClassification(crop_size=224)
-
-
-def load_and_preprocess(image_paths: list[Path]) -> torch.Tensor:
-  return torch.stack([_PREPROCESS(Image.open(p).convert("RGB")) for p in image_paths])
+from aciq.imagenet import ImagenetClassIndex
+from aciq.models.resnet import ResNet
+from aciq.preprocess import load_and_preprocess
 
 
 def parse_imagenet_val_labels(dataset_path: Path) -> dict[str, str]:
@@ -48,28 +39,23 @@ def sample_imagenet_val(dataset_path: Path, n_per_class: int | None = None) -> l
   return sorted(sampled)
 
 
-def benchmark_accuracy(model: nn.Module, device: str, imagenet_data_path: Path, batch_size: int):
+def benchmark_accuracy(model: ResNet, imagenet_data_path: Path, batch_size: int = 32) -> tuple[float, float]:
   images = sample_imagenet_val(imagenet_data_path)
-  imageid_to_label = parse_imagenet_val_labels(imagenet_data_path)
+  id2synset = parse_imagenet_val_labels(imagenet_data_path)
+  synset2idx = ImagenetClassIndex.load().synset_to_idx
 
-  with open(IMAGENET_LABELS_FILEPATH, "r") as f:
-    class_idx = json.load(f)
-  gt_label_to_idx = {v[0]: int(k) for k, v in class_idx.items()}
+  jmodel = TinyJit(model)
+  jmodel(Tensor.rand(batch_size, 3, 224, 224)).realize()
+  GlobalCounters.reset()
+  jmodel(Tensor.rand(batch_size, 3, 224, 224)).realize()
 
-  model.eval()
   correct_top1 = correct_top5 = 0
-  with torch.no_grad():
-    for start in tqdm(range(0, len(images), batch_size), desc="Benchmarking Accuracy"):
-      batch_paths = images[start : start + batch_size]
-      batch = load_and_preprocess(batch_paths).to(device)
-      outputs = model(batch).cpu().numpy()
-      for i in range(len(batch_paths)):
-        pred = np.argsort(outputs[i])[-5:][::-1]
-        gt_label_idx = gt_label_to_idx[imageid_to_label[batch_paths[i].stem]]
-
-        if pred[0] == gt_label_idx:
-          correct_top1 += 1
-        if any(p == gt_label_idx for p in pred):
-          correct_top5 += 1
-
+  for start in tqdm(range(0, len(images), batch_size), desc="Benchmarking Accuracy"):
+    batch_paths = images[start : start + batch_size]
+    logits = jmodel(load_and_preprocess(batch_paths, pad_to_batch_size=batch_size)).numpy()
+    for i, p in enumerate(batch_paths):
+      pred = np.argsort(logits[i])[-5:][::-1]
+      gt = synset2idx[id2synset[p.stem]]
+      correct_top1 += int(pred[0] == gt)
+      correct_top5 += int(gt in pred)
   return correct_top1 / len(images) * 100, correct_top5 / len(images) * 100
