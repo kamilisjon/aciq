@@ -39,8 +39,10 @@ def sample_imagenet_val(dataset_path: Path, n_per_class: int | None = None) -> l
   return sorted(sampled)
 
 
-def benchmark_accuracy(model: ResNet, imagenet_data_path: Path, batch_size: int = 32) -> tuple[float, float]:
-  images = sample_imagenet_val(imagenet_data_path)
+def benchmark_accuracy(
+  model: ResNet, imagenet_data_path: Path, batch_size: int = 32, n_per_class: int | None = None
+) -> tuple[float, float]:
+  images = sample_imagenet_val(imagenet_data_path, n_per_class=n_per_class)
   id2synset = parse_imagenet_val_labels(imagenet_data_path)
   synset2idx = ImagenetClassIndex.load().synset_to_idx
 

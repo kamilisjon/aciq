@@ -11,6 +11,13 @@ from tinygrad.nn import BatchNorm, Conv2d, Linear
 
 from aciq.analysis import LayerStats, ShiftResult, StatsAccumulator, compute_shift, save_shifts_csv
 from aciq.benchmark import benchmark_accuracy, sample_imagenet_val
+from aciq.bias_correction import (
+  CORRECTION_MODES,
+  LayerInputStats,
+  apply_correction,
+  capture_bn_params,
+  compute_input_stats,
+)
 from aciq.fusion import fuse_conv_bn
 from aciq.helpers import get_output_dir
 from aciq.models.resnet import Bottleneck, ResNet
@@ -32,6 +39,7 @@ class PipelineConfig:
   plot_per_channel: bool
   output_dir: Path
   n_per_class: int | None = None
+  n_per_class_bench: int | None = None
 
   @property
   def model_name(self) -> str:
@@ -48,6 +56,10 @@ class PipelineConfig:
   @property
   def shift_results_dir(self) -> Path:
     return self.output_dir / "quantization_shift"
+
+  @property
+  def correction_results_dir(self) -> Path:
+    return self.output_dir / "bias_variance_correction"
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +178,42 @@ def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet, fq_models
 
 
 # ---------------------------------------------------------------------------
+# Stage 2.5: Bias and Variance Correction (analytical, BN-derived)
+# ---------------------------------------------------------------------------
+
+
+def stage_corrections(
+  fp_model: ResNet,
+  fq_models: dict[str, ResNet],
+  input_stats: dict[str, LayerInputStats],
+) -> dict[tuple[str, str], ResNet]:
+  """Build the (method × correction_mode) variant matrix.
+
+  For each quant method, deep-copies the post-Stage-2 quantized model three times
+  ("bias", "variance", "joint") and applies in-place per-layer correction. The
+  "none" key is the existing Stage-2 model itself (no extra copy).
+  """
+  fp_modules = dict(_weight_modules(fp_model))
+  variants: dict[tuple[str, str], ResNet] = {}
+  for method in METHOD_NAMES:
+    base = fq_models[method]
+    variants[(method, "none")] = base
+    for mode in ("bias", "variance", "joint"):
+      m = copy.deepcopy(base)
+      mods = dict(_weight_modules(m))
+      for name, module in mods.items():
+        if name == "stem":
+          continue  # no preceding BN; correction is undefined analytically
+        stats = input_stats[name]
+        W_fp = fp_modules[name].weight.numpy()
+        b_orig = module.bias.numpy() if module.bias is not None else np.zeros(module.weight.shape[0], dtype=np.float32)
+        apply_correction(module, W_fp, b_orig, mode, stats)
+      variants[(method, mode)] = m
+      print(f"  applied '{mode}' correction to {method}")
+  return variants
+
+
+# ---------------------------------------------------------------------------
 # Stage 3: Quantization Shift Analysis
 # ---------------------------------------------------------------------------
 
@@ -187,7 +235,9 @@ def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int
   return acc.finalize()
 
 
-def stage_shift_analysis(config: PipelineConfig, fp32_model: ResNet, fq_models: dict[str, ResNet]) -> None:
+def stage_shift_analysis(
+  config: PipelineConfig, fp32_model: ResNet, variants: dict[tuple[str, str], ResNet]
+) -> None:
   image_paths = sample_imagenet_val(config.dataset_path, config.n_per_class)
   print(f"  Using {len(image_paths)} images")
 
@@ -195,10 +245,11 @@ def stage_shift_analysis(config: PipelineConfig, fp32_model: ResNet, fq_models: 
   fp32_stats = _collect_activations(fp32_model, image_paths)
 
   shifts: dict[str, ShiftResult] = {}
-  for method in METHOD_NAMES:
-    print(f"  Collecting {method} stats...")
-    quant_stats = _collect_activations(fq_models[method], image_paths)
-    shifts[method] = compute_shift(fp32_stats, quant_stats)
+  for (method, mode), model in variants.items():
+    label = f"{method}::{mode}"
+    print(f"  Collecting {label} stats...")
+    quant_stats = _collect_activations(model, image_paths)
+    shifts[label] = compute_shift(fp32_stats, quant_stats)
 
   layer_names = list(fp32_stats.keys())
   csv_path = config.shift_results_dir / "shifts.csv"
@@ -207,6 +258,33 @@ def stage_shift_analysis(config: PipelineConfig, fp32_model: ResNet, fq_models: 
 
   plot_shift(shifts, layer_names, config.shift_results_dir, model_name=config.model_name)
   print(f"  Plots saved to {config.shift_results_dir}/")
+
+
+# ---------------------------------------------------------------------------
+# Stage 4: Benchmarking
+# ---------------------------------------------------------------------------
+
+
+def stage_benchmark(
+  config: PipelineConfig, fp_model: ResNet, variants: dict[tuple[str, str], ResNet]
+) -> None:
+  config.correction_results_dir.mkdir(parents=True, exist_ok=True)
+  csv_path = config.correction_results_dir / "benchmark_results.csv"
+  with open(csv_path, "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["method", "correction_mode", "top1", "top5"])
+
+    print(f"  benchmarking FP32 (n_per_class={config.n_per_class_bench})")
+    top1, top5 = benchmark_accuracy(fp_model, config.dataset_path, n_per_class=config.n_per_class_bench)
+    writer.writerow(["fp32", "none", top1, top5])
+    print(f"  FP32: top1={top1:.2f}  top5={top5:.2f}")
+
+    for (method, mode), model in variants.items():
+      print(f"  benchmarking {method}::{mode}")
+      top1, top5 = benchmark_accuracy(model, config.dataset_path, n_per_class=config.n_per_class_bench)
+      writer.writerow([method, mode, top1, top5])
+      print(f"  {method}::{mode}: top1={top1:.2f}  top5={top5:.2f}")
+  print(f"  CSV saved to {csv_path}")
 
 
 # ---------------------------------------------------------------------------
@@ -221,6 +299,13 @@ def main() -> None:
   parser.add_argument("--dataset-path", type=Path, required=True, help="Path to ImageNet dataset root")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
   parser.add_argument("--n-per-class", type=int, default=5, help="Sample N ImageNet val images per class for shift analysis.")
+  parser.add_argument(
+    "--n-per-class-bench",
+    type=int,
+    default=5,
+    help="Sample N val images per class for benchmarking. Pass --full-benchmark to use the entire val set instead.",
+  )
+  parser.add_argument("--full-benchmark", action="store_true", help="Use the full ImageNet val set for benchmarking (overrides --n-per-class-bench).")
   parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Root results directory")
   args = parser.parse_args()
 
@@ -231,6 +316,7 @@ def main() -> None:
     plot_per_channel=args.plot_per_channel,
     output_dir=get_output_dir(args.output_dir, args.model),
     n_per_class=args.n_per_class,
+    n_per_class_bench=None if args.full_benchmark else args.n_per_class_bench,
   )
   print(f"Output directory: {config.output_dir}")
 
@@ -240,19 +326,26 @@ def main() -> None:
   print(f"\n=== Stage 1: BN Fusion Analysis ({config.model_name}) ===")
   stage_bn_analysis(config, model)
 
+  print("\n=== Capturing BN parameters (analytical bias/variance correction) ===")
+  bn_params = capture_bn_params(model)
   model.fuse()
+  input_stats = compute_input_stats(model, bn_params)
+  print(f"  captured BN params for {len(bn_params)} layers; input stats for {len(input_stats)} weight modules")
+
   fq_models = {m: copy.deepcopy(model) for m in METHOD_NAMES}
 
   print(f"\n=== Stage 2: Weight Distribution Analysis ({config.model_name}) ===")
   stage_weight_analysis(config, model, fq_models)
 
+  print(f"\n=== Stage 2.5: Bias and Variance Correction ({config.model_name}) ===")
+  variants = stage_corrections(model, fq_models, input_stats)
+  print(f"  built {len(variants)} variants (4 methods × 4 correction modes)")
+
   print(f"\n=== Stage 3: Quantization Shift Analysis ({config.model_name}) ===")
-  stage_shift_analysis(config, model, fq_models)
+  stage_shift_analysis(config, model, variants)
 
   print(f"\n=== Stage 4: Benchmarking ({config.model_name}) ===")
-  print(f"  FP32: {benchmark_accuracy(model, config.dataset_path)}")
-  for method in METHOD_NAMES:
-    print(f"  {method}: {benchmark_accuracy(fq_models[method], config.dataset_path)}")
+  stage_benchmark(config, model, variants)
 
   print(f"\nDone. All results in {config.output_dir}")
 
