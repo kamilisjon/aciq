@@ -327,10 +327,6 @@ def main() -> None:
 
   model = ResNet(config.model_depth)
   model.load_from_pretrained()
-  model.fuse()
-  for _ in range(50):
-    print(benchmark_accuracy(model, config.dataset_path, n_per_class=1))
-  exit()
 
   print(f"\n=== Stage 1: BN Fusion Analysis ({config.model_name}) ===")
   stage_bn_analysis(config, model)
