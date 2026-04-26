@@ -158,17 +158,16 @@ class TestApplyCorrection(unittest.TestCase):
     np.testing.assert_allclose(y_corr.mean(axis=0), y_fp.mean(axis=0), atol=5e-3)
     np.testing.assert_allclose(y_corr.var(axis=0), y_fp.var(axis=0), rtol=2e-2, atol=5e-3)
 
-  def test_none_mode_is_noop(self):
+  def test_unknown_mode_raises(self):
     rng = np.random.default_rng(8)
     W = rng.normal(size=(4, 8)).astype(np.float32)
     b = rng.normal(size=(4,)).astype(np.float32)
     layer = self._make_linear(W, b)
-    apply_correction(layer, W, b, "none", LayerInputStats(E_x=np.zeros(8), Var_x=np.ones(8)))
-    np.testing.assert_array_equal(layer.weight.numpy(), W)
-    np.testing.assert_array_equal(layer.bias.numpy(), b)
+    with self.assertRaises(ValueError):
+      apply_correction(layer, W, b, "none", LayerInputStats(E_x=np.zeros(8), Var_x=np.ones(8)))
 
   def test_modes_constant_lists_all(self):
-    assert set(CORRECTION_MODES) == {"none", "bias", "variance", "joint"}
+    assert set(CORRECTION_MODES) == {"bias", "variance", "joint"}
 
 
 class TestResidualPropagation(unittest.TestCase):

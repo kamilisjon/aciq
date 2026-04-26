@@ -215,10 +215,11 @@ $\{(\E[\xx],\Var[\xx])\}_L \leftarrow$ \texttt{compute\_input\_stats}, propagati
 \section{Implementation Notes}
 
 \begin{itemize}
-\item All math is per-output-channel, so per-tensor and per-output-channel weight quantization are both supported without changes.
-\item Variance scaling is folded into the (already-quantized) weights and bias. After folding, the weights are no longer on the original symmetric quantization grid; this is acceptable for an analysis pipeline that stores dequantized FP32 representations of quantized weights, but on real hardware $s_{c_o}$ would more naturally be implemented as a per-output-channel rescale at the accumulator.
+\item \textbf{Variance and joint correction require per-channel weight quantization.} The scale $s_{c_o}$ is per output channel by construction. Per-channel weight quantization stores one scale per output channel, so $s_{c_o}$ folds cleanly into that scale (or, equivalently in this dequantized-FP32 pipeline, into the per-channel weight row). Per-tensor weight quantization stores a single shared scale; multiplying by a per-channel $s_{c_o}$ produces a per-channel grid that is no longer representable under per-tensor quant. To keep the benchmark over hardware-realizable variants only, the implementation restricts $\{$bias, variance, joint$\}$ corrections to per-channel quantization variants. Per-tensor variants run only as the uncorrected baseline. (A hardware-equivalent alternative would be to express $s_{c_o}$ as a per-output-channel rescale at the accumulator/requant boundary, leaving the integer weight tensor untouched; that is supported by typical INT8 inference engines but is out of scope here.)
+\item Bias correction is hardware-friendly in any quantization scheme: it is an additive shift on the bias tensor, which is FP32/INT32 in any standard pipeline.
 \item The independence assumption between input channels is the same simplification used by~\cite{nagel2019} for $\E[\xx]$. It is the dominant approximation; real activations exhibit modest cross-channel correlation, which would add cross terms to $\Var[\y_{c_o}]$ that this derivation omits.
 \item The analytical clipped-normal model uses the BN running statistics. After fusion, the BN parameters $(\bgam,\bbet)$ are captured beforehand; the running mean and variance are absorbed into the fused weight and bias.
+\item The stem (first) convolution receives the normalized image and is left uncorrected: there is no preceding BN/ReLU to give an analytical input distribution.
 \end{itemize}
 
 \begin{thebibliography}{1}

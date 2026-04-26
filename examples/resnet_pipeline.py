@@ -29,6 +29,7 @@ from aciq.weight_analysis import analyze_layer
 
 METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]
 RESULTS_DIR = Path("results")
+PER_CHANNEL_METHODS = {"per_channel_minmax", "per_channel_aciq"}
 
 
 @dataclass
@@ -189,16 +190,20 @@ def stage_corrections(
 ) -> dict[tuple[str, str], ResNet]:
   """Build the (method × correction_mode) variant matrix.
 
-  For each quant method, deep-copies the post-Stage-2 quantized model three times
-  ("bias", "variance", "joint") and applies in-place per-layer correction. The
-  "none" key is the existing Stage-2 model itself (no extra copy).
+  Per-tensor methods get only the uncorrected baseline because variance correction
+  is not hardware-realizable in a per-tensor weight scheme. Per-channel methods
+  get the full {none, bias, variance, joint} set, with non-"none" modes deep-copied
+  off the post-Stage-2 model and corrected per layer (stem is left untouched —
+  no preceding BN to derive analytical input stats from).
   """
   fp_modules = dict(_weight_modules(fp_model))
   variants: dict[tuple[str, str], ResNet] = {}
   for method in METHOD_NAMES:
     base = fq_models[method]
     variants[(method, "none")] = base
-    for mode in ("bias", "variance", "joint"):
+    if method not in PER_CHANNEL_METHODS:
+      continue
+    for mode in CORRECTION_MODES:
       m = copy.deepcopy(base)
       mods = dict(_weight_modules(m))
       for name, module in mods.items():
@@ -339,7 +344,7 @@ def main() -> None:
 
   print(f"\n=== Stage 2.5: Bias and Variance Correction ({config.model_name}) ===")
   variants = stage_corrections(model, fq_models, input_stats)
-  print(f"  built {len(variants)} variants (4 methods × 4 correction modes)")
+  print(f"  built {len(variants)} quantized variants (per-tensor: none only; per-channel: none/bias/variance/joint)")
 
   print(f"\n=== Stage 3: Quantization Shift Analysis ({config.model_name}) ===")
   stage_shift_analysis(config, model, variants)

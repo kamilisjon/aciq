@@ -285,16 +285,16 @@ def apply_correction(
   """In-place: rewrite `module.weight` and `module.bias` for the requested correction mode.
 
   Modes:
-  - "none":     no change.
   - "bias":     b ← b - ε_sum @ E[x]; weight unchanged.
   - "variance": variance scaling around the *uncorrected* quantized mean E[ỹ].
                   W ← s · W̃; b ← s·b + (1-s)·E[ỹ]
   - "joint":    bias-corrected mean E[y] then variance scaling around E[y].
                   W ← s · W̃; b ← s·(b - Δb) + (1-s)·E[y]
                 where Δb = ε_sum @ E[x] and E[y] = W_fp_sum @ E[x] + b_orig.
+
+  Callers that want "no correction" should not invoke this function — the
+  uncorrected variant is just the post-quantization model.
   """
-  if mode == "none":
-    return
   W_q = module.weight.numpy().astype(np.float64)
   E_x = stats.E_x
   Var_x = stats.Var_x
@@ -325,4 +325,4 @@ def apply_correction(
   module.bias = Tensor(new_b)
 
 
-CORRECTION_MODES = ("none", "bias", "variance", "joint")
+CORRECTION_MODES = ("bias", "variance", "joint")
