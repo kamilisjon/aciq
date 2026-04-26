@@ -40,7 +40,6 @@ class PipelineConfig:
   plot_per_channel: bool
   output_dir: Path
   n_per_class: int | None = None
-  n_per_class_bench: int | None = None
 
   @property
   def model_name(self) -> str:
@@ -279,14 +278,14 @@ def stage_benchmark(
     writer = csv.writer(f)
     writer.writerow(["method", "correction_mode", "top1", "top5"])
 
-    print(f"  benchmarking FP32 (n_per_class={config.n_per_class_bench})")
-    top1, top5 = benchmark_accuracy(fp_model, config.dataset_path, n_per_class=config.n_per_class_bench)
+    print(f"  benchmarking FP32")
+    top1, top5 = benchmark_accuracy(fp_model, config.dataset_path)
     writer.writerow(["fp32", "none", top1, top5])
     print(f"  FP32: top1={top1:.2f}  top5={top5:.2f}")
 
     for (method, mode), model in variants.items():
       print(f"  benchmarking {method}::{mode}")
-      top1, top5 = benchmark_accuracy(model, config.dataset_path, n_per_class=config.n_per_class_bench)
+      top1, top5 = benchmark_accuracy(model, config.dataset_path)
       writer.writerow([method, mode, top1, top5])
       print(f"  {method}::{mode}: top1={top1:.2f}  top5={top5:.2f}")
   print(f"  CSV saved to {csv_path}")
@@ -304,13 +303,6 @@ def main() -> None:
   parser.add_argument("--dataset-path", type=Path, required=True, help="Path to ImageNet dataset root")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
   parser.add_argument("--n-per-class", type=int, default=5, help="Sample N ImageNet val images per class for shift analysis.")
-  parser.add_argument(
-    "--n-per-class-bench",
-    type=int,
-    default=5,
-    help="Sample N val images per class for benchmarking. Pass --full-benchmark to use the entire val set instead.",
-  )
-  parser.add_argument("--full-benchmark", action="store_true", help="Use the full ImageNet val set for benchmarking (overrides --n-per-class-bench).")
   parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Root results directory")
   args = parser.parse_args()
 
@@ -321,7 +313,6 @@ def main() -> None:
     plot_per_channel=args.plot_per_channel,
     output_dir=get_output_dir(args.output_dir, args.model),
     n_per_class=args.n_per_class,
-    n_per_class_bench=None if args.full_benchmark else args.n_per_class_bench,
   )
   print(f"Output directory: {config.output_dir}")
 
