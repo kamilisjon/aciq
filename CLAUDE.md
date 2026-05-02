@@ -77,6 +77,10 @@ Every new writing artefact gets:
 
 Use ISO 690 numeric format throughout. Never fabricate references — if uncertain, fetch the arxiv abstract page or ask.
 
+**Cite only peer-reviewed scientific papers and conference proceedings.** Do not cite books, textbooks, monographs, blog posts, lecture notes, course slides, technical reports without peer review, or other unpublished material. Acceptable venues: journal articles (e.g. *Nature*, *JMLR*, *IEEE TPAMI*), peer-reviewed conference proceedings (e.g. NeurIPS, ICML, ICLR, CVPR), and arxiv preprints when the work is widely cited and the preprint is the primary venue. When the obvious reference is a textbook, find the underlying scientific paper instead — e.g. cite Rumelhart, Hinton, Williams (1986, *Nature*) for the multilayer feedforward network, not the Goodfellow–Bengio–Courville textbook.
+
+**Prefer canonical papers over secondary or derivative ones.** Cite the original paper that introduced a concept, method, or architecture, not a later paper that merely uses or restates it. Examples: Rumelhart, Hinton, Williams (1986) for backpropagation and multilayer feedforward networks; LeCun et al.\ (1998, *Proc. IEEE*) for convolutional networks and MNIST; Krizhevsky, Sutskever, Hinton (2012, NeurIPS) for AlexNet and the modern ImageNet result; He et al.\ (2016, CVPR) for ResNet; Ioffe \& Szegedy (2015, ICML) for batch normalization; Russakovsky et al.\ (2015, *IJCV*) for the ImageNet benchmark. If a survey is cited, it should be in addition to the canonical primary source, not as a substitute for it.
+
 ## Workflow
 
 - **Do not auto-commit.** Spec docs (`docs/superpowers/specs/`), implementation plans (`docs/superpowers/plans/`), and the thesis-deliverable LaTeX/PDF files are left untracked. Wait for an explicit "commit" instruction before running `git add` / `git commit`.
