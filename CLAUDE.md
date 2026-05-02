@@ -6,7 +6,7 @@
 - **Author:** Kamilis Jonkus
 - **Supervisor:** Assoc. prof., dr. Tomas Iešmantas
 - **Active branch:** `bias_correction`
-- **Current state of the thesis:** `./thesis.pdf` at the repo root. The thesis itself is authored in Word/Pages — no `.tex` source for the manuscript exists in the repo.
+- **Current state of the thesis:** `./docs/thesis.pdf` at the repo root. The thesis itself is authored in Word/Pages — no `.tex` source for the manuscript exists in the repo.
 
 The repo also holds the ACIQ research code under `aciq/`, experiments under `examples/` and `results/`.
 
@@ -28,13 +28,13 @@ These rules are non-negotiable for new prose contributions:
 6. **US spelling.** "optimization", not "optimisation"; "behavior", not "behaviour".
 7. **Reason from first principles.** Before showing a method or formula, state the underlying problem it solves. §1.2.4 BN motivates BN as the response to internal covariate shift before introducing the equation. Parent sections (e.g. §1.1 above §1.1.1 and §1.1.2) motivate the underlying problem the children answer; they do not summarize the children. §1.1 explains why benchmark datasets matter before §1.1.1 and §1.1.2 describe specific datasets.
 8. **Cite on the first non-trivial claim.** Use numeric `\cite{key}` rendered as `[N]`. Do not fabricate references — if context is missing, ask.
-9. **Figure references use the manuscript phrasing.** Write *"illustrated in figure Fig. N"* (matching §1.1.1's pattern), not *"see Figure N"* or *"as shown in Fig. N"*. Keep figure numbers literal to match the manual numbering in `thesis.pdf`.
+9. **Figure references use the manuscript phrasing.** Write *"illustrated in figure Fig. N"* (matching §1.1.1's pattern), not *"see Figure N"* or *"as shown in Fig. N"*. Keep figure numbers literal to match the manual numbering in `./docs/thesis.pdf`.
 
 ## Output format — always LaTeX + PDF
 
 **All requested writing must be delivered as a LaTeX `.tex` source plus a tectonic-built `.pdf`** under a self-contained directory `docs/<topic>/`. Do not produce prose in Markdown, plain text, chat-only, or Word-paste-ready form unless explicitly asked.
 
-Section requests come **one at a time**. When asked to write a particular thesis section (e.g. "§1.1.1. ImageNet dataset"), open `thesis.pdf` and reuse the **exact heading text** as it appears in the manuscript — number and title — for the LaTeX `\subsection*{...}`. Do not paraphrase, retitle, or shorten the heading.
+Section requests come **one at a time**. When asked to write a particular thesis section (e.g. "§1.1.1. ImageNet dataset"), open `./docs/thesis.pdf` and reuse the **exact heading text** as it appears in the manuscript — number and title — for the LaTeX `\subsection*{...}`. Do not paraphrase, retitle, or shorten the heading.
 
 Every new writing artefact gets:
 - `docs/<topic>/<topic>.tex`
@@ -53,10 +53,10 @@ Every new writing artefact gets:
 
 **Numbering:**
 - Use `\section*{N. Heading}`, `\subsection*{N.M. Subheading}`, and `\subsubsection*{N.M.O. Subsubheading}` (e.g. `1.1.2. MNIST dataset`) — the **starred** forms. The numbers are written into the heading text literally so they match the thesis manuscript's manual numbering. If sections are reordered, update the numbers by hand.
-- The heading text after the number must match `thesis.pdf` verbatim.
+- The heading text after the number must match `./docs/thesis.pdf` verbatim.
 
 **Document layout for thesis-section deliverables:**
-- Thesis-section deliverables (prose meant to be pasted into `thesis.pdf`) start with the starred heading immediately inside `\begin{document}`. No `\title`, `\author`, `\date`, or `\maketitle`. The PDF exists for review, not as a self-contained document.
+- Thesis-section deliverables (prose meant to be pasted into `./docs/thesis.pdf`) start with the starred heading immediately inside `\begin{document}`. No `\title`, `\author`, `\date`, or `\maketitle`. The PDF exists for review, not as a self-contained document.
 - Derivation / working documents (e.g. `docs/bias_variance_correction/`) may use `\maketitle` since they stand alone.
 
 **Bibliography (ISO 690, numeric / citation-order):**
@@ -82,4 +82,4 @@ Use ISO 690 numeric format throughout. Never fabricate references — if uncerta
 - **Do not auto-commit.** Spec docs (`docs/superpowers/specs/`), implementation plans (`docs/superpowers/plans/`), and the thesis-deliverable LaTeX/PDF files are left untracked. Wait for an explicit "commit" instruction before running `git add` / `git commit`.
 - **One section at a time.** Wait for an explicit request naming the section to write; do not pre-emptively draft adjacent sections.
 - **Editing and revision:** focus on logical flow and conciseness; edit rather than rewrite when the original is sound.
-- **Structure:** follow IMRaD (Introduction, Methods, Results, Discussion) for original-research sections where applicable. Match the conventions already established in `thesis.pdf`.
+- **Structure:** follow IMRaD (Introduction, Methods, Results, Discussion) for original-research sections where applicable. Match the conventions already established in `./docs/thesis.pdf`.
