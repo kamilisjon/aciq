@@ -32,20 +32,27 @@ These rules are non-negotiable for new prose contributions:
 
 ## Output format — always LaTeX + PDF
 
-**All requested writing must be delivered as a LaTeX `.tex` source plus a tectonic-built `.pdf`** under a self-contained directory `docs/<topic>/`. Do not produce prose in Markdown, plain text, chat-only, or Word-paste-ready form unless explicitly asked.
+**All requested writing must be delivered as a LaTeX `.tex` source, a tectonic-built `.pdf`, and a pandoc-built `.docx`** under a self-contained directory `docs/<topic>/`. Do not produce prose in Markdown, plain text, or chat-only form unless explicitly asked. The `.pdf` is for visual review; the `.docx` is what gets copy-pasted into the manuscript (paragraph structure preserved, equations rendered as native Word OMML).
 
 Section requests come **one at a time**. When asked to write a particular thesis section (e.g. "§1.1.1. ImageNet dataset"), open `./docs/thesis.pdf` and reuse the **exact heading text** as it appears in the manuscript — number and title — for the LaTeX `\subsection*{...}`. Do not paraphrase, retitle, or shorten the heading.
 
 Every new writing artefact gets:
 - `docs/<topic>/<topic>.tex`
 - `docs/<topic>/<topic>.pdf` (built via `make pdf`)
+- `docs/<topic>/<topic>.docx` (built via `make docx`)
 - `docs/<topic>/Makefile` (copy from `docs/bias_variance_correction/Makefile`)
 
 ## LaTeX conventions
 
 **Build:**
-- Engine: `tectonic` (installed at `~/.local/bin/tectonic`).
-- Per-doc `Makefile` with `pdf` and `clean` targets — the `Makefile` at `docs/bias_variance_correction/Makefile` is the working reference.
+- Engines: `tectonic` (installed at `~/.local/bin/tectonic`) for PDF; `pandoc` (`~/.local/bin/pandoc`, version 3.x — Ubuntu's 2.9 is too buggy on math) for DOCX.
+- Per-doc `Makefile` with `pdf`, `docx`, `all`, and `clean` targets — the `Makefile` at `docs/bias_variance_correction/Makefile` is the working reference.
+
+**Math compatibility for `.docx` (pandoc):**
+- Avoid `\tag{...}`. Pandoc's math parser rejects it. For a manual equation number `(N)`, use `\setcounter{equation}{N-1}` followed by `\begin{equation}...\end{equation}` — both tectonic and pandoc honor this.
+- Avoid `\;`, `\!`, and other thin-space macros inside math; they survive in PDF but pandoc strips them and can mis-parse the result. Use a plain space or `\,` if spacing is needed.
+- Citations: pandoc does not expand `\cite{key}` against an inline `thebibliography` block. Hard-code the **deliverable's own** `[N]` directly in prose, numbered from 1 in the order the references first appear in the section. The deliverable then reads as a self-contained document; the author renumbers against the master manuscript bibliography by hand when pasting into `./docs/thesis.pdf`.
+- The `.docx` will appear to fail a pandoc round-trip (`pandoc file.docx -t plain` warns "Could not convert TeX math…"); ignore that. The actual `word/document.xml` contains valid `<m:oMath>` and Word renders the equation as a native, editable formula.
 
 **Document setup:**
 - `\documentclass[11pt,a4paper]{article}`
@@ -80,6 +87,10 @@ Use ISO 690 numeric format throughout. Never fabricate references — if uncerta
 **Cite only peer-reviewed scientific papers and conference proceedings.** Do not cite books, textbooks, monographs, blog posts, lecture notes, course slides, technical reports without peer review, or other unpublished material. Acceptable venues: journal articles (e.g. *Nature*, *JMLR*, *IEEE TPAMI*), peer-reviewed conference proceedings (e.g. NeurIPS, ICML, ICLR, CVPR), and arxiv preprints when the work is widely cited and the preprint is the primary venue. When the obvious reference is a textbook, find the underlying scientific paper instead — e.g. cite Rumelhart, Hinton, Williams (1986, *Nature*) for the multilayer feedforward network, not the Goodfellow–Bengio–Courville textbook.
 
 **Prefer canonical papers over secondary or derivative ones.** Cite the original paper that introduced a concept, method, or architecture, not a later paper that merely uses or restates it. Examples: Rumelhart, Hinton, Williams (1986) for backpropagation and multilayer feedforward networks; LeCun et al.\ (1998, *Proc. IEEE*) for convolutional networks and MNIST; Krizhevsky, Sutskever, Hinton (2012, NeurIPS) for AlexNet and the modern ImageNet result; He et al.\ (2016, CVPR) for ResNet; Ioffe \& Szegedy (2015, ICML) for batch normalization; Russakovsky et al.\ (2015, *IJCV*) for the ImageNet benchmark. If a survey is cited, it should be in addition to the canonical primary source, not as a substitute for it.
+
+**Read each cited paper before citing it.** Spend the time required to actually understand the paper, not just its title or abstract. Fetch the arxiv abstract page, the published PDF, or another primary source. Read the introduction, the relevant method section, and the results that the prose claim depends on. The bar to clear before writing `[N]` after a sentence: the cited paper genuinely supports that specific sentence, the dataset / model / metric named in the prose matches what the paper actually reports, and the framing of the contribution matches the paper's own framing rather than a downstream paraphrase. Common failure modes to avoid — citing a paper because it is famously associated with a topic rather than because it supports the specific claim, attributing a result to a survey when the survey itself is citing the primary work, and inheriting wording from a secondary source that subtly misstates the original. If the paper turns out not to support the claim, change the claim or change the citation; do not leave the mismatch in.
+
+**Paraphrase, do not copy.** Every sentence drawn from a cited paper must be re-expressed in the thesis's own voice and sentence structure. Do not lift phrases, definitions, or formulations verbatim from the source — even short distinctive phrases ("internal covariate shift", "dying ReLU") are acceptable as named technical terms but the surrounding explanation must be the author's own. Read the relevant passage, close the paper, then write the sentence from understanding rather than from the page. A useful self-check: if a sentence in the deliverable shares a clause of five or more consecutive words with the source, rewrite it. The same applies to figures and equations re-expressed as prose — describe them in the author's own words, not the source's caption text. Plagiarism risk is the reason this rule is non-negotiable; the Declaration of Academic Integrity at the front of the manuscript binds the author to it explicitly.
 
 ## Workflow
 
