@@ -11,23 +11,23 @@ The repo also holds the ACIQ research code under `aciq/`, experiments under `exa
 
 ### Voice
 
-Use a formal, third-person, observational voice. The calibration target is §1.2.4 (Batch normalization) of `./docs/thesis.pdf` — re-read when in doubt.
+Use a formal, third-person, observational voice. The calibration target is §1.2.6 (Batch normalization) of `./docs/thesis.pdf` — re-read when in doubt.
 
 ### Rules
 
 These rules are non-negotiable for new prose contributions:
 
 1. **One idea per sentence.** If a sentence joins two distinct ideas with "and", "so", "but", ", which", or a comma, split it.
-2. **No editorial filler.** Avoid: "notably", "interestingly", "the approach is notable because", "a key advantage", "comprehensive", "robust", "carefully", "we will see".
-3. **Use plain words.** Prefer the everyday word over its Latinate or technical-sounding synonym when both mean the same thing — "affects" not "governs", "size" not "magnitude", "unchanged" not "without attenuation", "problem" not "pathology", "fixes" not "removes the pathology". Keep technical terms that have no plain equivalent.
-4. **No first-person voice.** No "we", "our", "this thesis argues".
-5. **Do not refer to authors by name in prose.** Describe the work and let the citation carry the attribution. Write *"Deep Compression reduces model size by an order of magnitude with negligible accuracy loss [N]"*, not *"Han et al.\ demonstrate ... [N]"*.
-6. **No parenthetical glosses on established acronyms.** Spell out once on first use (e.g. "Post-Training Quantization (PTQ)"); use bare thereafter. Do not add "(PTQ, a technique that…)".
-7. **US spelling.** "optimization", not "optimisation"; "behavior", not "behaviour".
-8. **Reason from first principles.** Before showing a method or formula, state the underlying problem it solves. §1.2.4 motivates BN as the response to internal covariate shift before introducing the equation.
-9. **Cite on the first non-trivial claim.** Use numeric `\cite{key}` rendered as `[N]`. Do not fabricate references — if context is missing, ask.
-10. **Figure references use manuscript phrasing.** Write *"illustrated in figure Fig. N"* (matching §1.1.1's pattern), not *"see Figure N"*. Keep figure numbers literal to match the manual numbering in `./docs/thesis.pdf`.
-11. **One reference per paragraph minimum.** A paragraph without a citation either lacks support or is too narrow in scope.
+2. **Be concise.** Cut every word that does not add information. Delete sentences that restate the previous one. If two phrasings convey the same meaning, use the shorter one. A short paragraph that carries one idea is better than a long paragraph that pads it.
+3. **No editorial filler.** Avoid: "notably", "interestingly", "the approach is notable because", "a key advantage", "comprehensive", "robust", "carefully", "we will see".
+4. **Use plain words.** Prefer the everyday word over its Latinate or technical-sounding synonym when both mean the same thing — "affects" not "governs", "size" not "magnitude", "unchanged" not "without attenuation", "problem" not "pathology", "fixes" not "removes the pathology". Keep technical terms that have no plain equivalent.
+5. **No first-person voice.** No "we", "our", "this thesis argues".
+6. **Do not refer to authors by name in prose.** Describe the work and let the citation carry the attribution. Write *"Deep Compression reduces model size by an order of magnitude with negligible accuracy loss [N]"*, not *"Han et al.\ demonstrate ... [N]"*.
+7. **No parenthetical glosses on established acronyms.** Spell out once on first use (e.g. "Post-Training Quantization (PTQ)"); use bare thereafter. Do not add "(PTQ, a technique that…)".
+8. **US spelling.** "optimization", not "optimisation"; "behavior", not "behaviour".
+9. **Reason from first principles.** Before showing a method or formula, state the underlying problem it solves. §1.2.6. motivates BN as the response to internal covariate shift before introducing the equation.
+10. **Cite on the first non-trivial claim.** Use numeric `\cite{key}` rendered as `[N]`. Do not fabricate references — if context is missing, ask.
+12. **One reference per paragraph minimum.** A paragraph without a citation either lacks support or is too narrow in scope.
 
 ## Deliverables
 
@@ -37,7 +37,7 @@ All requested writing ships as a self-contained directory `docs/<topic>/` contai
 - `<topic>.tex` — LaTeX source
 - `<topic>.pdf` — built via `make pdf` (for visual review)
 - `<topic>.docx` — built via `make docx` (the paste-into-manuscript artefact; equations render as native Word OMML)
-- `Makefile` — copy from `docs/bias_variance_correction/Makefile`
+- `Makefile` — copy from `docs/Makefile.example`
 
 Section requests come **one at a time**. When asked to write a thesis section (e.g. "§1.1.1. ImageNet dataset"), open `./docs/thesis.pdf` and reuse the **exact heading text** — number and title — for the LaTeX `\subsection*{...}`. Do not paraphrase or shorten.
 
@@ -47,7 +47,7 @@ Do not produce prose in Markdown, plain text, or chat-only form unless explicitl
 
 - `tectonic` (at `~/.local/bin/tectonic`) builds the PDF.
 - `pandoc` 3.x (at `~/.local/bin/pandoc`) builds the DOCX. Ubuntu's 2.9 is too buggy on math.
-- `docs/bias_variance_correction/Makefile` is the working reference — targets are `pdf`, `docx`, `all`, `clean`.
+- `docs/Makefile.example` is the working reference — targets are `pdf`, `docx`, `all`, `clean`. After copying, update the `TEX :=` line to point at the new `<topic>.tex`.
 
 ### Math + pandoc gotchas
 
