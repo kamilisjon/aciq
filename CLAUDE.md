@@ -26,8 +26,7 @@ These rules are non-negotiable for new prose contributions:
 7. **No parenthetical glosses on established acronyms.** Spell out once on first use (e.g. "Post-Training Quantization (PTQ)"); use bare thereafter. Do not add "(PTQ, a technique that…)".
 8. **US spelling.** "optimization", not "optimisation"; "behavior", not "behaviour".
 9. **Reason from first principles.** Before showing a method or formula, state the underlying problem it solves. §1.2.6. motivates BN as the response to internal covariate shift before introducing the equation.
-10. **Cite on the first non-trivial claim.** Use numeric `\cite{key}` rendered as `[N]`. Do not fabricate references — if context is missing, ask.
-12. **One reference per paragraph minimum.** A paragraph without a citation either lacks support or is too narrow in scope.
+10. **Encapsulate every claim with a citation.** Group consecutive sentences drawn from the same source into a block and close the block with `[N]` (rendered from numeric `\cite{key}`). The closing `[N]` covers every sentence in the block back to the previous citation or paragraph start. No claim sits outside such a block. Every paragraph ends with a citation. Trailing sentences after the last `[N]` are not allowed — either extend the block with a citation or cut the sentence. Do not fabricate references — if context is missing, ask.
 
 ## Deliverables
 
