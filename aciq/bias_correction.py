@@ -142,17 +142,16 @@ def apply_correction(
   W_q = module.weight.numpy().astype(np.float64)
   E_x = stats.E_x
   Var_x = stats.Var_x
+  s = variance_correction_scale(W_fp, W_q, Var_x, clip=var_clip)
+  s_w = s.reshape((-1, 1, 1, 1)) if W_q.ndim == 4 else s.reshape((-1, 1))
+
 
   if mode == "bias":
     delta_b = bias_correction_delta(W_fp, W_q, E_x)
     new_b = b_orig.astype(np.float64) - delta_b
     module.bias = Tensor(new_b.astype(np.float32))
     return
-
-  s = variance_correction_scale(W_fp, W_q, Var_x, clip=var_clip)
-  s_w = s.reshape((-1, 1, 1, 1)) if W_q.ndim == 4 else s.reshape((-1, 1))
-
-  if mode == "variance":
+  elif mode == "variance":
     E_y_q = output_mean(W_q, b_orig, E_x)
     new_W = (s_w * W_q).astype(np.float32)
     new_b = (s * b_orig.astype(np.float64) + (1.0 - s) * E_y_q).astype(np.float32)
