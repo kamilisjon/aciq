@@ -13,7 +13,7 @@ from scipy.stats import spearmanr
 from aciq.analysis import LayerStats, ShiftResult, StatsAccumulator, compute_shift
 from aciq.distributions import Distribution, DistributionType
 from aciq.helpers import get_output_dir
-from aciq.mnist_model import MNISTModel, _load_normalized, evaluate_model, train_model
+from aciq.mnist import MNISTModel, _load_normalized, evaluate_model, train_model
 from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 
 

@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from tinygrad import Tensor
 
-from aciq.mnist_model import MNISTModel
+from aciq.mnist import MNISTModel
 
 
 class TestMNISTModel(unittest.TestCase):
