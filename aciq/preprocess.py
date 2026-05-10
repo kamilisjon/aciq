@@ -1,12 +1,4 @@
-"""ImageNet preprocessing: PIL image files → tinygrad `Tensor` batch.
-
-Mirrors `torchvision.transforms._presets.ImageClassification(crop_size=224)`:
-BILINEAR resize with short-edge == 256 (antialiased), center crop to 224, uint8 → [0,1]
-float32, HWC → CHW transpose, ImageNet mean/std normalisation, then stack.
-"""
-
 from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np
