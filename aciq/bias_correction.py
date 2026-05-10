@@ -1,15 +1,3 @@
-"""Analytical bias and variance correction for quantized layers.
-
-Implements the data-free bias correction from Nagel et al. 2019
-(https://arxiv.org/pdf/1906.04721, §4.2 + Appendix B) plus a derived per-channel
-variance correction. Input statistics E[x], Var[x] are computed in closed form
-from the preceding BatchNorm's (gamma, beta) under a clipped-normal-after-ReLU
-assumption.
-
-All math is done in numpy on `module.weight.numpy()` (matching the pipeline
-style); corrected tensors are assigned back via tinygrad `Tensor`.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -25,13 +13,7 @@ from aciq.resnet import Bottleneck, ResNet
 # Clipped normal distribution
 
 def clipped_normal_mean(beta: np.ndarray, gamma: np.ndarray, a: float = 0.0, b: float = np.inf) -> np.ndarray:
-  """Mean of N(beta, gamma**2) clipped to [a, b]. ReLU corresponds to a=0, b=inf.
-
-  Closed form (Nagel Appendix C):
-    mu_clip = a Phi(alpha) + b (1 - Phi(beta_n)) + sigma (phi(alpha) - phi(beta_n))
-              + mu (Phi(beta_n) - Phi(alpha))
-  where alpha = (a-mu)/sigma, beta_n = (b-mu)/sigma.
-  """
+  # Source: https://arxiv.org/pdf/1906.04721
   beta = np.asarray(beta, dtype=np.float64)
   gamma = np.asarray(gamma, dtype=np.float64)
   sigma = np.abs(gamma)
