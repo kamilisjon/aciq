@@ -89,7 +89,7 @@ class MNISTModel:
     }
 
 
-def train_model(seed: int, epochs: int = 10, lr: float = 1e-3, batch_size: int = 512) -> tuple[MNISTModel, float, list[float], list[float]]:
+def train_model(seed: int, steps: int = 1170, lr: float = 1e-3, batch_size: int = 512, eval_every: int = 10) -> tuple[MNISTModel, float, list[float], list[float]]:
   Tensor.manual_seed(seed)
   np.random.seed(seed)
 
@@ -98,16 +98,16 @@ def train_model(seed: int, epochs: int = 10, lr: float = 1e-3, batch_size: int =
   model.opt = AdamW(get_parameters(model), lr=lr)
   model.batch_size = batch_size
 
-  steps_per_epoch = int(x_train.shape[0]) // batch_size
   train_losses: list[float] = []
   test_losses: list[float] = []
-  for _ in tqdm(range(epochs), desc="train"):
-    epoch_loss_sum = 0.0
-    for _ in range(steps_per_epoch):
-      GlobalCounters.reset()
-      epoch_loss_sum += float(model.train_step(x_train, y_train).item())
-    train_losses.append(epoch_loss_sum / steps_per_epoch)
-    test_losses.append(float(model.test_loss_step(x_test, y_test).item()))
+  window_sum = 0.0
+  for i in tqdm(range(steps), desc="train"):
+    GlobalCounters.reset()
+    window_sum += float(model.train_step(x_train, y_train).item())
+    if (i + 1) % eval_every == 0:
+      train_losses.append(window_sum / eval_every)
+      test_losses.append(float(model.test_loss_step(x_test, y_test).item()))
+      window_sum = 0.0
 
   return model, evaluate_model(model, x_test, y_test), train_losses, test_losses
 
