@@ -1,4 +1,5 @@
 # Vendored from tinygrad/extra/models/resnet.py @ commit f28ea84de235cdeaa7e028a2034b34f27b67d30f
+import numpy as np
 import tinygrad.nn as nn
 from tinygrad import Tensor, dtypes
 from tinygrad.helpers import fetch, get_child
@@ -170,3 +171,25 @@ class ResNet:
       if "bn" not in k and "downsample" not in k:
         assert tuple(obj.shape) == dat_shape, (k, obj.shape, dat_shape)
       obj.assign(Tensor(dat_t.detach().numpy()).to(obj.device).cast(obj.dtype).reshape(obj.shape))
+
+
+def _bn_effective_params(bn: nn.BatchNorm) -> tuple[np.ndarray, np.ndarray]:
+  assert bn.weight is not None and bn.bias is not None, "expected affine BatchNorm"
+  gamma_eff = np.abs(bn.weight.numpy().astype(np.float64))
+  beta_eff = bn.bias.numpy().astype(np.float64)
+  return gamma_eff, beta_eff
+
+
+def capture_bn_params(model: ResNet) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+  out: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+  out["stem"] = _bn_effective_params(model.bn1)
+  for li, layer in enumerate((model.layer1, model.layer2, model.layer3, model.layer4), 1):
+    for bi, block in enumerate(layer):
+      prefix = f"layer{li}.{bi}"
+      out[f"{prefix}.conv1"] = _bn_effective_params(block.bn1)
+      out[f"{prefix}.conv2"] = _bn_effective_params(block.bn2)
+      if isinstance(block, Bottleneck):
+        out[f"{prefix}.conv3"] = _bn_effective_params(block.bn3)
+      if block.downsample:
+        out[f"{prefix}.downsample"] = _bn_effective_params(block.downsample[1])
+  return out

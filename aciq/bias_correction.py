@@ -17,15 +17,12 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.stats import norm
 from tinygrad import Tensor
-from tinygrad.nn import BatchNorm, Conv2d, Linear
+from tinygrad.nn import Conv2d, Linear
 
 from aciq.resnet import Bottleneck, ResNet
 
 
-# -----------------------------------------------------------------------------
 # Clipped normal distribution
-# -----------------------------------------------------------------------------
-
 
 def clipped_normal_mean(beta: np.ndarray, gamma: np.ndarray, a: float = 0.0, b: float = np.inf) -> np.ndarray:
   """Mean of N(beta, gamma**2) clipped to [a, b]. ReLU corresponds to a=0, b=inf.
@@ -77,46 +74,6 @@ def clipped_normal_var(beta: np.ndarray, gamma: np.ndarray, a: float = 0.0, b: f
     + term_high
   )
   return np.maximum(var, 0.0)
-
-
-# -----------------------------------------------------------------------------
-# BN parameter capture
-# -----------------------------------------------------------------------------
-
-
-def _bn_effective_params(bn: BatchNorm) -> tuple[np.ndarray, np.ndarray]:
-  """Return (gamma_eff, beta_eff) of the post-BN distribution per channel.
-
-  A BN layer with running mean mu_r, running var sigma_r^2, scale w, shift b produces
-  an output whose channel-wise mean is `b` and variance is `w**2` (assuming the input
-  statistics match the running stats). gamma_eff = |w|, beta_eff = b.
-  """
-  assert bn.weight is not None and bn.bias is not None, "expected affine BatchNorm"
-  gamma_eff = np.abs(bn.weight.numpy().astype(np.float64))
-  beta_eff = bn.bias.numpy().astype(np.float64)
-  return gamma_eff, beta_eff
-
-
-def capture_bn_params(model: ResNet) -> dict[str, tuple[np.ndarray, np.ndarray]]:
-  """Snapshot (gamma_eff, beta_eff) for every BN in `model`.
-
-  Keys mirror weight-module names from `_weight_modules` so each BN is associated
-  with the conv it normalizes. Should be called BEFORE `model.fuse()` for clarity
-  (BN modules survive fusion in this codebase, but capturing pre-fusion avoids
-  any future change in fuse semantics).
-  """
-  out: dict[str, tuple[np.ndarray, np.ndarray]] = {}
-  out["stem"] = _bn_effective_params(model.bn1)
-  for li, layer in enumerate((model.layer1, model.layer2, model.layer3, model.layer4), 1):
-    for bi, block in enumerate(layer):
-      prefix = f"layer{li}.{bi}"
-      out[f"{prefix}.conv1"] = _bn_effective_params(block.bn1)
-      out[f"{prefix}.conv2"] = _bn_effective_params(block.bn2)
-      if isinstance(block, Bottleneck):
-        out[f"{prefix}.conv3"] = _bn_effective_params(block.bn3)
-      if block.downsample:
-        out[f"{prefix}.downsample"] = _bn_effective_params(block.downsample[1])
-  return out
 
 
 # -----------------------------------------------------------------------------
@@ -282,19 +239,6 @@ def apply_correction(
   stats: LayerInputStats,
   var_clip: tuple[float, float] = (0.5, 2.0),
 ) -> None:
-  """In-place: rewrite `module.weight` and `module.bias` for the requested correction mode.
-
-  Modes:
-  - "bias":     b ← b - ε_sum @ E[x]; weight unchanged.
-  - "variance": variance scaling around the *uncorrected* quantized mean E[ỹ].
-                  W ← s · W̃; b ← s·b + (1-s)·E[ỹ]
-  - "joint":    bias-corrected mean E[y] then variance scaling around E[y].
-                  W ← s · W̃; b ← s·(b - Δb) + (1-s)·E[y]
-                where Δb = ε_sum @ E[x] and E[y] = W_fp_sum @ E[x] + b_orig.
-
-  Callers that want "no correction" should not invoke this function — the
-  uncorrected variant is just the post-quantization model.
-  """
   W_q = module.weight.numpy().astype(np.float64)
   E_x = stats.E_x
   Var_x = stats.Var_x

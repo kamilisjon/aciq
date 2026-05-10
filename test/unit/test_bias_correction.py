@@ -8,7 +8,6 @@ from aciq.bias_correction import (
   CORRECTION_MODES,
   apply_correction,
   bias_correction_delta,
-  capture_bn_params,
   clipped_normal_mean,
   clipped_normal_var,
   compute_input_stats,
@@ -18,6 +17,7 @@ from aciq.bias_correction import (
   LayerInputStats,
   _post_residual_stats,
 )
+from aciq.resnet import capture_bn_params
 from aciq.resnet import ResNet
 from aciq.quantization import quantize
 
