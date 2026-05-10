@@ -22,7 +22,7 @@ def solve_symmetric_mae_alpha(cdf: Callable[[float], float], b: int, alpha_max: 
 
 
 def quantize(data: np.ndarray, alpha: float, bits: int) -> np.ndarray:
-  """Symmetric uniform quantization with range [-alpha, alpha]. Returns dequantized values."""
+  # Symmetric uniform quantization with range [-alpha, alpha]. Returns dequantized values.
   qmax = 2 ** (bits - 1) - 1
   scale = alpha / qmax
   quantized = np.clip(np.round(data / scale), -qmax, qmax)

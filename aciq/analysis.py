@@ -18,22 +18,18 @@ class ShiftResult:
 
 
 def compute_shift(fp32_outputs: dict[str, LayerStats], quant_outputs: dict[str, LayerStats]) -> ShiftResult:
-  """Mean of absolute per-channel mean and variance shifts."""
   mean_shift = {name: float(np.mean(np.abs(fp32_outputs[name].mean - quant_outputs[name].mean))) for name in fp32_outputs}
   var_shift = {name: float(np.mean(np.abs(fp32_outputs[name].var - quant_outputs[name].var))) for name in fp32_outputs}
   return ShiftResult(mean_shift=mean_shift, var_shift=var_shift)
 
 
 class StatsAccumulator:
-  """Online accumulation of per-channel mean and variance from (B, C, H, W) activations."""
-
   def __init__(self) -> None:
     self._sums: dict[str, np.ndarray] = {}
     self._sq_sums: dict[str, np.ndarray] = {}
     self._counts: dict[str, int] = {}
 
   def update(self, name: str, activation: np.ndarray) -> None:
-    """Accumulate statistics from a (B, C, H, W) activation tensor."""
     ch_sum = activation.sum(axis=(0, 2, 3)).astype(np.float64)
     ch_sq_sum = (activation.astype(np.float64) ** 2).sum(axis=(0, 2, 3))
     b, _, h, w = activation.shape

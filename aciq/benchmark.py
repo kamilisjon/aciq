@@ -11,7 +11,6 @@ from aciq.preprocess import load_and_preprocess
 
 
 def parse_imagenet_val_labels(dataset_path: Path) -> dict[str, str]:
-  """Return {image_id: synset} from LOC_val_solution.csv."""
   labels_csv = dataset_path / "LOC_val_solution.csv"
   imageid_to_synset: dict[str, str] = {}
   with labels_csv.open("r", newline="") as f:
@@ -24,7 +23,6 @@ def parse_imagenet_val_labels(dataset_path: Path) -> dict[str, str]:
 
 
 def sample_imagenet_val(dataset_path: Path, n_per_class: int | None = None) -> list[Path]:
-  """Sorted val paths, optionally limited to the first N files (by path) of each synset class."""
   val_dir = dataset_path / "ILSVRC" / "Data" / "CLS-LOC" / "val"
   images = sorted(p for p in val_dir.iterdir() if p.suffix.upper() == ".JPEG")
   if n_per_class is None:

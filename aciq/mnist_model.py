@@ -16,7 +16,6 @@ _MNIST_STD = 0.3081
 
 
 def _load_normalized() -> tuple[Tensor, Tensor, Tensor, Tensor]:
-  """Load MNIST, cast to float32, scale to [0,1], then apply the standard mean/std."""
   x_train, y_train, x_test, y_test = mnist()
   x_train = (x_train.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD
   x_test = (x_test.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD

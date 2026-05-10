@@ -38,12 +38,6 @@ def _preprocess_one(img: Image.Image) -> np.ndarray:
 
 
 def load_and_preprocess(image_paths: list[Path], pad_to_batch_size: int | None = None) -> Tensor:
-  """Returns a `(N, 3, 224, 224)` tensor where `N = len(image_paths)` by default.
-
-  When `pad_to_batch_size` is set, the tail is padded with zero (normalized-black) frames
-  so the output is `(pad_to_batch_size, 3, 224, 224)`. Useful for keeping a JIT'd forward's
-  input shape stable across the final partial batch.
-  """
   processed = [_preprocess_one(Image.open(p).convert("RGB")) for p in image_paths]
   if pad_to_batch_size is not None:
     n = len(processed)
