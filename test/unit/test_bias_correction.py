@@ -10,14 +10,12 @@ from aciq.bias_correction import (
   bias_correction_delta,
   clipped_normal_mean,
   clipped_normal_var,
-  compute_input_stats,
   output_mean,
   output_variance,
   variance_correction_scale,
   LayerInputStats,
-  _post_residual_stats,
 )
-from aciq.resnet import capture_bn_params
+from aciq.resnet import capture_bn_params, compute_input_stats, _post_residual_stats
 from aciq.resnet import ResNet
 from aciq.quantization import quantize
 

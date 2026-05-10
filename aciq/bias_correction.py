@@ -7,9 +7,6 @@ from scipy.stats import norm
 from tinygrad import Tensor
 from tinygrad.nn import Conv2d, Linear
 
-from aciq.resnet import Bottleneck, ResNet
-
-
 # Clipped normal distribution
 
 def clipped_normal_mean(beta: np.ndarray, gamma: np.ndarray, a: float = 0.0, b: float = np.inf) -> np.ndarray:
@@ -59,7 +56,7 @@ def clipped_normal_var(beta: np.ndarray, gamma: np.ndarray, a: float = 0.0, b: f
 
 
 # -----------------------------------------------------------------------------
-# Per-layer input statistics (recursive forward propagation)
+# Per-layer input statistics
 # -----------------------------------------------------------------------------
 
 
@@ -67,85 +64,6 @@ def clipped_normal_var(beta: np.ndarray, gamma: np.ndarray, a: float = 0.0, b: f
 class LayerInputStats:
   E_x: np.ndarray  # (C_in,)
   Var_x: np.ndarray  # (C_in,)
-
-
-def _post_relu_stats_from_bn(beta: np.ndarray, gamma: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-  """ReLU(N(beta, gamma**2)) per channel."""
-  return clipped_normal_mean(beta, gamma), clipped_normal_var(beta, gamma)
-
-
-def _post_residual_stats(
-  beta_main: np.ndarray, gamma_main: np.ndarray, mu_skip: np.ndarray, var_skip: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
-  """Statistics of ReLU(N(beta_main, gamma_main**2) + skip).
-
-  Treats skip as approximately Gaussian, independent of the main branch. Combined
-  pre-ReLU per channel is N(beta_main + mu_skip, gamma_main**2 + var_skip).
-  """
-  mu = beta_main + mu_skip
-  var = gamma_main**2 + var_skip
-  sigma = np.sqrt(np.maximum(var, 0.0))
-  return clipped_normal_mean(mu, sigma), clipped_normal_var(mu, sigma)
-
-
-def compute_input_stats(model: ResNet, bn_params: dict[str, tuple[np.ndarray, np.ndarray]]) -> dict[str, LayerInputStats]:
-  """Walk the network forward, propagating per-channel (E[x], Var[x]) for each weight module's input.
-
-  - The stem layer has no preceding BN/ReLU; its entry is omitted (caller treats stem as no-op).
-  - Block first conv (`conv1`) input = previous block's post-residual activation stats.
-  - Within-block convs (`conv2`, `conv3`) inputs = ReLU(BN_prev) stats.
-  - Downsample conv input = block input (same as `conv1`).
-  - FC input = layer4 last activation averaged over H*W; mean unchanged, variance / (H*W).
-  """
-  out: dict[str, LayerInputStats] = {}
-
-  # After stem: ReLU(BN_stem). This is the input to the first block's conv1.
-  gamma_stem, beta_stem = bn_params["stem"]
-  current_mu, current_var = _post_relu_stats_from_bn(beta_stem, gamma_stem)
-  # Spatial size after stem (stride 2 conv + stride 2 maxpool from 224 input) = 56x56.
-  # layer1 keeps the same size (stride 1); layer2/3/4 each halve it via the first block's stride-2 conv.
-  spatial_hw = 56 * 56
-
-  for li, layer in enumerate((model.layer1, model.layer2, model.layer3, model.layer4), 1):
-    if li >= 2:
-      spatial_hw = max(1, spatial_hw // 4)
-    for bi, block in enumerate(layer):
-      prefix = f"layer{li}.{bi}"
-
-      # conv1 input = previous block's post-residual activation
-      out[f"{prefix}.conv1"] = LayerInputStats(E_x=current_mu.copy(), Var_x=current_var.copy())
-      if block.downsample:
-        out[f"{prefix}.downsample"] = LayerInputStats(E_x=current_mu.copy(), Var_x=current_var.copy())
-
-      # conv2 input = ReLU(BN of conv1)
-      gamma_bn1, beta_bn1 = bn_params[f"{prefix}.conv1"]
-      mu_h1, var_h1 = _post_relu_stats_from_bn(beta_bn1, gamma_bn1)
-      out[f"{prefix}.conv2"] = LayerInputStats(E_x=mu_h1, Var_x=var_h1)
-
-      if isinstance(block, Bottleneck):
-        # conv3 input = ReLU(BN of conv2)
-        gamma_bn2, beta_bn2 = bn_params[f"{prefix}.conv2"]
-        mu_h2, var_h2 = _post_relu_stats_from_bn(beta_bn2, gamma_bn2)
-        out[f"{prefix}.conv3"] = LayerInputStats(E_x=mu_h2, Var_x=var_h2)
-        last_bn_key = f"{prefix}.conv3"
-      else:
-        last_bn_key = f"{prefix}.conv2"
-
-      # Update post-residual stats after this block
-      gamma_last, beta_last = bn_params[last_bn_key]
-      if block.downsample:
-        gamma_ds, beta_ds = bn_params[f"{prefix}.downsample"]
-        mu_skip = beta_ds
-        var_skip = gamma_ds**2
-      else:
-        mu_skip = current_mu
-        var_skip = current_var
-      current_mu, current_var = _post_residual_stats(beta_last, gamma_last, mu_skip, var_skip)
-
-  # FC input = global average pool of layer4 last activation. Mean is preserved;
-  # variance shrinks by 1/(H*W) under spatial i.i.d. assumption.
-  out["fc"] = LayerInputStats(E_x=current_mu, Var_x=current_var / float(spatial_hw))
-  return out
 
 
 # -----------------------------------------------------------------------------
