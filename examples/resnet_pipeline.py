@@ -10,7 +10,7 @@ from tinygrad.helpers import tqdm
 from tinygrad.nn import BatchNorm, Conv2d, Linear
 
 from aciq.analysis import LayerStats, ShiftResult, StatsAccumulator, compute_shift, save_shifts_csv
-from aciq.benchmark import benchmark_accuracy, sample_imagenet_val
+from aciq.imagenet.benchmark import benchmark_accuracy, sample_imagenet_val
 from aciq.bias_correction import (
   CORRECTION_MODES,
   LayerInputStats,

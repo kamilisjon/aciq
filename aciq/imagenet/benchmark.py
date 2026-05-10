@@ -5,7 +5,7 @@ import numpy as np
 from tinygrad import GlobalCounters, Tensor, TinyJit
 from tinygrad.helpers import tqdm
 
-from aciq.imagenet import ImagenetClassIndex
+from aciq.imagenet.class_containers import ImagenetClassIndex
 from aciq.resnet import ResNet
 from aciq.preprocess import load_and_preprocess
 
