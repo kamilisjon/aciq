@@ -5,7 +5,7 @@ import tinygrad.nn as nn
 from tinygrad import Tensor, TinyJit
 from tinygrad.helpers import tqdm
 from tinygrad.nn.datasets import mnist
-from tinygrad.nn.optim import Adam
+from tinygrad.nn.optim import AdamW
 from tinygrad.nn.state import get_parameters
 
 from aciq.fusion import fuse_inplace
@@ -76,7 +76,7 @@ def train_model(seed: int, epochs: int = 10, lr: float = 1e-3, batch_size: int =
 
   x_train, y_train, x_test, y_test = _load_normalized()
   model = MNISTModel()
-  opt = Adam(get_parameters(model), lr=lr)
+  opt = AdamW(get_parameters(model), lr=lr)
 
   @TinyJit
   @Tensor.train()
