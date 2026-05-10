@@ -132,8 +132,6 @@ def save_results_csv(results: list[ModelResult], save_path: Path) -> None:
   header = ["seed", "fp32_acc", "minmax_acc", "aciq_acc"]
   for layer in BLOCK_NAMES:
     header += [f"minmax_{layer}_mean_shift", f"aciq_{layer}_mean_shift"]
-  for layer in BLOCK_NAMES:
-    header += [f"minmax_{layer}_var_shift", f"aciq_{layer}_var_shift"]
 
   with open(save_path, "w", newline="") as f:
     writer = csv.writer(f)
@@ -142,8 +140,6 @@ def save_results_csv(results: list[ModelResult], save_path: Path) -> None:
       row: list[float | int] = [r.seed, r.fp32_accuracy, r.minmax_accuracy, r.aciq_accuracy]
       for layer in BLOCK_NAMES:
         row += [r.minmax_shifts.mean_shift[layer], r.aciq_shifts.mean_shift[layer]]
-      for layer in BLOCK_NAMES:
-        row += [r.minmax_shifts.var_shift[layer], r.aciq_shifts.var_shift[layer]]
       writer.writerow(row)
 
 
@@ -211,7 +207,6 @@ def _plot_scatter_grid(rows: list[dict[str, float]], shift_key: str, shift_label
 
 def plot_scatter(rows: list[dict[str, float]], save_dir: Path) -> None:
   _plot_scatter_grid(rows, "mean_shift", "Mean shift", save_dir, "scatter_mean_shift_vs_accuracy.png")
-  _plot_scatter_grid(rows, "var_shift", "Variance shift", save_dir, "scatter_var_shift_vs_accuracy.png")
 
 
 def _plot_accumulation(rows: list[dict[str, float]], shift_key: str, ylabel: str, title: str, save_dir: Path, filename: str) -> None:
@@ -256,14 +251,6 @@ def plot_shift_accumulation(rows: list[dict[str, float]], save_dir: Path) -> Non
     title="Mean shift accumulation across layers",
     save_dir=save_dir,
     filename="mean_shift_accumulation.png",
-  )
-  _plot_accumulation(
-    rows,
-    "var_shift",
-    ylabel="Output variance shift |Var[fp32] - Var[quant]|",
-    title="Variance shift accumulation across layers",
-    save_dir=save_dir,
-    filename="var_shift_accumulation.png",
   )
 
 

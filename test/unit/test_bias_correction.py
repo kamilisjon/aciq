@@ -5,14 +5,10 @@ from tinygrad import Tensor
 from tinygrad.nn import Conv2d, Linear
 
 from aciq.bias_correction import (
-  CorrectionMode,
   apply_correction,
   bias_correction_delta,
   clipped_normal_mean,
   clipped_normal_var,
-  output_mean,
-  output_variance,
-  variance_correction_scale,
   LayerInputStats,
 )
 from aciq.resnet import capture_bn_params, compute_input_stats, _post_residual_stats
@@ -90,28 +86,6 @@ class TestBiasCorrectionMath(unittest.TestCase):
     np.testing.assert_allclose(delta, expected, atol=1e-6)
 
 
-class TestVarianceCorrection(unittest.TestCase):
-  def test_variance_scale_brings_var_close(self):
-    rng = np.random.default_rng(4)
-    C_in, C_out = 64, 16
-    W_fp = rng.normal(scale=0.1, size=(C_out, C_in)).astype(np.float32)
-    W_q = _quantize_weight(W_fp, bits=3)
-    Var_x = rng.uniform(0.1, 1.5, size=(C_in,))
-    s = variance_correction_scale(W_fp, W_q, Var_x, clip=(0.1, 5.0))
-    var_fp = output_variance(W_fp, Var_x)
-    var_q_scaled = (s**2) * output_variance(W_q, Var_x)
-    np.testing.assert_allclose(var_q_scaled, var_fp, rtol=1e-6)
-
-  def test_variance_scale_clipped(self):
-    rng = np.random.default_rng(5)
-    C_in, C_out = 4, 2
-    W_fp = rng.normal(size=(C_out, C_in)).astype(np.float32)
-    W_q = (W_fp * 1e-12).astype(np.float32)  # near-zero quantized weight
-    Var_x = np.ones(C_in)
-    s = variance_correction_scale(W_fp, W_q, Var_x, clip=(0.5, 2.0))
-    assert np.all(s == 2.0)
-
-
 class TestApplyCorrection(unittest.TestCase):
   def _make_linear(self, W: np.ndarray, b: np.ndarray) -> Linear:
     layer = Linear(W.shape[1], W.shape[0], bias=True)
@@ -133,29 +107,9 @@ class TestApplyCorrection(unittest.TestCase):
     W_q = _quantize_weight(W_fp, bits=3)
     layer = self._make_linear(W_q, b)
     stats = LayerInputStats(E_x=rng.normal(size=(16,)), Var_x=np.ones(16))
-    apply_correction(layer, W_fp, b, CorrectionMode.BIAS, stats)
+    apply_correction(layer, W_fp, b, stats)
     np.testing.assert_allclose(layer.weight.numpy(), W_q)
     assert not np.allclose(layer.bias.numpy(), b)
-
-  def test_joint_preserves_mean_and_variance(self):
-    rng = np.random.default_rng(7)
-    C_in, C_out = 32, 8
-    W_fp = rng.normal(scale=0.2, size=(C_out, C_in)).astype(np.float32)
-    b = rng.normal(scale=0.1, size=(C_out,)).astype(np.float32)
-    W_q = _quantize_weight(W_fp, bits=3)
-    x = rng.normal(loc=0.5, scale=0.7, size=(100_000, C_in)).astype(np.float32)
-    E_x = x.mean(axis=0)
-    Var_x = x.var(axis=0)
-
-    layer = self._make_linear(W_q, b)
-    apply_correction(layer, W_fp, b, CorrectionMode.JOINT, LayerInputStats(E_x=E_x, Var_x=Var_x), var_clip=(0.01, 100.0))
-    W_out = layer.weight.numpy()
-    b_out = layer.bias.numpy()
-    y_fp = x @ W_fp.T + b
-    y_corr = x @ W_out.T + b_out
-    np.testing.assert_allclose(y_corr.mean(axis=0), y_fp.mean(axis=0), atol=5e-3)
-    np.testing.assert_allclose(y_corr.var(axis=0), y_fp.var(axis=0), rtol=2e-2, atol=5e-3)
-
 
 class TestResidualPropagation(unittest.TestCase):
   def test_post_residual_matches_monte_carlo(self):

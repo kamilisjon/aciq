@@ -12,7 +12,6 @@ from tinygrad.nn import BatchNorm, Conv2d, Linear
 from aciq.analysis import LayerStats, ShiftResult, StatsAccumulator, compute_shift, save_shifts_csv
 from aciq.imagenet.benchmark import benchmark_accuracy, sample_imagenet_val
 from aciq.bias_correction import (
-  CorrectionMode,
   LayerInputStats,
   apply_correction,
 )
@@ -233,16 +232,6 @@ def plot_shift(
     filename="mean_shift.png",
     colors=colors,
   )
-  _plot_shift(
-    shift_data,
-    layer_names,
-    shift_key="var_shift",
-    ylabel="Output variance shift |Var[fp32] - Var[quant]|",
-    title=f"{prefix}Per-layer variance shift",
-    save_dir=save_dir,
-    filename="var_shift.png",
-    colors=colors,
-  )
 
 @dataclass
 class PipelineConfig:
@@ -414,18 +403,17 @@ def stage_corrections(
     variants[(method, "none")] = base
     if method not in PER_CHANNEL_METHODS:
       continue
-    for mode in CorrectionMode:
-      m = copy.deepcopy(base)
-      mods = dict(_weight_modules(m))
-      for name, module in mods.items():
-        if name == "stem":
-          continue  # no preceding BN; correction is undefined analytically
-        stats = input_stats[name]
-        W_fp = fp_modules[name].weight.numpy()
-        b_orig = module.bias.numpy() if module.bias is not None else np.zeros(module.weight.shape[0], dtype=np.float32)
-        apply_correction(module, W_fp, b_orig, mode, stats)
-      variants[(method, mode)] = m
-      print(f"  applied '{mode}' correction to {method}")
+    m = copy.deepcopy(base)
+    mods = dict(_weight_modules(m))
+    for name, module in mods.items():
+      if name == "stem":
+        continue  # no preceding BN; correction is undefined analytically
+      stats = input_stats[name]
+      W_fp = fp_modules[name].weight.numpy()
+      b_orig = module.bias.numpy() if module.bias is not None else np.zeros(module.weight.shape[0], dtype=np.float32)
+      apply_correction(module, W_fp, b_orig, stats)
+    variants[(method, "bias")] = m
+    print(f"  applied 'bias' correction to {method}")
   return variants
 
 
