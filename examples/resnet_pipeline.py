@@ -12,7 +12,7 @@ from tinygrad.nn import BatchNorm, Conv2d, Linear
 from aciq.analysis import LayerStats, ShiftResult, StatsAccumulator, compute_shift, save_shifts_csv
 from aciq.imagenet.benchmark import benchmark_accuracy, sample_imagenet_val
 from aciq.bias_correction import (
-  CORRECTION_MODES,
+  CorrectionMode,
   LayerInputStats,
   apply_correction,
 )
@@ -200,7 +200,7 @@ def stage_corrections(
     variants[(method, "none")] = base
     if method not in PER_CHANNEL_METHODS:
       continue
-    for mode in CORRECTION_MODES:
+    for mode in CorrectionMode:
       m = copy.deepcopy(base)
       mods = dict(_weight_modules(m))
       for name, module in mods.items():

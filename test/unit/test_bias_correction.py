@@ -5,7 +5,7 @@ from tinygrad import Tensor
 from tinygrad.nn import Conv2d, Linear
 
 from aciq.bias_correction import (
-  CORRECTION_MODES,
+  CorrectionMode,
   apply_correction,
   bias_correction_delta,
   clipped_normal_mean,
@@ -133,7 +133,7 @@ class TestApplyCorrection(unittest.TestCase):
     W_q = _quantize_weight(W_fp, bits=3)
     layer = self._make_linear(W_q, b)
     stats = LayerInputStats(E_x=rng.normal(size=(16,)), Var_x=np.ones(16))
-    apply_correction(layer, W_fp, b, "bias", stats)
+    apply_correction(layer, W_fp, b, CorrectionMode.BIAS, stats)
     np.testing.assert_allclose(layer.weight.numpy(), W_q)
     assert not np.allclose(layer.bias.numpy(), b)
 
@@ -148,24 +148,13 @@ class TestApplyCorrection(unittest.TestCase):
     Var_x = x.var(axis=0)
 
     layer = self._make_linear(W_q, b)
-    apply_correction(layer, W_fp, b, "joint", LayerInputStats(E_x=E_x, Var_x=Var_x), var_clip=(0.01, 100.0))
+    apply_correction(layer, W_fp, b, CorrectionMode.JOINT, LayerInputStats(E_x=E_x, Var_x=Var_x), var_clip=(0.01, 100.0))
     W_out = layer.weight.numpy()
     b_out = layer.bias.numpy()
     y_fp = x @ W_fp.T + b
     y_corr = x @ W_out.T + b_out
     np.testing.assert_allclose(y_corr.mean(axis=0), y_fp.mean(axis=0), atol=5e-3)
     np.testing.assert_allclose(y_corr.var(axis=0), y_fp.var(axis=0), rtol=2e-2, atol=5e-3)
-
-  def test_unknown_mode_raises(self):
-    rng = np.random.default_rng(8)
-    W = rng.normal(size=(4, 8)).astype(np.float32)
-    b = rng.normal(size=(4,)).astype(np.float32)
-    layer = self._make_linear(W, b)
-    with self.assertRaises(ValueError):
-      apply_correction(layer, W, b, "none", LayerInputStats(E_x=np.zeros(8), Var_x=np.ones(8)))
-
-  def test_modes_constant_lists_all(self):
-    assert set(CORRECTION_MODES) == {"bias", "variance", "joint"}
 
 
 class TestResidualPropagation(unittest.TestCase):

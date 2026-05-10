@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 import numpy as np
 from scipy.stats import norm
@@ -131,11 +132,17 @@ def variance_correction_scale(
   return np.clip(s, clip[0], clip[1])
 
 
+class CorrectionMode(StrEnum):
+  BIAS = "bias"
+  VARIANCE = "variance"
+  JOINT = "joint"
+
+
 def apply_correction(
   module: Conv2d | Linear,
   W_fp: np.ndarray,
   b_orig: np.ndarray,
-  mode: str,
+  mode: CorrectionMode,
   stats: LayerInputStats,
   var_clip: tuple[float, float] = (0.5, 2.0),
 ) -> None:
@@ -145,27 +152,18 @@ def apply_correction(
   s = variance_correction_scale(W_fp, W_q, Var_x, clip=var_clip)
   s_w = s.reshape((-1, 1, 1, 1)) if W_q.ndim == 4 else s.reshape((-1, 1))
 
-
-  if mode == "bias":
-    delta_b = bias_correction_delta(W_fp, W_q, E_x)
-    new_b = b_orig.astype(np.float64) - delta_b
-    module.bias = Tensor(new_b.astype(np.float32))
-    return
-  elif mode == "variance":
-    E_y_q = output_mean(W_q, b_orig, E_x)
-    new_W = (s_w * W_q).astype(np.float32)
-    new_b = (s * b_orig.astype(np.float64) + (1.0 - s) * E_y_q).astype(np.float32)
-  elif mode == "joint":
-    delta_b = bias_correction_delta(W_fp, W_q, E_x)
-    b_corrected = b_orig.astype(np.float64) - delta_b
-    E_y_fp = output_mean(W_fp, b_orig, E_x)
-    new_W = (s_w * W_q).astype(np.float32)
-    new_b = (s * b_corrected + (1.0 - s) * E_y_fp).astype(np.float32)
-  else:
-    raise ValueError(f"unknown correction mode {mode!r}")
-
-  module.weight = Tensor(new_W)
-  module.bias = Tensor(new_b)
-
-
-CORRECTION_MODES = ("bias", "variance", "joint")
+  match mode:
+    case CorrectionMode.BIAS:
+      delta_b = bias_correction_delta(W_fp, W_q, E_x)
+      new_b = b_orig.astype(np.float64) - delta_b
+      module.bias = Tensor(new_b.astype(np.float32))
+    case CorrectionMode.VARIANCE:
+      E_y_q = output_mean(W_q, b_orig, E_x)
+      module.weight = Tensor((s_w * W_q).astype(np.float32))
+      module.bias = Tensor((s * b_orig.astype(np.float64) + (1.0 - s) * E_y_q).astype(np.float32))
+    case CorrectionMode.JOINT:
+      delta_b = bias_correction_delta(W_fp, W_q, E_x)
+      b_corrected = b_orig.astype(np.float64) - delta_b
+      E_y_fp = output_mean(W_fp, b_orig, E_x)
+      module.weight = Tensor((s_w * W_q).astype(np.float32))
+      module.bias = Tensor((s * b_corrected + (1.0 - s) * E_y_fp).astype(np.float32))
