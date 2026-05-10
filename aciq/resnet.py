@@ -7,7 +7,7 @@ from tinygrad.nn.state import torch_load
 
 
 from aciq.bias_correction import LayerInputStats, clipped_normal_mean, clipped_normal_var
-from aciq.fusion import fuse_conv_bn_inplace
+from aciq.bn_fusion import fuse_conv_bn_inplace
 
 
 class BasicBlock:
