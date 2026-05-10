@@ -93,6 +93,8 @@ class ModelResult:
   aciq_accuracy: float
   minmax_shifts: ShiftResult
   aciq_shifts: ShiftResult
+  train_losses: list[float]
+  test_losses: list[float]
 
 
 def run_training(n_models: int, epochs: int) -> list[ModelResult]:
@@ -101,7 +103,7 @@ def run_training(n_models: int, epochs: int) -> list[ModelResult]:
   results: list[ModelResult] = []
   for seed in range(n_models):
     print(f"[{seed + 1}/{n_models}] Training model (seed={seed})...")
-    model, fp32_acc = train_model(seed=seed, epochs=epochs)
+    model, fp32_acc, train_losses, test_losses = train_model(seed=seed, epochs=epochs)
 
     fp32_outputs = collect_layer_outputs(model, x_test)
 
@@ -118,7 +120,7 @@ def run_training(n_models: int, epochs: int) -> list[ModelResult]:
     aciq_shift = compute_shift(fp32_outputs, aciq_outputs)
 
     print(f"  FP32={fp32_acc:.4f}  MinMax={mm_acc:.4f}  ACIQ={aciq_acc:.4f}")
-    results.append(ModelResult(seed, fp32_acc, mm_acc, aciq_acc, mm_shift, aciq_shift))
+    results.append(ModelResult(seed, fp32_acc, mm_acc, aciq_acc, mm_shift, aciq_shift, train_losses, test_losses))
   return results
 
 
@@ -148,6 +150,29 @@ def save_results_csv(results: list[ModelResult], save_path: Path) -> None:
 def load_results_csv(path: Path) -> list[dict[str, float]]:
   with open(path) as f:
     return [{k: float(v) for k, v in row.items()} for row in csv.DictReader(f)]
+
+
+def save_losses_csv(results: list[ModelResult], save_path: Path) -> None:
+  save_path.parent.mkdir(parents=True, exist_ok=True)
+  with open(save_path, "w", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=["seed", "epoch", "train_loss", "test_loss"])
+    writer.writeheader()
+    for r in results:
+      for epoch, (tr, te) in enumerate(zip(r.train_losses, r.test_losses), start=1):
+        writer.writerow({"seed": r.seed, "epoch": epoch, "train_loss": tr, "test_loss": te})
+
+
+def load_losses_csv(path: Path) -> list[dict[str, float | int]]:
+  with open(path) as f:
+    return [
+      {
+        "seed": int(r["seed"]),
+        "epoch": int(r["epoch"]),
+        "train_loss": float(r["train_loss"]),
+        "test_loss": float(r["test_loss"]),
+      }
+      for r in csv.DictReader(f)
+    ]
 
 
 # --- Analysis ---
@@ -242,6 +267,32 @@ def plot_shift_accumulation(rows: list[dict[str, float]], save_dir: Path) -> Non
   )
 
 
+def plot_loss_curves(loss_rows: list[dict[str, float | int]], save_dir: Path, max_lines: int = 10) -> None:
+  save_dir.mkdir(parents=True, exist_ok=True)
+  by_seed: dict[int, list[dict[str, float | int]]] = {}
+  for r in loss_rows:
+    by_seed.setdefault(int(r["seed"]), []).append(r)
+  selected_seeds = sorted(by_seed)[:max_lines]
+
+  fig, ax = plt.subplots(figsize=(8, 5))
+  for i, seed in enumerate(selected_seeds):
+    seed_rows = sorted(by_seed[seed], key=lambda r: r["epoch"])
+    epochs = [r["epoch"] for r in seed_rows]
+    train_losses = [r["train_loss"] for r in seed_rows]
+    test_losses = [r["test_loss"] for r in seed_rows]
+    ax.plot(epochs, train_losses, color="steelblue", alpha=0.6, label="Training loss" if i == 0 else None)
+    ax.plot(epochs, test_losses, color="indianred", alpha=0.6, label="Testing set loss" if i == 0 else None)
+
+  ax.set_xlabel("Epoch")
+  ax.set_ylabel("Cross-entropy loss")
+  ax.set_title(f"MNIST training and testing set loss across {len(selected_seeds)} runs")
+  ax.legend()
+  ax.grid(True, alpha=0.3)
+  fig.tight_layout()
+  fig.savefig(save_dir / "loss_curves.png", dpi=700)
+  plt.close(fig)
+
+
 # --- Main ---
 
 
@@ -256,13 +307,22 @@ if __name__ == "__main__":
   if args.from_csv:
     rows = load_results_csv(args.from_csv)
     print(f"Loaded {len(rows)} models from {args.from_csv}\n")
+    losses_path = args.from_csv.parent / "losses.csv"
+    loss_rows = load_losses_csv(losses_path) if losses_path.exists() else []
   else:
     print(f"Running training with {args.n_models} models, {args.epochs} epochs each...")
     results = run_training(args.n_models, args.epochs)
-    csv_path = save_dir / "results.csv"
-    save_results_csv(results, csv_path)
-    rows = load_results_csv(csv_path)
+    save_results_csv(results, save_dir / "results.csv")
+    save_losses_csv(results, save_dir / "losses.csv")
+    rows = load_results_csv(save_dir / "results.csv")
+    loss_rows = [
+      {"seed": r.seed, "epoch": e + 1, "train_loss": r.train_losses[e], "test_loss": r.test_losses[e]}
+      for r in results
+      for e in range(len(r.train_losses))
+    ]
 
   plot_scatter(rows, save_dir)
   plot_shift_accumulation(rows, save_dir)
+  if loss_rows:
+    plot_loss_curves(loss_rows, save_dir)
   print(f"Plots saved to {save_dir}/")

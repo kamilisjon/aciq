@@ -70,7 +70,7 @@ class MNISTModel:
     }
 
 
-def train_model(seed: int, epochs: int = 10, lr: float = 1e-3, batch_size: int = 512) -> tuple[MNISTModel, float]:
+def train_model(seed: int, epochs: int = 10, lr: float = 1e-3, batch_size: int = 512) -> tuple[MNISTModel, float, list[float], list[float]]:
   Tensor.manual_seed(seed)
   np.random.seed(seed)
 
@@ -86,12 +86,21 @@ def train_model(seed: int, epochs: int = 10, lr: float = 1e-3, batch_size: int =
     loss = model(X[samples]).sparse_categorical_crossentropy(Y[samples]).backward()
     return loss.realize(*opt.schedule_step())
 
-  steps_per_epoch = int(x_train.shape[0]) // batch_size
-  total_steps = epochs * steps_per_epoch
-  for _ in tqdm(range(total_steps), desc="train"):
-    train_step(x_train, y_train)
+  @TinyJit
+  def test_loss_step(X: Tensor, Y: Tensor) -> Tensor:
+    return model(X).sparse_categorical_crossentropy(Y).realize()
 
-  return model, evaluate_model(model, x_test, y_test)
+  steps_per_epoch = int(x_train.shape[0]) // batch_size
+  train_losses: list[float] = []
+  test_losses: list[float] = []
+  for _ in tqdm(range(epochs), desc="train"):
+    epoch_loss_sum = 0.0
+    for _ in range(steps_per_epoch):
+      epoch_loss_sum += float(train_step(x_train, y_train).item())
+    train_losses.append(epoch_loss_sum / steps_per_epoch)
+    test_losses.append(float(test_loss_step(x_test, y_test).item()))
+
+  return model, evaluate_model(model, x_test, y_test), train_losses, test_losses
 
 
 def evaluate_model(model: MNISTModel, x_test: Tensor, y_test: Tensor) -> float:
