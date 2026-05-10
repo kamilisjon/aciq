@@ -8,7 +8,7 @@ from tinygrad.nn.datasets import mnist
 from tinygrad.nn.optim import AdamW
 from tinygrad.nn.state import get_parameters
 
-from aciq.fusion import fuse_inplace
+from aciq.fusion import fuse_conv_bn_inplace
 
 
 _MNIST_MEAN = 0.1307
@@ -52,11 +52,11 @@ class MNISTModel:
     return self.classifier(self.block5.mean((2, 3)))
 
   def fuse(self) -> None:
-    fuse_inplace(self.conv1, self.bn1)
-    fuse_inplace(self.conv2, self.bn2)
-    fuse_inplace(self.conv3, self.bn3)
-    fuse_inplace(self.conv4, self.bn4)
-    fuse_inplace(self.conv5, self.bn5)
+    fuse_conv_bn_inplace(self.conv1, self.bn1)
+    fuse_conv_bn_inplace(self.conv2, self.bn2)
+    fuse_conv_bn_inplace(self.conv3, self.bn3)
+    fuse_conv_bn_inplace(self.conv4, self.bn4)
+    fuse_conv_bn_inplace(self.conv5, self.bn5)
     self.fused = True
 
   @property

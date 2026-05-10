@@ -7,7 +7,7 @@ from tinygrad.nn.state import torch_load
 
 
 from aciq.bias_correction import LayerInputStats, clipped_normal_mean, clipped_normal_var
-from aciq.fusion import fuse_inplace
+from aciq.fusion import fuse_conv_bn_inplace
 
 
 class BasicBlock:
@@ -38,10 +38,10 @@ class BasicBlock:
     return self.activation_2
 
   def fuse(self):
-    fuse_inplace(self.conv1, self.bn1)
-    fuse_inplace(self.conv2, self.bn2)
+    fuse_conv_bn_inplace(self.conv1, self.bn1)
+    fuse_conv_bn_inplace(self.conv2, self.bn2)
     if self.downsample:
-      fuse_inplace(self.downsample[0], self.downsample[1])
+      fuse_conv_bn_inplace(self.downsample[0], self.downsample[1])
       self.downsample = [self.downsample[0]]
     self.fused = True
 
@@ -81,11 +81,11 @@ class Bottleneck:
     return self.activation_3
 
   def fuse(self):
-    fuse_inplace(self.conv1, self.bn1)
-    fuse_inplace(self.conv2, self.bn2)
-    fuse_inplace(self.conv3, self.bn3)
+    fuse_conv_bn_inplace(self.conv1, self.bn1)
+    fuse_conv_bn_inplace(self.conv2, self.bn2)
+    fuse_conv_bn_inplace(self.conv3, self.bn3)
     if self.downsample:
-      fuse_inplace(self.downsample[0], self.downsample[1])
+      fuse_conv_bn_inplace(self.downsample[0], self.downsample[1])
       self.downsample = [self.downsample[0]]
     self.fused = True
 
@@ -135,7 +135,7 @@ class ResNet:
     return self.forward(x)
 
   def fuse(self):
-    fuse_inplace(self.conv1, self.bn1)
+    fuse_conv_bn_inplace(self.conv1, self.bn1)
     self.fused = True
     for layer in (self.layer1, self.layer2, self.layer3, self.layer4):
       for block in layer:

@@ -12,5 +12,5 @@ def fuse_conv_bn(conv: Conv2d, bn: BatchNorm) -> tuple[Tensor, Tensor]:
   return fused_w, fused_b
 
 
-def fuse_inplace(conv: Conv2d, bn: BatchNorm) -> None:
+def fuse_conv_bn_inplace(conv: Conv2d, bn: BatchNorm) -> None:
   conv.weight, conv.bias = fuse_conv_bn(conv, bn)
