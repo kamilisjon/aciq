@@ -20,7 +20,7 @@ from aciq.bias_correction import (
 )
 from aciq.fusion import fuse_conv_bn
 from aciq.helpers import get_output_dir
-from aciq.models.resnet import Bottleneck, ResNet
+from aciq.resnet import Bottleneck, ResNet
 from aciq.plotting import plot_channel_ranges, plot_shift
 from aciq.preprocess import load_and_preprocess
 from aciq.quantization import quantize

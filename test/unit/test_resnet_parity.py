@@ -5,7 +5,7 @@ import torch
 import torchvision
 from tinygrad import Tensor
 
-from aciq.models.resnet import ResNet
+from aciq.resnet import ResNet
 
 
 class TestResNetParity(unittest.TestCase):

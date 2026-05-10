@@ -6,7 +6,7 @@ from tinygrad import GlobalCounters, Tensor, TinyJit
 from tinygrad.helpers import tqdm
 
 from aciq.imagenet import ImagenetClassIndex
-from aciq.models.resnet import ResNet
+from aciq.resnet import ResNet
 from aciq.preprocess import load_and_preprocess
 
 

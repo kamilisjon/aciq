@@ -19,7 +19,7 @@ from scipy.stats import norm
 from tinygrad import Tensor
 from tinygrad.nn import BatchNorm, Conv2d, Linear
 
-from aciq.models.resnet import Bottleneck, ResNet
+from aciq.resnet import Bottleneck, ResNet
 
 
 # -----------------------------------------------------------------------------

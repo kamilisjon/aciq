@@ -18,7 +18,7 @@ from aciq.bias_correction import (
   LayerInputStats,
   _post_residual_stats,
 )
-from aciq.models.resnet import ResNet
+from aciq.resnet import ResNet
 from aciq.quantization import quantize
 
 
