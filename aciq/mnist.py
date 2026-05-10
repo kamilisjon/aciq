@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import tinygrad.nn as nn
-from tinygrad import Tensor, TinyJit
+from tinygrad import GlobalCounters, Tensor, TinyJit, function
 from tinygrad.helpers import tqdm
 from tinygrad.nn.datasets import mnist
 from tinygrad.nn.optim import AdamW
@@ -36,6 +36,8 @@ class MNISTModel:
     self.bn5 = nn.BatchNorm2d(128)
     self.classifier = nn.Linear(128, 10)
     self.fused = False
+    self.opt = None
+    self.batch_size = 0
 
   def _block(self, x: Tensor, conv: nn.Conv2d, bn: nn.BatchNorm) -> Tensor:
     out = conv(x)
@@ -43,6 +45,7 @@ class MNISTModel:
       out = bn(out)
     return out.relu()
 
+  @function
   def __call__(self, x: Tensor) -> Tensor:
     self.block1 = self._block(x, self.conv1, self.bn1)
     self.block2 = self._block(self.block1, self.conv2, self.bn2)
@@ -50,6 +53,22 @@ class MNISTModel:
     self.block4 = self._block(self.block3, self.conv4, self.bn4)
     self.block5 = self._block(self.block4, self.conv5, self.bn5)
     return self.classifier(self.block5.mean((2, 3)))
+
+  @TinyJit
+  @Tensor.train()
+  def train_step(self, X: Tensor, Y: Tensor) -> Tensor:
+    self.opt.zero_grad()
+    samples = Tensor.randint(self.batch_size, high=X.shape[0])
+    loss = self(X[samples]).sparse_categorical_crossentropy(Y[samples]).backward()
+    return loss.realize(*self.opt.schedule_step())
+
+  @TinyJit
+  def test_loss_step(self, X: Tensor, Y: Tensor) -> Tensor:
+    return self(X).sparse_categorical_crossentropy(Y).realize()
+
+  @TinyJit
+  def get_test_acc(self, X: Tensor, Y: Tensor) -> Tensor:
+    return (self(X).argmax(axis=1) == Y).mean()
 
   def fuse(self) -> None:
     fuse_conv_bn_inplace(self.conv1, self.bn1)
@@ -76,19 +95,8 @@ def train_model(seed: int, epochs: int = 10, lr: float = 1e-3, batch_size: int =
 
   x_train, y_train, x_test, y_test = _load_normalized()
   model = MNISTModel()
-  opt = AdamW(get_parameters(model), lr=lr)
-
-  @TinyJit
-  @Tensor.train()
-  def train_step(X: Tensor, Y: Tensor) -> Tensor:
-    opt.zero_grad()
-    samples = Tensor.randint(batch_size, high=X.shape[0])
-    loss = model(X[samples]).sparse_categorical_crossentropy(Y[samples]).backward()
-    return loss.realize(*opt.schedule_step())
-
-  @TinyJit
-  def test_loss_step(X: Tensor, Y: Tensor) -> Tensor:
-    return model(X).sparse_categorical_crossentropy(Y).realize()
+  model.opt = AdamW(get_parameters(model), lr=lr)
+  model.batch_size = batch_size
 
   steps_per_epoch = int(x_train.shape[0]) // batch_size
   train_losses: list[float] = []
@@ -96,17 +104,14 @@ def train_model(seed: int, epochs: int = 10, lr: float = 1e-3, batch_size: int =
   for _ in tqdm(range(epochs), desc="train"):
     epoch_loss_sum = 0.0
     for _ in range(steps_per_epoch):
-      epoch_loss_sum += float(train_step(x_train, y_train).item())
+      GlobalCounters.reset()
+      epoch_loss_sum += float(model.train_step(x_train, y_train).item())
     train_losses.append(epoch_loss_sum / steps_per_epoch)
-    test_losses.append(float(test_loss_step(x_test, y_test).item()))
+    test_losses.append(float(model.test_loss_step(x_test, y_test).item()))
 
   return model, evaluate_model(model, x_test, y_test), train_losses, test_losses
 
 
 def evaluate_model(model: MNISTModel, x_test: Tensor, y_test: Tensor) -> float:
-  @TinyJit
-  def get_test_acc(X: Tensor, Y: Tensor) -> Tensor:
-    return (model(X).argmax(axis=1) == Y).mean()
-
-  get_test_acc(x_test, y_test).item()
-  return float(get_test_acc(x_test, y_test).item())
+  model.get_test_acc(x_test, y_test).item()  # warmup
+  return float(model.get_test_acc(x_test, y_test).item())
