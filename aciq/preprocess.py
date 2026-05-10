@@ -19,11 +19,9 @@ def _preprocess_one(img: Image.Image) -> np.ndarray:
   else:
     new_h, new_w = _RESIZE_SIZE, int(_RESIZE_SIZE * w / h)
   img = img.resize((new_w, new_h), Image.Resampling.BILINEAR)
-
   left = (new_w - _CROP_SIZE) // 2
   top = (new_h - _CROP_SIZE) // 2
   img = img.crop((left, top, left + _CROP_SIZE, top + _CROP_SIZE))
-
   arr = np.asarray(img, dtype=np.float32) / 255.0  # HWC
   arr = arr.transpose(2, 0, 1)  # CHW
   return (arr - _IMAGENET_MEAN[:, None, None]) / _IMAGENET_STD[:, None, None]

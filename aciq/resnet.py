@@ -197,18 +197,12 @@ def capture_bn_params(model: ResNet) -> dict[str, tuple[np.ndarray, np.ndarray]]
 
 
 def _post_relu_stats_from_bn(beta: np.ndarray, gamma: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-  """ReLU(N(beta, gamma**2)) per channel."""
   return clipped_normal_mean(beta, gamma), clipped_normal_var(beta, gamma)
 
 
 def _post_residual_stats(
   beta_main: np.ndarray, gamma_main: np.ndarray, mu_skip: np.ndarray, var_skip: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
-  """Statistics of ReLU(N(beta_main, gamma_main**2) + skip).
-
-  Treats skip as approximately Gaussian, independent of the main branch. Combined
-  pre-ReLU per channel is N(beta_main + mu_skip, gamma_main**2 + var_skip).
-  """
   mu = beta_main + mu_skip
   var = gamma_main**2 + var_skip
   sigma = np.sqrt(np.maximum(var, 0.0))
@@ -216,14 +210,6 @@ def _post_residual_stats(
 
 
 def compute_input_stats(model: ResNet, bn_params: dict[str, tuple[np.ndarray, np.ndarray]]) -> dict[str, LayerInputStats]:
-  """Walk the network forward, propagating per-channel (E[x], Var[x]) for each weight module's input.
-
-  - The stem layer has no preceding BN/ReLU; its entry is omitted (caller treats stem as no-op).
-  - Block first conv (`conv1`) input = previous block's post-residual activation stats.
-  - Within-block convs (`conv2`, `conv3`) inputs = ReLU(BN_prev) stats.
-  - Downsample conv input = block input (same as `conv1`).
-  - FC input = layer4 last activation averaged over H*W; mean unchanged, variance / (H*W).
-  """
   out: dict[str, LayerInputStats] = {}
 
   # After stem: ReLU(BN_stem). This is the input to the first block's conv1.
