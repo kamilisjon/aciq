@@ -8,7 +8,7 @@ from tinygrad.helpers import tqdm
 from aciq.helpers import load_csv
 from aciq.imagenet.class_containers import ImagenetClassIndex
 from aciq.resnet import ResNet
-from aciq.preprocess import load_and_preprocess
+from aciq.imagenet.preprocess import load_and_preprocess
 
 
 @dataclass

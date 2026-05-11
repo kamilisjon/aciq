@@ -17,7 +17,7 @@ from aciq.bias_correction import (
 from aciq.bn_fusion import fuse_conv_bn
 from aciq.helpers import RESULTS_DIR, get_output_dir, save_csv
 from aciq.resnet import Bottleneck, ResNet, capture_bn_params, compute_input_stats
-from aciq.preprocess import load_and_preprocess
+from aciq.imagenet.preprocess import load_and_preprocess
 from aciq.quantization import quantize
 
 
