@@ -9,7 +9,7 @@ from tinygrad import Tensor
 from tinygrad.nn import Conv2d, Linear
 from scipy.stats import spearmanr
 
-from aciq.analysis import LayerStats, ShiftResult, StatsAccumulator, compute_shift
+from aciq.mean_shift import LayerStats, ShiftResult, StatsAccumulator, compute_shift
 from aciq.distributions import Distribution, DistributionType
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.mnist import BlockName, MNISTModel, _load_normalized, evaluate_model, train_model

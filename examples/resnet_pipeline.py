@@ -8,7 +8,7 @@ from tinygrad import GlobalCounters, Tensor, TinyJit
 from tinygrad.helpers import tqdm
 from tinygrad.nn import BatchNorm, Conv2d, Linear
 
-from aciq.analysis import LayerStats, ShiftResult, ShiftRow, StatsAccumulator, compute_shift
+from aciq.mean_shift import LayerStats, ShiftResult, ShiftRow, StatsAccumulator, compute_shift
 from aciq.imagenet.benchmark import benchmark_accuracy, sample_imagenet_val
 from aciq.bias_correction import (
   LayerInputStats,
