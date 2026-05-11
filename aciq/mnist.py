@@ -1,6 +1,8 @@
 # Reference: https://github.com/tinygrad/tinygrad/blob/master/examples/beautiful_mnist.py
 from __future__ import annotations
 
+from enum import StrEnum
+
 import numpy as np
 import tinygrad.nn as nn
 from tinygrad import GlobalCounters, Tensor, TinyJit, function
@@ -14,6 +16,13 @@ from aciq.bn_fusion import fuse_conv_bn_inplace
 
 _MNIST_MEAN = 0.1307
 _MNIST_STD = 0.3081
+
+
+class BlockName(StrEnum):
+  BLOCK1 = "block1"
+  BLOCK2 = "block2"
+  BLOCK3 = "block3"
+  BLOCK4 = "block4"
 
 
 def _load_normalized() -> tuple[Tensor, Tensor, Tensor, Tensor]:
@@ -77,10 +86,10 @@ class MNISTModel:
   @property
   def activations(self) -> dict[str, Tensor]:
     return {
-      "block1": self.block1,
-      "block2": self.block2,
-      "block3": self.block3,
-      "block4": self.block4,
+      BlockName.BLOCK1: self.block1,
+      BlockName.BLOCK2: self.block2,
+      BlockName.BLOCK3: self.block3,
+      BlockName.BLOCK4: self.block4,
     }
 
 

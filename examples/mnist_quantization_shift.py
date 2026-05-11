@@ -12,12 +12,11 @@ from scipy.stats import spearmanr
 from aciq.analysis import LayerStats, ShiftResult, StatsAccumulator, compute_shift
 from aciq.distributions import Distribution, DistributionType
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
-from aciq.mnist import MNISTModel, _load_normalized, evaluate_model, train_model
+from aciq.mnist import BlockName, MNISTModel, _load_normalized, evaluate_model, train_model
 from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 
 
 BITS = 4
-BLOCK_NAMES = ["block1", "block2", "block3", "block4", "block5"]
 TEST_CHUNK_SIZE = 1000
 
 
@@ -31,12 +30,10 @@ class MnistResultRow:
   minmax_block2_mean_shift: float
   minmax_block3_mean_shift: float
   minmax_block4_mean_shift: float
-  minmax_block5_mean_shift: float
   aciq_block1_mean_shift: float
   aciq_block2_mean_shift: float
   aciq_block3_mean_shift: float
   aciq_block4_mean_shift: float
-  aciq_block5_mean_shift: float
 
 
 @dataclass
@@ -56,7 +53,6 @@ def _weight_modules(model: MNISTModel) -> list[tuple[str, Conv2d | Linear]]:
     ("conv2", model.conv2),
     ("conv3", model.conv3),
     ("conv4", model.conv4),
-    ("conv5", model.conv5),
     ("classifier", model.classifier),
   ]
 
@@ -98,14 +94,14 @@ def collect_layer_outputs(model: MNISTModel, x_test: Tensor) -> dict[str, LayerS
   @TinyJit
   def get_activations(X: Tensor) -> tuple[Tensor, ...]:
     model(X)
-    return tuple(model.activations[k].realize() for k in BLOCK_NAMES)
+    return tuple(model.activations[k].realize() for k in BlockName)
 
   assert x_test.shape[0] % TEST_CHUNK_SIZE == 0
   acc = StatsAccumulator()
   for i in range(0, x_test.shape[0], TEST_CHUNK_SIZE):
     x_chunk = x_test[i : i + TEST_CHUNK_SIZE].contiguous()
     acts = get_activations(x_chunk)
-    for name, act in zip(BLOCK_NAMES, acts):
+    for name, act in zip(BlockName, acts):
       acc.update(name, act.numpy())
   return acc.finalize()
 
@@ -165,8 +161,8 @@ def _to_result_row(r: ModelResult) -> MnistResultRow:
     fp32_acc=r.fp32_accuracy,
     minmax_acc=r.minmax_accuracy,
     aciq_acc=r.aciq_accuracy,
-    **{f"minmax_{b}_mean_shift": r.minmax_shifts.mean_shift[b] for b in BLOCK_NAMES},
-    **{f"aciq_{b}_mean_shift": r.aciq_shifts.mean_shift[b] for b in BLOCK_NAMES},
+    **{f"minmax_{b}_mean_shift": r.minmax_shifts.mean_shift[b] for b in BlockName},
+    **{f"aciq_{b}_mean_shift": r.aciq_shifts.mean_shift[b] for b in BlockName},
   )
 
 
@@ -181,11 +177,11 @@ def _to_loss_rows(r: ModelResult) -> list[MnistLossRow]:
 
 def _plot_scatter_grid(rows: list[MnistResultRow], shift_key: str, shift_label: str, save_dir: Path, filename: str) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
-  fig, axes = plt.subplots(2, len(BLOCK_NAMES) + 1, figsize=(4 * (len(BLOCK_NAMES) + 1), 8))
+  fig, axes = plt.subplots(2, len(BlockName) + 1, figsize=(4 * (len(BlockName) + 1), 8))
   for row_idx, (method, color) in enumerate([("minmax", "steelblue"), ("aciq", "indianred")]):
     acc_drops = np.array([r.fp32_acc - getattr(r, f"{method}_acc") for r in rows])
 
-    for col_idx, block in enumerate(BLOCK_NAMES):
+    for col_idx, block in enumerate(BlockName):
       ax = axes[row_idx, col_idx]
       shifts = np.array([getattr(r, f"{method}_{block}_{shift_key}") for r in rows])
       ax.scatter(shifts, acc_drops, color=color, alpha=0.6, s=20)
@@ -195,8 +191,8 @@ def _plot_scatter_grid(rows: list[MnistResultRow], shift_key: str, shift_label: 
       ax.set_ylabel("Accuracy drop", fontsize=8)
       ax.grid(True, alpha=0.3)
 
-    ax = axes[row_idx, len(BLOCK_NAMES)]
-    total_shifts = np.array([sum(getattr(r, f"{method}_{b}_{shift_key}") for b in BLOCK_NAMES) for r in rows])
+    ax = axes[row_idx, len(BlockName)]
+    total_shifts = np.array([sum(getattr(r, f"{method}_{b}_{shift_key}") for b in BlockName) for r in rows])
     ax.scatter(total_shifts, acc_drops, color=color, alpha=0.6, s=20)
     rho, p = spearmanr(total_shifts, acc_drops)
     ax.set_title(f"{method.upper()} total\nrho={rho:.3f} p={p:.3g}", fontsize=9)
@@ -218,11 +214,11 @@ def _plot_accumulation(rows: list[MnistResultRow], shift_key: str, ylabel: str, 
   save_dir.mkdir(parents=True, exist_ok=True)
   fig, ax = plt.subplots(figsize=(10, 5))
   for color, method in [("steelblue", "minmax"), ("indianred", "aciq")]:
-    per_layer_means = [np.mean([getattr(r, f"{method}_{b}_{shift_key}") for r in rows]) for b in BLOCK_NAMES]
-    per_layer_stds = [np.std([getattr(r, f"{method}_{b}_{shift_key}") for r in rows]) for b in BLOCK_NAMES]
+    per_layer_means = [np.mean([getattr(r, f"{method}_{b}_{shift_key}") for r in rows]) for b in BlockName]
+    per_layer_stds = [np.std([getattr(r, f"{method}_{b}_{shift_key}") for r in rows]) for b in BlockName]
     cumulative = np.cumsum(per_layer_means)
 
-    x_pos = np.arange(len(BLOCK_NAMES))
+    x_pos = np.arange(len(BlockName))
     label = method.upper()
     ax.bar(
       x_pos + (-0.2 if method == "minmax" else 0.2),
@@ -236,8 +232,8 @@ def _plot_accumulation(rows: list[MnistResultRow], shift_key: str, ylabel: str, 
     )
     ax.plot(x_pos, cumulative, color=color, marker="o", linewidth=2, linestyle="--", label=f"{label} cumulative shift")
 
-  ax.set_xticks(np.arange(len(BLOCK_NAMES)))
-  ax.set_xticklabels(BLOCK_NAMES)
+  ax.set_xticks(np.arange(len(BlockName)))
+  ax.set_xticklabels(BlockName)
   ax.set_xlabel("Layer")
   ax.set_ylabel(ylabel)
   ax.set_title(title)
