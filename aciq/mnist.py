@@ -97,7 +97,9 @@ class MNISTModel:
       cls.__dict__[name].reset()
 
 
-def train_model(seed: int = 0, steps: int = 100, batch_size: int = 512, gather_losses: bool = True) -> tuple[MNISTModel, list[float], list[float]]:
+def train_model(
+  seed: int = 0, steps: int = 100, batch_size: int = 512, gather_losses: bool = True
+) -> tuple[MNISTModel, float, list[float], list[float]]:
   Tensor.manual_seed(seed)
   np.random.seed(seed)
 

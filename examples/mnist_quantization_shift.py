@@ -155,7 +155,7 @@ def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
       ax.grid(True, alpha=0.3)
 
     ax = axes[row_idx, len(BlockName)]
-    total_shifts = sum(_shifts(rows, method, b) for b in BlockName)
+    total_shifts = np.sum([_shifts(rows, method, b) for b in BlockName], axis=0)
     ax.scatter(total_shifts, acc_drops, color=color, alpha=0.6, s=20)
     rho, p = spearmanr(total_shifts, acc_drops)
     ax.set_title(f"{method.upper()} total\nrho={rho:.3f} p={p:.3g}", fontsize=9)

@@ -94,7 +94,8 @@ class ResNet:
   def __init__(self, num, num_classes=1000):
     assert num in [18, 34, 50, 101, 152]
     self.num = num
-    self.block = {18: BasicBlock, 34: BasicBlock, 50: Bottleneck, 101: Bottleneck, 152: Bottleneck}[num]
+    block_map: dict[int, type[BasicBlock] | type[Bottleneck]] = {18: BasicBlock, 34: BasicBlock, 50: Bottleneck, 101: Bottleneck, 152: Bottleneck}
+    self.block = block_map[num]
 
     self.num_blocks = {18: [2, 2, 2, 2], 34: [3, 4, 6, 3], 50: [3, 4, 6, 3], 101: [3, 4, 23, 3], 152: [3, 8, 36, 3]}[num]
 
