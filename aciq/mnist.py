@@ -76,9 +76,9 @@ class MNISTModel:
     return (self(X_test).argmax(axis=1) == Y_test).mean()
 
   @TinyJit
-  def get_activations(self, X: Tensor) -> dict[BlockName, Tensor]:
+  def get_activations(self, X: Tensor) -> dict[str, Tensor]:
     self(X)
-    return {k: self.activations[k].realize() for k in BlockName}
+    return {str(name): v.realize() for name, v in zip(BlockName, [self.block1, self.block2, self.block3, self.block4])}
 
   def fuse(self) -> None:
     fuse_conv_bn_inplace(self.conv1, self.bn1)
@@ -88,22 +88,13 @@ class MNISTModel:
     self.fused = True
 
   @property
-  def activations(self) -> dict[str, Tensor]:
-    return {
-      BlockName.BLOCK1: self.block1,
-      BlockName.BLOCK2: self.block2,
-      BlockName.BLOCK3: self.block3,
-      BlockName.BLOCK4: self.block4,
-    }
-
-  @property
   def weight_modules(self) -> list[nn.Conv2d | nn.Linear]:
     return [self.conv1, self.conv2, self.conv3, self.conv4, self.classifier]
 
 
 def train_model(
   seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 512, gather_losses: bool = True
-) -> tuple[MNISTModel, float, list[float], list[float]]:
+) -> tuple[MNISTModel, list[float], list[float]]:
   Tensor.manual_seed(seed)
   np.random.seed(seed)
 
@@ -122,8 +113,4 @@ def train_model(
       t.set_description(f"train_loss: {train_loss:6.5f} test_loss: {test_loss:6.5f}")
     else:
       t.set_description(f"train_loss: {train_loss:6.5f}")
-  return model, evaluate_model(model, x_test, y_test), train_losses, test_losses
-
-
-def evaluate_model(model: MNISTModel, x_test: Tensor, y_test: Tensor) -> float:
-  return float(model.test_acc(x_test, y_test).item())
+  return model, train_losses, test_losses

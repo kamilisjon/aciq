@@ -92,7 +92,8 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
   loss_rows: list[MnistLossRow] = []
   for seed in range(n_models):
     print(f"[{seed + 1}/{n_models}] Training model (seed={seed})...")
-    model, fp32_acc, train_losses, test_losses = train_model(seed=seed, steps=steps, gather_losses=seed < LOSS_TRACKED_SEEDS)
+    model, train_losses, test_losses = train_model(seed=seed, steps=steps, gather_losses=seed < LOSS_TRACKED_SEEDS)
+    fp32_acc = float(model.test_acc(x_test, y_test).item())
     print("Model trained")
 
     fp32_outputs = collect_layer_outputs(model, x_test)
@@ -100,14 +101,14 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
 
     # MinMax quantization
     mm_model = quantize_model(model, "minmax")
-    mm_acc = evaluate_model(mm_model, x_test, y_test)
+    mm_acc = float(mm_model.test_acc(x_test, y_test).item())
     mm_outputs = collect_layer_outputs(mm_model, x_test)
     mm_shift = {r.layer: r.mean_shift for r in compute_shift(fp32_outputs, mm_outputs, "minmax")}
     print("MinMax quantization done")
 
     # ACIQ quantization
     aciq_model = quantize_model(model, "aciq")
-    aciq_acc = evaluate_model(aciq_model, x_test, y_test)
+    aciq_acc = float(aciq_model.test_acc(x_test, y_test).item())
     aciq_outputs = collect_layer_outputs(aciq_model, x_test)
     aciq_shift = {r.layer: r.mean_shift for r in compute_shift(fp32_outputs, aciq_outputs, "aciq")}
     print("ACIQ quantization done")
