@@ -43,6 +43,16 @@ class MnistLossRow:
   train_loss: float
   test_loss: float
 
+@dataclass
+class ModelResult:
+  seed: int
+  fp32_accuracy: float
+  minmax_accuracy: float
+  aciq_accuracy: float
+  minmax_shifts: ShiftResult
+  aciq_shifts: ShiftResult
+  train_losses: list[float]
+  test_losses: list[float]
 
 # --- Quantization ---
 
@@ -60,7 +70,6 @@ def _weight_modules(model: MNISTModel) -> list[tuple[str, Conv2d | Linear]]:
 def quantize_model(model: MNISTModel, method: str) -> MNISTModel:
   qmodel = copy.deepcopy(model)
   qmodel.fuse()
-
   for _, mod in _weight_modules(qmodel):
     w = mod.weight.numpy()
     alpha = _compute_alpha(w.flatten(), method)
@@ -83,14 +92,6 @@ def _compute_alpha(vec: np.ndarray, method: str) -> float:
 
 
 def collect_layer_outputs(model: MNISTModel, x_test: Tensor) -> dict[str, LayerStats]:
-  """Collect per-channel output means and variances for each block over the test set.
-
-  Iterates the test set in chunks of TEST_CHUNK_SIZE so each captured JIT graph holds only
-  one chunk's activation memory. StatsAccumulator combines per-chunk channel sums into the
-  global per-channel mean and variance in finalize(). Explicit return of
-  model.activations[k].realize() avoids the stale-attribute pitfall of reading
-  model.activations after JIT replay."""
-
   @TinyJit
   def get_activations(X: Tensor) -> tuple[Tensor, ...]:
     model(X)
@@ -107,18 +108,6 @@ def collect_layer_outputs(model: MNISTModel, x_test: Tensor) -> dict[str, LayerS
 
 
 # --- Training + measurement ---
-
-
-@dataclass
-class ModelResult:
-  seed: int
-  fp32_accuracy: float
-  minmax_accuracy: float
-  aciq_accuracy: float
-  minmax_shifts: ShiftResult
-  aciq_shifts: ShiftResult
-  train_losses: list[float]
-  test_losses: list[float]
 
 
 def run_training(n_models: int, steps: int) -> list[ModelResult]:
@@ -175,7 +164,7 @@ def _to_loss_rows(r: ModelResult) -> list[MnistLossRow]:
 # --- Analysis ---
 
 
-def _plot_scatter_grid(rows: list[MnistResultRow], shift_key: str, shift_label: str, save_dir: Path, filename: str) -> None:
+def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   fig, axes = plt.subplots(2, len(BlockName) + 1, figsize=(4 * (len(BlockName) + 1), 8))
   for row_idx, (method, color) in enumerate([("minmax", "steelblue"), ("aciq", "indianred")]):
@@ -183,39 +172,35 @@ def _plot_scatter_grid(rows: list[MnistResultRow], shift_key: str, shift_label: 
 
     for col_idx, block in enumerate(BlockName):
       ax = axes[row_idx, col_idx]
-      shifts = np.array([getattr(r, f"{method}_{block}_{shift_key}") for r in rows])
+      shifts = np.array([getattr(r, f"{method}_{block}_mean_shift") for r in rows])
       ax.scatter(shifts, acc_drops, color=color, alpha=0.6, s=20)
       rho, p = spearmanr(shifts, acc_drops)
       ax.set_title(f"{method.upper()} {block}\nrho={rho:.3f} p={p:.3g}", fontsize=9)
-      ax.set_xlabel(shift_label, fontsize=8)
+      ax.set_xlabel("Mean shift", fontsize=8)
       ax.set_ylabel("Accuracy drop", fontsize=8)
       ax.grid(True, alpha=0.3)
 
     ax = axes[row_idx, len(BlockName)]
-    total_shifts = np.array([sum(getattr(r, f"{method}_{b}_{shift_key}") for b in BlockName) for r in rows])
+    total_shifts = np.array([sum(getattr(r, f"{method}_{b}_mean_shift") for b in BlockName) for r in rows])
     ax.scatter(total_shifts, acc_drops, color=color, alpha=0.6, s=20)
     rho, p = spearmanr(total_shifts, acc_drops)
     ax.set_title(f"{method.upper()} total\nrho={rho:.3f} p={p:.3g}", fontsize=9)
-    ax.set_xlabel(f"Total {shift_label.lower()}", fontsize=8)
+    ax.set_xlabel(f"Total mean shift", fontsize=8)
     ax.set_ylabel("Accuracy drop", fontsize=8)
     ax.grid(True, alpha=0.3)
 
-  fig.suptitle(f"{shift_label} vs accuracy drop (Spearman correlation)", fontsize=12, y=1.02)
+  fig.suptitle(f"Mean shift vs accuracy drop (Spearman correlation)", fontsize=12, y=1.02)
   fig.tight_layout()
-  fig.savefig(save_dir / filename, dpi=700, bbox_inches="tight")
+  fig.savefig(save_dir / "scatter_mean_shift_vs_accuracy.png", dpi=700, bbox_inches="tight")
   plt.close(fig)
 
 
-def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
-  _plot_scatter_grid(rows, "mean_shift", "Mean shift", save_dir, "scatter_mean_shift_vs_accuracy.png")
-
-
-def _plot_accumulation(rows: list[MnistResultRow], shift_key: str, ylabel: str, title: str, save_dir: Path, filename: str) -> None:
+def plot_shift_accumulation(rows: list[MnistResultRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   fig, ax = plt.subplots(figsize=(10, 5))
   for color, method in [("steelblue", "minmax"), ("indianred", "aciq")]:
-    per_layer_means = [np.mean([getattr(r, f"{method}_{b}_{shift_key}") for r in rows]) for b in BlockName]
-    per_layer_stds = [np.std([getattr(r, f"{method}_{b}_{shift_key}") for r in rows]) for b in BlockName]
+    per_layer_means = [np.mean([getattr(r, f"{method}_{b}_mean_shift") for r in rows]) for b in BlockName]
+    per_layer_stds = [np.std([getattr(r, f"{method}_{b}_mean_shift") for r in rows]) for b in BlockName]
     cumulative = np.cumsum(per_layer_means)
 
     x_pos = np.arange(len(BlockName))
@@ -231,28 +216,15 @@ def _plot_accumulation(rows: list[MnistResultRow], shift_key: str, ylabel: str, 
       capsize=3,
     )
     ax.plot(x_pos, cumulative, color=color, marker="o", linewidth=2, linestyle="--", label=f"{label} cumulative shift")
-
   ax.set_xticks(np.arange(len(BlockName)))
   ax.set_xticklabels(BlockName)
   ax.set_xlabel("Layer")
-  ax.set_ylabel(ylabel)
-  ax.set_title(title)
+  ax.set_ylabel("Output mean shift")
   ax.legend(fontsize=8, prop={"family": "monospace", "size": 8})
   ax.grid(True, alpha=0.3, axis="y")
   fig.tight_layout()
-  fig.savefig(save_dir / filename, dpi=700)
+  fig.savefig(save_dir / "mean_shift_accumulation.png", dpi=700)
   plt.close(fig)
-
-
-def plot_shift_accumulation(rows: list[MnistResultRow], save_dir: Path) -> None:
-  _plot_accumulation(
-    rows,
-    "mean_shift",
-    ylabel="Output mean shift |E[fp32] - E[quant]|",
-    title="Mean shift accumulation across layers",
-    save_dir=save_dir,
-    filename="mean_shift_accumulation.png",
-  )
 
 
 def plot_loss_curves(loss_rows: list[MnistLossRow], save_dir: Path, max_lines: int = 10) -> None:
@@ -269,11 +241,10 @@ def plot_loss_curves(loss_rows: list[MnistLossRow], save_dir: Path, max_lines: i
     train_losses = [r.train_loss for r in seed_rows]
     test_losses = [r.test_loss for r in seed_rows]
     ax.plot(xs, train_losses, color="steelblue", alpha=0.6, label="Training loss" if i == 0 else None)
-    ax.plot(xs, test_losses, color="indianred", alpha=0.6, label="Testing set loss" if i == 0 else None)
+    ax.plot(xs, test_losses, color="indianred", alpha=0.6, label="Testing loss" if i == 0 else None)
 
   ax.set_xlabel("Step")
-  ax.set_ylabel("Cross-entropy loss")
-  ax.set_title(f"MNIST training and testing set loss across {len(selected_seeds)} runs")
+  ax.set_ylabel("Loss")
   ax.legend()
   ax.grid(True, alpha=0.3)
   fig.tight_layout()
@@ -286,8 +257,8 @@ def plot_loss_curves(loss_rows: list[MnistLossRow], save_dir: Path, max_lines: i
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="MNIST quantization distribution shift analysis")
-  parser.add_argument("--n-models", type=int, default=30, help="Number of models to train")
-  parser.add_argument("--steps", type=int, default=1170, help="Training steps per model")
+  parser.add_argument("--n-models", type=int, default=100, help="Number of models to train")
+  parser.add_argument("--steps", type=int, default=100, help="Training steps per model")
   parser.add_argument("--from-csv", type=Path, default=None, help="Load results from CSV instead of training")
   args = parser.parse_args()
   save_dir = get_output_dir(RESULTS_DIR, "mnist")
