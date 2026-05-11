@@ -1,5 +1,6 @@
 import argparse
 import copy
+import gc
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -72,6 +73,7 @@ def quantize_model(model: MNISTModel, method: str) -> MNISTModel:
     w = mod.weight.numpy()
     alpha = alpha_fn(w.flatten())
     mod.weight = Tensor(quantize(w.flatten(), alpha, BITS).reshape(w.shape).astype(np.float32))
+  MNISTModel.clear_jit_caches()
   return qmodel
 
 
@@ -113,6 +115,7 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
       q_outputs = collect_layer_outputs(qmodel, x_test)
       shifts[method] = {r.layer: r.mean_shift for r in compute_shift(fp32_outputs, q_outputs, method)}
       print(f"{method} quantization done")
+      # del qmodel, q_outputs
 
     print(f"  FP32={fp32_acc:.4f}  MinMax={accs['minmax']:.4f}  ACIQ={accs['aciq']:.4f}")
     result_rows.append(
@@ -127,6 +130,9 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
     loss_rows.extend(
       MnistLossRow(seed=seed, step=step, train_loss=tl, test_loss=el) for step, (tl, el) in enumerate(zip(train_losses, test_losses), start=1)
     )
+    # del model, fp32_outputs
+    MNISTModel.clear_jit_caches()
+    # gc.collect()
   return result_rows, loss_rows
 
 

@@ -91,6 +91,11 @@ class MNISTModel:
   def weight_modules(self) -> list[nn.Conv2d | nn.Linear]:
     return [self.conv1, self.conv2, self.conv3, self.conv4, self.classifier]
 
+  @classmethod
+  def clear_jit_caches(cls) -> None:
+    for name in ("train_step", "test_loss", "test_acc", "get_activations"):
+      cls.__dict__[name].reset()
+
 
 def train_model(seed: int = 0, steps: int = 100, batch_size: int = 512, gather_losses: bool = True) -> tuple[MNISTModel, list[float], list[float]]:
   Tensor.manual_seed(seed)
