@@ -1,10 +1,8 @@
 import argparse
 import copy
-import gc
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Callable
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -133,9 +131,7 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
     loss_rows.extend(
       MnistLossRow(seed=seed, step=step, train_loss=tl, test_loss=el) for step, (tl, el) in enumerate(zip(train_losses, test_losses), start=1)
     )
-    # del model, fp32_outputs
     MNISTModel.clear_jit_caches()
-    # gc.collect()
   return result_rows, loss_rows
 
 
