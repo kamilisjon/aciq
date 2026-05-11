@@ -96,6 +96,10 @@ class MNISTModel:
       BlockName.BLOCK4: self.block4,
     }
 
+  @property
+  def weight_modules(self) -> list[nn.Conv2d | nn.Linear]:
+    return [self.conv1, self.conv2, self.conv3, self.conv4, self.classifier]
+
 
 def train_model(
   seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 512, gather_losses: bool = True

@@ -7,7 +7,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tinygrad import Tensor
 from tinygrad.helpers import tqdm
-from tinygrad.nn import Conv2d, Linear
 from scipy.stats import spearmanr
 
 from aciq.mean_shift import LayerStats, StatsAccumulator, compute_shift
@@ -48,14 +47,10 @@ class MnistLossRow:
 # --- Quantization ---
 
 
-def _weight_modules(model: MNISTModel) -> list[Conv2d | Linear]:
-  return [model.conv1, model.conv2, model.conv3, model.conv4, model.classifier]
-
-
 def quantize_model(model: MNISTModel, method: str) -> MNISTModel:
   qmodel = copy.deepcopy(model)
   qmodel.fuse()
-  for mod in _weight_modules(qmodel):
+  for mod in qmodel.weight_modules:
     w = mod.weight.numpy()
     alpha = _compute_alpha(w.flatten(), method)
     mod.weight = Tensor(quantize(w.flatten(), alpha, BITS).reshape(w.shape).astype(np.float32))
