@@ -38,7 +38,6 @@ class MNISTModel:
     self.bn5 = nn.BatchNorm2d(128)
     self.classifier = nn.Linear(128, 10)
     self.fused = False
-    self.opt = None
     self.batch_size = 0
 
   def _block(self, x: Tensor, conv: nn.Conv2d, bn: nn.BatchNorm) -> Tensor:
@@ -58,11 +57,11 @@ class MNISTModel:
 
   @TinyJit
   @Tensor.train()
-  def train_step(self, X: Tensor, Y: Tensor) -> Tensor:
-    self.opt.zero_grad()
+  def train_step(self, X: Tensor, Y: Tensor, opt: AdamW) -> Tensor:
+    opt.zero_grad()
     samples = Tensor.randint(self.batch_size, high=X.shape[0])
     loss = self(X[samples]).sparse_categorical_crossentropy(Y[samples]).backward()
-    return loss.realize(*self.opt.schedule_step())
+    return loss.realize(*opt.schedule_step())
 
   @TinyJit
   def test_loss_step(self, X: Tensor, Y: Tensor) -> Tensor:
@@ -97,7 +96,7 @@ def train_model(seed: int, steps: int = 1170, lr: float = 1e-3, batch_size: int 
 
   x_train, y_train, x_test, y_test = _load_normalized()
   model = MNISTModel()
-  model.opt = AdamW(get_parameters(model), lr=lr)
+  opt = AdamW(get_parameters(model), lr=lr)
   model.batch_size = batch_size
 
   train_losses: list[float] = []
@@ -105,7 +104,7 @@ def train_model(seed: int, steps: int = 1170, lr: float = 1e-3, batch_size: int 
   window_sum = 0.0
   for i in tqdm(range(steps), desc="train"):
     GlobalCounters.reset()
-    window_sum += float(model.train_step(x_train, y_train).item())
+    window_sum += float(model.train_step(x_train, y_train, opt).item())
     if (i + 1) % eval_every == 0:
       train_losses.append(window_sum / eval_every)
       assert x_test.shape[0] % TEST_CHUNK_SIZE == 0
