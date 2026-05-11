@@ -8,7 +8,7 @@ from tinygrad import GlobalCounters, Tensor, TinyJit
 from tinygrad.helpers import tqdm
 from tinygrad.nn import BatchNorm, Conv2d, Linear
 
-from aciq.mean_shift import LayerStats, ShiftRow, StatsAccumulator, compute_shift
+from aciq.mean_shift import MeanShift, StatsAccumulator, compute_shift
 from aciq.imagenet.benchmark import benchmark_accuracy, sample_imagenet_val
 from aciq.bias_correction import (
   LayerInputStats,
@@ -185,7 +185,7 @@ def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, 
 
 
 def plot_shift(
-  rows: list[ShiftRow],
+  rows: list[MeanShift],
   layer_names: list[str],
   save_dir: Path,
   model_name: str = "",
@@ -410,7 +410,7 @@ def stage_corrections(
 # ---------------------------------------------------------------------------
 
 
-def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int = 32) -> dict[str, LayerStats]:
+def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int = 32) -> dict[str, np.ndarray]:
   jmodel = TinyJit(model)
   jmodel(Tensor.rand(batch_size, 3, 224, 224)).realize()
   GlobalCounters.reset()
@@ -424,7 +424,7 @@ def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int
     for name, act in model.activations.items():
       # slice off the zero-padded tail so accumulated stats only reflect real images
       acc.update(name, (act[:real_n] if real_n < batch_size else act).numpy())
-  return acc.finalize()
+  return acc.get_per_channel_means()
 
 
 def stage_shift_analysis(config: PipelineConfig, fp32_model: ResNet, variants: dict[tuple[str, str], ResNet]) -> None:
@@ -434,7 +434,7 @@ def stage_shift_analysis(config: PipelineConfig, fp32_model: ResNet, variants: d
   print("  Collecting FP32 stats...")
   fp32_stats = _collect_activations(fp32_model, image_paths)
 
-  shift_rows: list[ShiftRow] = []
+  shift_rows: list[MeanShift] = []
   for (method, mode), model in variants.items():
     label = f"{method}::{mode}"
     print(f"  Collecting {label} stats...")

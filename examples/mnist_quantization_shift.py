@@ -9,7 +9,7 @@ from tinygrad import Tensor
 from tinygrad.helpers import tqdm
 from scipy.stats import spearmanr
 
-from aciq.mean_shift import LayerStats, StatsAccumulator, compute_shift
+from aciq.mean_shift import StatsAccumulator, compute_shift
 from aciq.distributions import Distribution, DistributionType
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.mnist import BlockName, MNISTModel, _load_normalized, train_model
@@ -71,7 +71,7 @@ def _compute_alpha(vec: np.ndarray, method: str) -> float:
 # --- Distribution shift measurement ---
 
 
-def collect_layer_outputs(model: MNISTModel, x_test: Tensor, batch_size: int = 100) -> dict[str, LayerStats]:
+def collect_layer_outputs(model: MNISTModel, x_test: Tensor, batch_size: int = 100) -> dict[str, np.ndarray]:
   acc = StatsAccumulator()
   n = x_test.shape[0]
   assert n % batch_size == 0, f"test set size {n} must be divisible by batch_size {batch_size}"
@@ -79,7 +79,7 @@ def collect_layer_outputs(model: MNISTModel, x_test: Tensor, batch_size: int = 1
     idx = Tensor.arange(start, start + batch_size)
     for name, act in model.get_activations(x_test[idx]).items():
       acc.update(name, act.numpy())
-  return acc.finalize()
+  return acc.get_per_channel_means()
 
 
 # --- Training + measurement ---
