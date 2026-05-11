@@ -78,7 +78,7 @@ def collect_layer_outputs(model: MNISTModel, x_test: Tensor) -> dict[str, LayerS
   assert x_test.shape[0] % TEST_CHUNK_SIZE == 0
   acc = StatsAccumulator()
   for i in range(0, x_test.shape[0], TEST_CHUNK_SIZE):
-    x_chunk = x_test[i:i + TEST_CHUNK_SIZE].contiguous()
+    x_chunk = x_test[i : i + TEST_CHUNK_SIZE].contiguous()
     acts = get_activations(x_chunk)
     for name, act in zip(BLOCK_NAMES, acts):
       acc.update(name, act.numpy())

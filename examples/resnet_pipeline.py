@@ -26,23 +26,14 @@ METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "p
 PER_CHANNEL_METHODS = {"per_channel_minmax", "per_channel_aciq"}
 
 
-from pathlib import Path
-
-import numpy as np
 import matplotlib.pyplot as plt
-
-from aciq.analysis import ShiftResult
 
 
 DEFAULT_COLORS = ["steelblue", "indianred", "seagreen", "darkorange"]
 
-from pathlib import Path
-
-import numpy as np
-import matplotlib.pyplot as plt
 
 from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
-from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
+from aciq.quantization import minmax_alpha, solve_symmetric_mae_alpha
 
 
 DIST_COLORS = {
@@ -132,7 +123,6 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     plt.close(fig)
 
   return alpha_minmax, alpha_aciq
-
 
 
 def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, post_weight: np.ndarray, save_dir: Path) -> None:
@@ -231,6 +221,7 @@ def plot_shift(
     filename="mean_shift.png",
     colors=colors,
   )
+
 
 @dataclass
 class PipelineConfig:
@@ -436,9 +427,7 @@ def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int
   return acc.finalize()
 
 
-def stage_shift_analysis(
-  config: PipelineConfig, fp32_model: ResNet, variants: dict[tuple[str, str], ResNet]
-) -> None:
+def stage_shift_analysis(config: PipelineConfig, fp32_model: ResNet, variants: dict[tuple[str, str], ResNet]) -> None:
   image_paths = sample_imagenet_val(config.dataset_path, config.n_per_class)
   print(f"  Using {len(image_paths)} images")
 
@@ -466,16 +455,14 @@ def stage_shift_analysis(
 # ---------------------------------------------------------------------------
 
 
-def stage_benchmark(
-  config: PipelineConfig, fp_model: ResNet, variants: dict[tuple[str, str], ResNet]
-) -> None:
+def stage_benchmark(config: PipelineConfig, fp_model: ResNet, variants: dict[tuple[str, str], ResNet]) -> None:
   config.correction_results_dir.mkdir(parents=True, exist_ok=True)
   csv_path = config.correction_results_dir / "benchmark_results.csv"
   with open(csv_path, "w", newline="") as f:
     writer = csv.writer(f)
     writer.writerow(["method", "correction_mode", "top1", "top5"])
 
-    print(f"  benchmarking FP32")
+    print("  benchmarking FP32")
     top1, top5 = benchmark_accuracy(fp_model, config.dataset_path)
     writer.writerow(["fp32", "none", top1, top5])
     print(f"  FP32: top1={top1:.2f}  top5={top5:.2f}")

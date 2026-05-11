@@ -111,6 +111,7 @@ class TestApplyCorrection(unittest.TestCase):
     np.testing.assert_allclose(layer.weight.numpy(), W_q)
     assert not np.allclose(layer.bias.numpy(), b)
 
+
 class TestResidualPropagation(unittest.TestCase):
   def test_post_residual_matches_monte_carlo(self):
     """ReLU(N(beta_main, gamma_main**2) + skip) per-channel stats vs Monte Carlo."""

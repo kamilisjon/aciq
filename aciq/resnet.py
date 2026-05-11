@@ -200,9 +200,7 @@ def _post_relu_stats_from_bn(beta: np.ndarray, gamma: np.ndarray) -> tuple[np.nd
   return clipped_normal_mean(beta, gamma), clipped_normal_var(beta, gamma)
 
 
-def _post_residual_stats(
-  beta_main: np.ndarray, gamma_main: np.ndarray, mu_skip: np.ndarray, var_skip: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
+def _post_residual_stats(beta_main: np.ndarray, gamma_main: np.ndarray, mu_skip: np.ndarray, var_skip: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
   mu = beta_main + mu_skip
   var = gamma_main**2 + var_skip
   sigma = np.sqrt(np.maximum(var, 0.0))

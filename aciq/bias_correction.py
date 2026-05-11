@@ -9,6 +9,7 @@ from tinygrad.nn import Conv2d, Linear
 
 # Clipped normal distribution
 
+
 def clipped_normal_mean(beta: np.ndarray, gamma: np.ndarray, a: float = 0.0, b: float = np.inf) -> np.ndarray:
   # Source: https://arxiv.org/pdf/1906.04721
   beta = np.asarray(beta, dtype=np.float64)

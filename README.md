@@ -22,6 +22,10 @@ pip install -e .
 ```sh
 pip install -e '.[linting,testing]'
 ```
+### Format code
+```sh
+./format.sh
+```
 ### Run tests
 ```sh
 pre-commit run --all-files
