@@ -112,4 +112,4 @@ def train_model(seed: int = 0, steps: int = 100, batch_size: int = 512, gather_l
     else:
       t.set_description(f"train_loss: {train_loss:6.5f}")
   test_acc = float(model.test_acc(x_test, y_test).item())
-  return model,  train_losses, test_losses
+  return model, test_acc, train_losses, test_losses
