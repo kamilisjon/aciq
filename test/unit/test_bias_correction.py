@@ -134,8 +134,8 @@ class TestResnetIntegration(unittest.TestCase):
     model = ResNet(18)
     bn_params = capture_bn_params(model)
     stats = compute_input_stats(model, bn_params)
-    # Every weight module except stem should have a stats entry with C_in matching weight shape
-    expected_keys = {"fc"}
+    # Every weight module should have a stats entry with C_in matching weight shape
+    expected_keys = {"stem", "fc"}
     for li in range(1, 5):
       layer = (model.layer1, model.layer2, model.layer3, model.layer4)[li - 1]
       for bi in range(len(layer)):
@@ -144,6 +144,11 @@ class TestResnetIntegration(unittest.TestCase):
         if layer[bi].downsample:
           expected_keys.add(f"{prefix}.downsample")
     assert set(stats.keys()) == expected_keys
+    # Stem stats: N(0, 1) per input channel, shape derived from conv1
+    stem = stats["stem"]
+    assert stem.E_x.shape == (model.conv1.weight.shape[1],)
+    assert np.allclose(stem.E_x, 0.0)
+    assert np.allclose(stem.Var_x, 1.0)
     # Shape check on a known layer
     s = stats["layer1.0.conv1"]
     assert s.E_x.shape == (model.layer1[0].conv1.weight.shape[1],)

@@ -212,7 +212,15 @@ def _post_residual_stats(
 def compute_input_stats(model: ResNet, bn_params: dict[str, tuple[np.ndarray, np.ndarray]]) -> dict[str, LayerInputStats]:
   out: dict[str, LayerInputStats] = {}
 
-  # After stem: ReLU(BN_stem). This is the input to the first block's conv1.
+  # Stem input: per-channel zero mean and unit variance, matching the
+  # per-channel input standardization that precedes the network (arXiv 1906.04721, p. 7).
+  c_in_stem = int(model.conv1.weight.shape[1])
+  out["stem"] = LayerInputStats(
+    E_x=np.zeros(c_in_stem, dtype=np.float64),
+    Var_x=np.ones(c_in_stem, dtype=np.float64),
+  )
+
+  # Post-stem ReLU(BN_stem) gives the input to the first block's conv1.
   gamma_stem, beta_stem = bn_params["stem"]
   current_mu, current_var = _post_relu_stats_from_bn(beta_stem, gamma_stem)
   # Spatial size after stem (stride 2 conv + stride 2 maxpool from 224 input) = 56x56.

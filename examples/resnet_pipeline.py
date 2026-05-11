@@ -390,11 +390,11 @@ def stage_corrections(
 ) -> dict[tuple[str, str], ResNet]:
   """Build the (method × correction_mode) variant matrix.
 
-  Per-tensor methods get only the uncorrected baseline because variance correction
-  is not hardware-realizable in a per-tensor weight scheme. Per-channel methods
-  get the full {none, bias, variance, joint} set, with non-"none" modes deep-copied
-  off the post-Stage-2 model and corrected per layer (stem is left untouched —
-  no preceding BN to derive analytical input stats from).
+  Per-tensor methods get only the uncorrected baseline. Per-channel methods get
+  the uncorrected baseline and a bias-corrected copy; the bias copy is deep-copied
+  off the post-Stage-2 model and corrected per layer, stem included (the stem
+  uses a N(0, 1) input assumption, matching the per-channel standardization
+  applied to the network input).
   """
   fp_modules = dict(_weight_modules(fp_model))
   variants: dict[tuple[str, str], ResNet] = {}
@@ -406,8 +406,6 @@ def stage_corrections(
     m = copy.deepcopy(base)
     mods = dict(_weight_modules(m))
     for name, module in mods.items():
-      if name == "stem":
-        continue  # no preceding BN; correction is undefined analytically
       stats = input_stats[name]
       W_fp = fp_modules[name].weight.numpy()
       b_orig = module.bias.numpy() if module.bias is not None else np.zeros(module.weight.shape[0], dtype=np.float32)
