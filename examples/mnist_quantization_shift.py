@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
-from tinygrad import Tensor, TinyJit
+from tinygrad import Tensor
 from tinygrad.nn import Conv2d, Linear
 from scipy.stats import spearmanr
 
@@ -17,6 +17,7 @@ from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 
 
 BITS = 4
+LOSS_TRACKED_SEEDS = 10
 
 
 @dataclass
@@ -42,16 +43,6 @@ class MnistLossRow:
   train_loss: float
   test_loss: float
 
-@dataclass
-class ModelResult:
-  seed: int
-  fp32_accuracy: float
-  minmax_accuracy: float
-  aciq_accuracy: float
-  minmax_shifts: ShiftResult
-  aciq_shifts: ShiftResult
-  train_losses: list[float]
-  test_losses: list[float]
 
 # --- Quantization ---
 
@@ -101,13 +92,14 @@ def collect_layer_outputs(model: MNISTModel, x_test: Tensor) -> dict[str, LayerS
 # --- Training + measurement ---
 
 
-def run_training(n_models: int, steps: int) -> list[ModelResult]:
+def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[MnistLossRow]]:
   _, _, x_test, y_test = _load_normalized()
 
-  results: list[ModelResult] = []
+  result_rows: list[MnistResultRow] = []
+  loss_rows: list[MnistLossRow] = []
   for seed in range(n_models):
     print(f"[{seed + 1}/{n_models}] Training model (seed={seed})...")
-    model, fp32_acc, train_losses, test_losses = train_model(seed=seed, steps=steps)
+    model, fp32_acc, train_losses, test_losses = train_model(seed=seed, steps=steps, gather_losses=seed < LOSS_TRACKED_SEEDS)
     print("Model trained")
 
     fp32_outputs = collect_layer_outputs(model, x_test)
@@ -128,28 +120,19 @@ def run_training(n_models: int, steps: int) -> list[ModelResult]:
     print("ACIQ quantization done")
 
     print(f"  FP32={fp32_acc:.4f}  MinMax={mm_acc:.4f}  ACIQ={aciq_acc:.4f}")
-    results.append(ModelResult(seed, fp32_acc, mm_acc, aciq_acc, mm_shift, aciq_shift, train_losses, test_losses))
-  return results
-
-
-# --- CSV row adapters ---
-
-
-def _to_result_row(r: ModelResult) -> MnistResultRow:
-  return MnistResultRow(
-    seed=r.seed,
-    fp32_acc=r.fp32_accuracy,
-    minmax_acc=r.minmax_accuracy,
-    aciq_acc=r.aciq_accuracy,
-    **{f"minmax_{b}_mean_shift": r.minmax_shifts.mean_shift[b] for b in BlockName},
-    **{f"aciq_{b}_mean_shift": r.aciq_shifts.mean_shift[b] for b in BlockName},
-  )
-
-
-def _to_loss_rows(r: ModelResult) -> list[MnistLossRow]:
-  return [
-    MnistLossRow(seed=r.seed, step=step, train_loss=tl, test_loss=el) for step, (tl, el) in enumerate(zip(r.train_losses, r.test_losses), start=1)
-  ]
+    result_rows.append(MnistResultRow(
+      seed=seed,
+      fp32_acc=fp32_acc,
+      minmax_acc=mm_acc,
+      aciq_acc=aciq_acc,
+      **{f"minmax_{b}_mean_shift": mm_shift.mean_shift[b] for b in BlockName},
+      **{f"aciq_{b}_mean_shift": aciq_shift.mean_shift[b] for b in BlockName},
+    ))
+    loss_rows.extend(
+      MnistLossRow(seed=seed, step=step, train_loss=tl, test_loss=el)
+      for step, (tl, el) in enumerate(zip(train_losses, test_losses), start=1)
+    )
+  return result_rows, loss_rows
 
 
 # --- Analysis ---
@@ -218,15 +201,14 @@ def plot_shift_accumulation(rows: list[MnistResultRow], save_dir: Path) -> None:
   plt.close(fig)
 
 
-def plot_loss_curves(loss_rows: list[MnistLossRow], save_dir: Path, max_lines: int = 10) -> None:
+def plot_loss_curves(loss_rows: list[MnistLossRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   by_seed: dict[int, list[MnistLossRow]] = {}
   for r in loss_rows:
     by_seed.setdefault(r.seed, []).append(r)
-  selected_seeds = sorted(by_seed)[:max_lines]
 
   fig, ax = plt.subplots(figsize=(8, 5))
-  for i, seed in enumerate(selected_seeds):
+  for i, seed in enumerate(sorted(by_seed)):
     seed_rows = sorted(by_seed[seed], key=lambda r: r.step)
     xs = [r.step for r in seed_rows]
     train_losses = [r.train_loss for r in seed_rows]
@@ -261,11 +243,10 @@ if __name__ == "__main__":
     loss_rows = load_csv(losses_path, MnistLossRow) if losses_path.exists() else []
   else:
     print(f"Running training with {args.n_models} models, {args.steps} steps each...")
-    results = run_training(args.n_models, args.steps)
-    save_csv([_to_result_row(r) for r in results], save_dir / "results.csv")
-    save_csv([row for r in results for row in _to_loss_rows(r)], save_dir / "losses.csv")
-    rows = load_csv(save_dir / "results.csv", MnistResultRow)
-    loss_rows = load_csv(save_dir / "losses.csv", MnistLossRow)
+    rows, loss_rows = run_training(args.n_models, args.steps)
+    save_csv(rows, save_dir / "results.csv")
+    if loss_rows:
+      save_csv(loss_rows, save_dir / "losses.csv")
 
   plot_scatter(rows, save_dir)
   plot_shift_accumulation(rows, save_dir)

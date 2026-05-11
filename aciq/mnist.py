@@ -43,8 +43,6 @@ class MNISTModel:
     self.conv4 = nn.Conv2d(64, 128, 3, padding=1, stride=2, bias=False)
     self.bn4 = nn.BatchNorm2d(128)
     self.classifier = nn.Linear(128, 10)
-    self.fused = False
-    self.batch_size = 0
 
   def _block(self, x: Tensor, conv: nn.Conv2d, bn: nn.BatchNorm) -> Tensor:
     out = conv(x)
@@ -86,7 +84,6 @@ class MNISTModel:
     fuse_conv_bn_inplace(self.conv2, self.bn2)
     fuse_conv_bn_inplace(self.conv3, self.bn3)
     fuse_conv_bn_inplace(self.conv4, self.bn4)
-    self.fused = True
 
   @property
   def activations(self) -> dict[str, Tensor]:
@@ -98,7 +95,7 @@ class MNISTModel:
     }
 
 
-def train_model(seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 512) -> tuple[MNISTModel, float, list[float], list[float]]:
+def train_model(seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 512, gather_losses: bool = True) -> tuple[MNISTModel, float, list[float], list[float]]:
   Tensor.manual_seed(seed)
   np.random.seed(seed)
 
@@ -110,10 +107,13 @@ def train_model(seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 
   for _ in (t := tqdm(range(steps), desc="train")):
     GlobalCounters.reset()
     train_loss = float(model.train_step(x_train, y_train, opt, batch_size).item())
-    test_loss = float(model.test_loss(x_test, y_test).item())
-    train_losses.append(train_loss)
-    test_losses.append(test_loss)
-    t.set_description(f"train_loss: {train_loss:6.5f} test_loss: {test_loss:6.5f}")
+    if gather_losses:
+      test_loss = float(model.test_loss(x_test, y_test).item())
+      train_losses.append(train_loss)
+      test_losses.append(test_loss)
+      t.set_description(f"train_loss: {train_loss:6.5f} test_loss: {test_loss:6.5f}")
+    else:
+      t.set_description(f"train_loss: {train_loss:6.5f}")
   return model, evaluate_model(model, x_test, y_test), train_losses, test_losses
 
 
