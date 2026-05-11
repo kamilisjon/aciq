@@ -10,7 +10,7 @@ from tinygrad.nn.datasets import mnist
 from tinygrad.nn.optim import Adam
 from tinygrad.nn.state import get_parameters
 
-# from aciq.bn_fusion import fuse_conv_bn_inplace
+from aciq.bn_fusion import fuse_conv_bn_inplace
 
 
 _MNIST_MEAN = 0.1307
@@ -25,48 +25,48 @@ def _load_normalized() -> tuple[Tensor, Tensor, Tensor, Tensor]:
 
 
 class MNISTModel:
-  # def __init__(self) -> None:
-  #   self.conv1 = nn.Conv2d(1, 32, 3, padding=1, bias=False)
-  #   self.bn1 = nn.BatchNorm2d(32)
-  #   self.conv2 = nn.Conv2d(32, 64, 3, padding=1, stride=2, bias=False)
-  #   self.bn2 = nn.BatchNorm2d(64)
-  #   self.conv3 = nn.Conv2d(64, 64, 3, padding=1, bias=False)
-  #   self.bn3 = nn.BatchNorm2d(64)
-  #   self.conv4 = nn.Conv2d(64, 128, 3, padding=1, stride=2, bias=False)
-  #   self.bn4 = nn.BatchNorm2d(128)
-  #   self.conv5 = nn.Conv2d(128, 128, 3, padding=1, bias=False)
-  #   self.bn5 = nn.BatchNorm2d(128)
-  #   self.classifier = nn.Linear(128, 10)
-  #   self.fused = False
-  #   self.batch_size = 0
+  def __init__(self) -> None:
+    self.conv1 = nn.Conv2d(1, 32, 3, padding=1, bias=False)
+    self.bn1 = nn.BatchNorm2d(32)
+    self.conv2 = nn.Conv2d(32, 64, 3, padding=1, stride=2, bias=False)
+    self.bn2 = nn.BatchNorm2d(64)
+    self.conv3 = nn.Conv2d(64, 64, 3, padding=1, bias=False)
+    self.bn3 = nn.BatchNorm2d(64)
+    self.conv4 = nn.Conv2d(64, 128, 3, padding=1, stride=2, bias=False)
+    self.bn4 = nn.BatchNorm2d(128)
+    self.conv5 = nn.Conv2d(128, 128, 3, padding=1, bias=False)
+    self.bn5 = nn.BatchNorm2d(128)
+    self.classifier = nn.Linear(128, 10)
+    self.fused = False
+    self.batch_size = 0
 
-  # def _block(self, x: Tensor, conv: nn.Conv2d, bn: nn.BatchNorm) -> Tensor:
-  #   out = conv(x)
-  #   if not self.fused:
-  #     out = bn(out)
-  #   return out.relu()
-
-  # @function
-  # def __call__(self, x: Tensor) -> Tensor:
-  #   self.block1 = self._block(x, self.conv1, self.bn1)
-  #   self.block2 = self._block(self.block1, self.conv2, self.bn2)
-  #   self.block3 = self._block(self.block2, self.conv3, self.bn3)
-  #   self.block4 = self._block(self.block3, self.conv4, self.bn4)
-  #   self.block5 = self._block(self.block4, self.conv5, self.bn5)
-  #   return self.classifier(self.block5.mean((2, 3)))
-
-  def __init__(self):
-    self.layers: list[Callable[[Tensor], Tensor]] = [
-      nn.Conv2d(1, 32, 5), Tensor.relu,
-      nn.Conv2d(32, 32, 5), Tensor.relu,
-      nn.BatchNorm(32), Tensor.max_pool2d,
-      nn.Conv2d(32, 64, 3), Tensor.relu,
-      nn.Conv2d(64, 64, 3), Tensor.relu,
-      nn.BatchNorm(64), Tensor.max_pool2d,
-      lambda x: x.flatten(1), nn.Linear(576, 10)]
+  def _block(self, x: Tensor, conv: nn.Conv2d, bn: nn.BatchNorm) -> Tensor:
+    out = conv(x)
+    if not self.fused:
+      out = bn(out)
+    return out.relu()
 
   @function
-  def __call__(self, x:Tensor) -> Tensor: return x.sequential(self.layers)
+  def __call__(self, x: Tensor) -> Tensor:
+    self.block1 = self._block(x, self.conv1, self.bn1)
+    self.block2 = self._block(self.block1, self.conv2, self.bn2)
+    self.block3 = self._block(self.block2, self.conv3, self.bn3)
+    self.block4 = self._block(self.block3, self.conv4, self.bn4)
+    self.block5 = self._block(self.block4, self.conv5, self.bn5)
+    return self.classifier(self.block5.mean((2, 3)))
+
+  # def __init__(self):
+  #   self.layers: list[Callable[[Tensor], Tensor]] = [
+  #     nn.Conv2d(1, 32, 5), Tensor.relu,
+  #     nn.Conv2d(32, 32, 5), Tensor.relu,
+  #     nn.BatchNorm(32), Tensor.max_pool2d,
+  #     nn.Conv2d(32, 64, 3), Tensor.relu,
+  #     nn.Conv2d(64, 64, 3), Tensor.relu,
+  #     nn.BatchNorm(64), Tensor.max_pool2d,
+  #     lambda x: x.flatten(1), nn.Linear(576, 10)]
+
+  # @function
+  # def __call__(self, x:Tensor) -> Tensor: return x.sequential(self.layers)
 
   @TinyJit
   @Tensor.train()
@@ -84,23 +84,23 @@ class MNISTModel:
   def test_acc(self, X_test: Tensor, Y_test: Tensor) -> Tensor:
     return (self(X_test).argmax(axis=1) == Y_test).mean()
 
-  # def fuse(self) -> None:
-  #   fuse_conv_bn_inplace(self.conv1, self.bn1)
-  #   fuse_conv_bn_inplace(self.conv2, self.bn2)
-  #   fuse_conv_bn_inplace(self.conv3, self.bn3)
-  #   fuse_conv_bn_inplace(self.conv4, self.bn4)
-  #   fuse_conv_bn_inplace(self.conv5, self.bn5)
-  #   self.fused = True
+  def fuse(self) -> None:
+    fuse_conv_bn_inplace(self.conv1, self.bn1)
+    fuse_conv_bn_inplace(self.conv2, self.bn2)
+    fuse_conv_bn_inplace(self.conv3, self.bn3)
+    fuse_conv_bn_inplace(self.conv4, self.bn4)
+    fuse_conv_bn_inplace(self.conv5, self.bn5)
+    self.fused = True
 
-  # @property
-  # def activations(self) -> dict[str, Tensor]:
-  #   return {
-  #     "block1": self.block1,
-  #     "block2": self.block2,
-  #     "block3": self.block3,
-  #     "block4": self.block4,
-  #     "block5": self.block5,
-  #   }
+  @property
+  def activations(self) -> dict[str, Tensor]:
+    return {
+      "block1": self.block1,
+      "block2": self.block2,
+      "block3": self.block3,
+      "block4": self.block4,
+      "block5": self.block5,
+    }
 
 
 def train_model(seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 512) -> tuple[MNISTModel, float, list[float], list[float]]:
