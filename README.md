@@ -13,6 +13,9 @@ pip install -e .
     1. `DEV=NV JITBEAM=4 python -m examples.resnet_pipeline --dataset-path /home/kamilis/Downloads/imagenet-object-localization-challenge --model resnet50 --bits 8`
 1. MNIST training for evaluating layers outputs distributions shift after quantization:
     1. `DEV=NV JITBEAM=4 python -m examples.mnist_quantization_shift --n-models 2 --steps 100`
+1. Single MNIST training run (no quantization, useful for sanity-checking the training pipeline in isolation):
+    1. `DEV=NV JITBEAM=4 python -m examples.train_mnist --steps 1170 --eval-every 10`
+    1. Flags: `--seed` (default 0), `--steps` (default 1170), `--lr` (default 1e-3), `--batch-size` (default 512), `--eval-every` (default 10). Progress bar shows live `loss: X.XX test_accuracy: YY.YY%`; the script prints the final accuracy and last logged train/test losses on exit.
 
 ## Local testing
 ### Install extra dependencies
