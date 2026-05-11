@@ -97,7 +97,9 @@ class MNISTModel:
     }
 
 
-def train_model(seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 512, gather_losses: bool = True) -> tuple[MNISTModel, float, list[float], list[float]]:
+def train_model(
+  seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 512, gather_losses: bool = True
+) -> tuple[MNISTModel, float, list[float], list[float]]:
   Tensor.manual_seed(seed)
   np.random.seed(seed)
 

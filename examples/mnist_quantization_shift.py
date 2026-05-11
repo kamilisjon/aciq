@@ -49,7 +49,7 @@ class MnistLossRow:
 
 
 def _weight_modules(model: MNISTModel) -> list[Conv2d | Linear]:
-  return [ model.conv1,model.conv2,model.conv3, model.conv4, model.classifier]
+  return [model.conv1, model.conv2, model.conv3, model.conv4, model.classifier]
 
 
 def quantize_model(model: MNISTModel, method: str) -> MNISTModel:
@@ -118,17 +118,18 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
     print("ACIQ quantization done")
 
     print(f"  FP32={fp32_acc:.4f}  MinMax={mm_acc:.4f}  ACIQ={aciq_acc:.4f}")
-    result_rows.append(MnistResultRow(
-      seed=seed,
-      fp32_acc=fp32_acc,
-      minmax_acc=mm_acc,
-      aciq_acc=aciq_acc,
-      **{f"minmax_{b}_mean_shift": mm_shift[b] for b in BlockName},
-      **{f"aciq_{b}_mean_shift": aciq_shift[b] for b in BlockName},
-    ))
+    result_rows.append(
+      MnistResultRow(
+        seed=seed,
+        fp32_acc=fp32_acc,
+        minmax_acc=mm_acc,
+        aciq_acc=aciq_acc,
+        **{f"minmax_{b}_mean_shift": mm_shift[b] for b in BlockName},
+        **{f"aciq_{b}_mean_shift": aciq_shift[b] for b in BlockName},
+      )
+    )
     loss_rows.extend(
-      MnistLossRow(seed=seed, step=step, train_loss=tl, test_loss=el)
-      for step, (tl, el) in enumerate(zip(train_losses, test_losses), start=1)
+      MnistLossRow(seed=seed, step=step, train_loss=tl, test_loss=el) for step, (tl, el) in enumerate(zip(train_losses, test_losses), start=1)
     )
   return result_rows, loss_rows
 
@@ -157,11 +158,11 @@ def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
     ax.scatter(total_shifts, acc_drops, color=color, alpha=0.6, s=20)
     rho, p = spearmanr(total_shifts, acc_drops)
     ax.set_title(f"{method.upper()} total\nrho={rho:.3f} p={p:.3g}", fontsize=9)
-    ax.set_xlabel(f"Total mean shift", fontsize=8)
+    ax.set_xlabel("Total mean shift", fontsize=8)
     ax.set_ylabel("Accuracy drop", fontsize=8)
     ax.grid(True, alpha=0.3)
 
-  fig.suptitle(f"Mean shift vs accuracy drop (Spearman correlation)", fontsize=12, y=1.02)
+  fig.suptitle("Mean shift vs accuracy drop (Spearman correlation)", fontsize=12, y=1.02)
   fig.tight_layout()
   fig.savefig(save_dir / "scatter_mean_shift_vs_accuracy.png", dpi=700, bbox_inches="tight")
   plt.close(fig)

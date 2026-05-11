@@ -15,11 +15,7 @@ class ShiftRow:
   mean_shift: float
 
 
-def compute_shift(
-  fp32_outputs: dict[str, LayerStats],
-  quant_outputs: dict[str, LayerStats],
-  method: str,
-) -> list[ShiftRow]:
+def compute_shift(fp32_outputs: dict[str, LayerStats], quant_outputs: dict[str, LayerStats], method: str) -> list[ShiftRow]:
   return [
     ShiftRow(
       method=method,
@@ -48,7 +44,4 @@ class StatsAccumulator:
     self._counts[name] += n
 
   def finalize(self) -> dict[str, LayerStats]:
-    return {
-      name: LayerStats(mean=(self._sums[name] / self._counts[name]).astype(np.float32))
-      for name in self._sums
-    }
+    return {name: LayerStats(mean=(self._sums[name] / self._counts[name]).astype(np.float32)) for name in self._sums}
