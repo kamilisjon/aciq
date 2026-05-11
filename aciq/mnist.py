@@ -1,13 +1,12 @@
 # Reference: https://github.com/tinygrad/tinygrad/blob/master/examples/beautiful_mnist.py
 from __future__ import annotations
-from typing import Callable
 
 import numpy as np
 import tinygrad.nn as nn
 from tinygrad import GlobalCounters, Tensor, TinyJit, function
 from tinygrad.helpers import tqdm
 from tinygrad.nn.datasets import mnist
-from tinygrad.nn.optim import Adam
+from tinygrad.nn.optim import AdamW
 from tinygrad.nn.state import get_parameters
 
 from aciq.bn_fusion import fuse_conv_bn_inplace
@@ -55,22 +54,9 @@ class MNISTModel:
     self.block5 = self._block(self.block4, self.conv5, self.bn5)
     return self.classifier(self.block5.mean((2, 3)))
 
-  # def __init__(self):
-  #   self.layers: list[Callable[[Tensor], Tensor]] = [
-  #     nn.Conv2d(1, 32, 5), Tensor.relu,
-  #     nn.Conv2d(32, 32, 5), Tensor.relu,
-  #     nn.BatchNorm(32), Tensor.max_pool2d,
-  #     nn.Conv2d(32, 64, 3), Tensor.relu,
-  #     nn.Conv2d(64, 64, 3), Tensor.relu,
-  #     nn.BatchNorm(64), Tensor.max_pool2d,
-  #     lambda x: x.flatten(1), nn.Linear(576, 10)]
-
-  # @function
-  # def __call__(self, x:Tensor) -> Tensor: return x.sequential(self.layers)
-
   @TinyJit
   @Tensor.train()
-  def train_step(self, X_train: Tensor, Y_train: Tensor, opt: Adam, batch_size: int) -> Tensor:
+  def train_step(self, X_train: Tensor, Y_train: Tensor, opt: AdamW, batch_size: int) -> Tensor:
     opt.zero_grad()
     samples = Tensor.randint(batch_size, high=X_train.shape[0])
     loss = self(X_train[samples]).sparse_categorical_crossentropy(Y_train[samples]).backward()
@@ -109,7 +95,7 @@ def train_model(seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 
 
   x_train, y_train, x_test, y_test = _load_normalized()
   model = MNISTModel()
-  opt = Adam(get_parameters(model), lr=lr)
+  opt = AdamW(get_parameters(model), lr=lr)
   train_losses: list[float] = []
   test_losses: list[float] = []
   for _ in (t := tqdm(range(steps), desc="train")):
