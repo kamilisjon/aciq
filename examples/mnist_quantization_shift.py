@@ -12,7 +12,7 @@ from scipy.stats import spearmanr
 from aciq.mean_shift import LayerStats, StatsAccumulator, compute_shift
 from aciq.distributions import Distribution, DistributionType
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
-from aciq.mnist import BlockName, MNISTModel, _load_normalized, evaluate_model, train_model
+from aciq.mnist import BlockName, MNISTModel, _load_normalized, train_model
 from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 
 
@@ -92,8 +92,7 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
   loss_rows: list[MnistLossRow] = []
   for seed in range(n_models):
     print(f"[{seed + 1}/{n_models}] Training model (seed={seed})...")
-    model, train_losses, test_losses = train_model(seed=seed, steps=steps, gather_losses=seed < LOSS_TRACKED_SEEDS)
-    fp32_acc = float(model.test_acc(x_test, y_test).item())
+    model, fp32_acc, train_losses, test_losses = train_model(seed=seed, steps=steps, gather_losses=seed < LOSS_TRACKED_SEEDS)
     print("Model trained")
 
     fp32_outputs = collect_layer_outputs(model, x_test)

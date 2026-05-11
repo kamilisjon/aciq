@@ -18,18 +18,18 @@ _MNIST_MEAN = 0.1307
 _MNIST_STD = 0.3081
 
 
-class BlockName(StrEnum):
-  BLOCK1 = "block1"
-  BLOCK2 = "block2"
-  BLOCK3 = "block3"
-  BLOCK4 = "block4"
-
-
 def _load_normalized() -> tuple[Tensor, Tensor, Tensor, Tensor]:
   x_train, y_train, x_test, y_test = mnist()
   x_train = (x_train.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD
   x_test = (x_test.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD
   return x_train, y_train, x_test, y_test
+
+
+class BlockName(StrEnum):
+  BLOCK1 = "block1"
+  BLOCK2 = "block2"
+  BLOCK3 = "block3"
+  BLOCK4 = "block4"
 
 
 class MNISTModel:
@@ -92,15 +92,13 @@ class MNISTModel:
     return [self.conv1, self.conv2, self.conv3, self.conv4, self.classifier]
 
 
-def train_model(
-  seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 512, gather_losses: bool = True
-) -> tuple[MNISTModel, list[float], list[float]]:
+def train_model(seed: int = 0, steps: int = 100, batch_size: int = 512, gather_losses: bool = True) -> tuple[MNISTModel, list[float], list[float]]:
   Tensor.manual_seed(seed)
   np.random.seed(seed)
 
   x_train, y_train, x_test, y_test = _load_normalized()
   model = MNISTModel()
-  opt = AdamW(get_parameters(model), lr=lr)
+  opt = AdamW(get_parameters(model), lr=1e-3)
   train_losses: list[float] = []
   test_losses: list[float] = []
   for _ in (t := tqdm(range(steps), desc="train")):
@@ -113,4 +111,5 @@ def train_model(
       t.set_description(f"train_loss: {train_loss:6.5f} test_loss: {test_loss:6.5f}")
     else:
       t.set_description(f"train_loss: {train_loss:6.5f}")
-  return model, train_losses, test_losses
+  test_acc = float(model.test_acc(x_test, y_test).item())
+  return model,  train_losses, test_losses
