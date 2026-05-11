@@ -17,7 +17,6 @@ from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 
 
 BITS = 4
-TEST_CHUNK_SIZE = 1000
 
 
 @dataclass
@@ -92,18 +91,10 @@ def _compute_alpha(vec: np.ndarray, method: str) -> float:
 
 
 def collect_layer_outputs(model: MNISTModel, x_test: Tensor) -> dict[str, LayerStats]:
-  @TinyJit
-  def get_activations(X: Tensor) -> tuple[Tensor, ...]:
-    model(X)
-    return tuple(model.activations[k].realize() for k in BlockName)
-
-  assert x_test.shape[0] % TEST_CHUNK_SIZE == 0
+  acts = model.get_activations(x_test)
   acc = StatsAccumulator()
-  for i in range(0, x_test.shape[0], TEST_CHUNK_SIZE):
-    x_chunk = x_test[i : i + TEST_CHUNK_SIZE].contiguous()
-    acts = get_activations(x_chunk)
-    for name, act in zip(BlockName, acts):
-      acc.update(name, act.numpy())
+  for name, act in zip(BlockName, acts):
+    acc.update(name, act.numpy())
   return acc.finalize()
 
 

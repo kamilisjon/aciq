@@ -76,6 +76,11 @@ class MNISTModel:
   def test_acc(self, X_test: Tensor, Y_test: Tensor) -> Tensor:
     return (self(X_test).argmax(axis=1) == Y_test).mean()
 
+  @TinyJit
+  def get_activations(self, X: Tensor) -> tuple[Tensor, ...]:
+    self(X)
+    return tuple(self.activations[k].realize() for k in BlockName)
+
   def fuse(self) -> None:
     fuse_conv_bn_inplace(self.conv1, self.bn1)
     fuse_conv_bn_inplace(self.conv2, self.bn2)
