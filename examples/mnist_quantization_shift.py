@@ -64,16 +64,10 @@ def _aciq_alpha(vec: np.ndarray) -> float:
   return solve_symmetric_mae_alpha(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=BITS, alpha_max=alpha_mm)
 
 
-ALPHA_FUNCS: dict[str, Callable[[np.ndarray], float]] = {
-  "minmax": minmax_alpha,
-  "aciq": _aciq_alpha,
-}
-
-
 def quantize_model(model: MNISTModel, method: str) -> MNISTModel:
   qmodel = copy.deepcopy(model)
   qmodel.fuse()
-  alpha_fn = ALPHA_FUNCS[method]
+  alpha_fn = minmax_alpha if method == "minmax" else _aciq_alpha
   for mod in qmodel.weight_modules:
     w = mod.weight.numpy()
     alpha = alpha_fn(w.flatten())
