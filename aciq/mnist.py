@@ -111,7 +111,9 @@ def train_model(seed: int, steps: int = 1170, lr: float = 1e-3, batch_size: int 
       assert x_test.shape[0] % TEST_CHUNK_SIZE == 0
       chunk_loss_sum = 0.0
       for j in range(0, x_test.shape[0], TEST_CHUNK_SIZE):
-        chunk_loss_sum += float(model.test_loss_step(x_test[j:j + TEST_CHUNK_SIZE], y_test[j:j + TEST_CHUNK_SIZE]).item())
+        x_chunk = x_test[j:j + TEST_CHUNK_SIZE].contiguous()
+        y_chunk = y_test[j:j + TEST_CHUNK_SIZE].contiguous()
+        chunk_loss_sum += float(model.test_loss_step(x_chunk, y_chunk).item())
       test_losses.append(chunk_loss_sum / (x_test.shape[0] // TEST_CHUNK_SIZE))
       window_sum = 0.0
 
@@ -122,5 +124,7 @@ def evaluate_model(model: MNISTModel, x_test: Tensor, y_test: Tensor) -> float:
   assert x_test.shape[0] % TEST_CHUNK_SIZE == 0
   chunk_acc_sum = 0.0
   for j in range(0, x_test.shape[0], TEST_CHUNK_SIZE):
-    chunk_acc_sum += float(model.get_test_acc(x_test[j:j + TEST_CHUNK_SIZE], y_test[j:j + TEST_CHUNK_SIZE]).item())
+    x_chunk = x_test[j:j + TEST_CHUNK_SIZE].contiguous()
+    y_chunk = y_test[j:j + TEST_CHUNK_SIZE].contiguous()
+    chunk_acc_sum += float(model.get_test_acc(x_chunk, y_chunk).item())
   return chunk_acc_sum / (x_test.shape[0] // TEST_CHUNK_SIZE)
