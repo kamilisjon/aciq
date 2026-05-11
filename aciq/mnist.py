@@ -31,11 +31,7 @@ class MNISTModel:
     self.bn2 = nn.BatchNorm2d(64)
     self.conv3 = nn.Conv2d(64, 64, 3, padding=1, bias=False)
     self.bn3 = nn.BatchNorm2d(64)
-    self.conv4 = nn.Conv2d(64, 128, 3, padding=1, stride=2, bias=False)
-    self.bn4 = nn.BatchNorm2d(128)
-    self.conv5 = nn.Conv2d(128, 128, 3, padding=1, bias=False)
-    self.bn5 = nn.BatchNorm2d(128)
-    self.classifier = nn.Linear(128, 10)
+    self.classifier = nn.Linear(64, 10)
     self.fused = False
     self.batch_size = 0
 
@@ -50,9 +46,7 @@ class MNISTModel:
     self.block1 = self._block(x, self.conv1, self.bn1)
     self.block2 = self._block(self.block1, self.conv2, self.bn2)
     self.block3 = self._block(self.block2, self.conv3, self.bn3)
-    self.block4 = self._block(self.block3, self.conv4, self.bn4)
-    self.block5 = self._block(self.block4, self.conv5, self.bn5)
-    return self.classifier(self.block5.mean((2, 3)))
+    return self.classifier(self.block3.mean((2, 3)))
 
   @TinyJit
   @Tensor.train()
@@ -74,8 +68,6 @@ class MNISTModel:
     fuse_conv_bn_inplace(self.conv1, self.bn1)
     fuse_conv_bn_inplace(self.conv2, self.bn2)
     fuse_conv_bn_inplace(self.conv3, self.bn3)
-    fuse_conv_bn_inplace(self.conv4, self.bn4)
-    fuse_conv_bn_inplace(self.conv5, self.bn5)
     self.fused = True
 
   @property
@@ -84,8 +76,6 @@ class MNISTModel:
       "block1": self.block1,
       "block2": self.block2,
       "block3": self.block3,
-      "block4": self.block4,
-      "block5": self.block5,
     }
 
 
