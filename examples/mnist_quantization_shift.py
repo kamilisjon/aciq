@@ -2,6 +2,7 @@ import argparse
 import copy
 import gc
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Callable
 
@@ -54,7 +55,9 @@ def _shifts(rows: list[MnistResultRow], method: str, block: str) -> np.ndarray:
 # --- Quantization ---
 
 
-QUANT_METHODS = ["minmax", "aciq"]
+class QuantMethod(StrEnum):
+  MINMAX = "minmax"
+  ACIQ = "aciq"
 
 
 def _aciq_alpha(vec: np.ndarray) -> float:
@@ -65,10 +68,10 @@ def _aciq_alpha(vec: np.ndarray) -> float:
   return solve_symmetric_mae_alpha(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=BITS, alpha_max=alpha_mm)
 
 
-def quantize_model(model: MNISTModel, method: str) -> MNISTModel:
+def quantize_model(model: MNISTModel, method: QuantMethod) -> MNISTModel:
   qmodel = copy.deepcopy(model)
   qmodel.fuse()
-  alpha_fn = minmax_alpha if method == "minmax" else _aciq_alpha
+  alpha_fn = minmax_alpha if method == QuantMethod.MINMAX else _aciq_alpha
   for mod in qmodel.weight_modules:
     w = mod.weight.numpy()
     alpha = alpha_fn(w.flatten())
@@ -107,9 +110,9 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
     fp32_outputs = collect_layer_outputs(model, x_test)
     print("Collected activations")
 
-    accs: dict[str, float] = {}
-    shifts: dict[str, dict[str, float]] = {}
-    for method in QUANT_METHODS:
+    accs: dict[QuantMethod, float] = {}
+    shifts: dict[QuantMethod, dict[str, float]] = {}
+    for method in QuantMethod:
       qmodel = quantize_model(model, method)
       accs[method] = float(qmodel.test_acc(x_test, y_test).item())
       q_outputs = collect_layer_outputs(qmodel, x_test)
@@ -117,14 +120,14 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
       print(f"{method} quantization done")
       # del qmodel, q_outputs
 
-    print(f"  FP32={fp32_acc:.4f}  MinMax={accs['minmax']:.4f}  ACIQ={accs['aciq']:.4f}")
+    print(f"  FP32={fp32_acc:.4f}  MinMax={accs[QuantMethod.MINMAX]:.4f}  ACIQ={accs[QuantMethod.ACIQ]:.4f}")
     result_rows.append(
       MnistResultRow(
         seed=seed,
         fp32_acc=fp32_acc,
-        minmax_acc=accs["minmax"],
-        aciq_acc=accs["aciq"],
-        **{f"{m}_{b}_mean_shift": shifts[m][b] for m in QUANT_METHODS for b in BlockName},
+        minmax_acc=accs[QuantMethod.MINMAX],
+        aciq_acc=accs[QuantMethod.ACIQ],
+        **{f"{m}_{b}_mean_shift": shifts[m][b] for m in QuantMethod for b in BlockName},
       )
     )
     loss_rows.extend(
@@ -142,7 +145,7 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
 def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   fig, axes = plt.subplots(2, len(BlockName) + 1, figsize=(4 * (len(BlockName) + 1), 8))
-  for row_idx, (method, color) in enumerate([("minmax", "steelblue"), ("aciq", "indianred")]):
+  for row_idx, (method, color) in enumerate([(QuantMethod.MINMAX, "steelblue"), (QuantMethod.ACIQ, "indianred")]):
     acc_drops = np.array([r.fp32_acc - getattr(r, f"{method}_acc") for r in rows])
 
     for col_idx, block in enumerate(BlockName):
@@ -173,7 +176,7 @@ def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
 def plot_shift_accumulation(rows: list[MnistResultRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   fig, ax = plt.subplots(figsize=(10, 5))
-  for color, method in [("steelblue", "minmax"), ("indianred", "aciq")]:
+  for color, method in [("steelblue", QuantMethod.MINMAX), ("indianred", QuantMethod.ACIQ)]:
     per_layer_means = [_shifts(rows, method, b).mean() for b in BlockName]
     per_layer_stds = [_shifts(rows, method, b).std() for b in BlockName]
     cumulative = np.cumsum(per_layer_means)
@@ -181,7 +184,7 @@ def plot_shift_accumulation(rows: list[MnistResultRow], save_dir: Path) -> None:
     x_pos = np.arange(len(BlockName))
     label = method.upper()
     ax.bar(
-      x_pos + (-0.2 if method == "minmax" else 0.2),
+      x_pos + (-0.2 if method == QuantMethod.MINMAX else 0.2),
       per_layer_means,
       width=0.35,
       color=color,
