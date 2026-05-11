@@ -8,7 +8,7 @@ from tinygrad import GlobalCounters, Tensor, TinyJit
 from tinygrad.helpers import tqdm
 from tinygrad.nn import BatchNorm, Conv2d, Linear
 
-from aciq.mean_shift import LayerStats, ShiftResult, ShiftRow, StatsAccumulator, compute_shift
+from aciq.mean_shift import LayerStats, ShiftRow, StatsAccumulator, compute_shift
 from aciq.imagenet.benchmark import benchmark_accuracy, sample_imagenet_val
 from aciq.bias_correction import (
   LayerInputStats,
@@ -184,64 +184,42 @@ def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, 
   plt.close(fig)
 
 
-def _plot_shift(
-  shift_data: dict[str, ShiftResult],
+def plot_shift(
+  rows: list[ShiftRow],
   layer_names: list[str],
-  shift_key: str,
-  ylabel: str,
-  title: str,
   save_dir: Path,
-  filename: str,
+  model_name: str = "",
   colors: list[str] | None = None,
 ) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   colors = colors or DEFAULT_COLORS
 
-  methods = list(shift_data.keys())
+  by_method: dict[str, dict[str, float]] = {}
+  for r in rows:
+    by_method.setdefault(r.method, {})[r.layer] = r.mean_shift
+
+  methods = list(by_method.keys())
   n_methods = len(methods)
   x_pos = np.arange(len(layer_names))
   bar_width = 0.7 / n_methods
   offsets = np.linspace(-0.35 + bar_width / 2, 0.35 - bar_width / 2, n_methods)
 
   fig, ax = plt.subplots(figsize=(max(10, len(layer_names) * 1.2), 5))
-
   for i, method in enumerate(methods):
-    shifts = getattr(shift_data[method], shift_key)
-    per_layer = [shifts[name] for name in layer_names]
-
-    color = colors[i % len(colors)]
-    ax.bar(x_pos + offsets[i], per_layer, width=bar_width, color=color, alpha=0.5, label=method)
+    per_layer = [by_method[method][name] for name in layer_names]
+    ax.bar(x_pos + offsets[i], per_layer, width=bar_width, color=colors[i % len(colors)], alpha=0.5, label=method)
 
   ax.set_xticks(x_pos)
   ax.set_xticklabels(layer_names, rotation=45, ha="right", fontsize=7)
   ax.set_xlabel("Layer")
-  ax.set_ylabel(ylabel)
-  ax.set_title(title)
+  ax.set_ylabel("Output mean shift |E[fp32] - E[quant]|")
+  prefix = f"{model_name} — " if model_name else ""
+  ax.set_title(f"{prefix}Per-layer mean shift")
   ax.legend(fontsize=7, prop={"family": "monospace", "size": 7})
   ax.grid(True, alpha=0.3, axis="y")
   fig.tight_layout()
-  fig.savefig(save_dir / filename, dpi=700)
+  fig.savefig(save_dir / "mean_shift.png", dpi=700)
   plt.close(fig)
-
-
-def plot_shift(
-  shift_data: dict[str, ShiftResult],
-  layer_names: list[str],
-  save_dir: Path,
-  model_name: str = "",
-  colors: list[str] | None = None,
-) -> None:
-  prefix = f"{model_name} — " if model_name else ""
-  _plot_shift(
-    shift_data,
-    layer_names,
-    shift_key="mean_shift",
-    ylabel="Output mean shift |E[fp32] - E[quant]|",
-    title=f"{prefix}Per-layer mean shift",
-    save_dir=save_dir,
-    filename="mean_shift.png",
-    colors=colors,
-  )
 
 
 @dataclass
@@ -456,24 +434,19 @@ def stage_shift_analysis(config: PipelineConfig, fp32_model: ResNet, variants: d
   print("  Collecting FP32 stats...")
   fp32_stats = _collect_activations(fp32_model, image_paths)
 
-  shifts: dict[str, ShiftResult] = {}
+  shift_rows: list[ShiftRow] = []
   for (method, mode), model in variants.items():
     label = f"{method}::{mode}"
     print(f"  Collecting {label} stats...")
     quant_stats = _collect_activations(model, image_paths)
-    shifts[label] = compute_shift(fp32_stats, quant_stats)
+    shift_rows.extend(compute_shift(fp32_stats, quant_stats, label))
 
   layer_names = list(fp32_stats.keys())
   csv_path = config.shift_results_dir / "shifts.csv"
-  shift_rows = [
-    ShiftRow(method=method, layer=layer, mean_shift=sh.mean_shift[layer], var_shift=sh.var_shift[layer])
-    for method, sh in shifts.items()
-    for layer in layer_names
-  ]
   save_csv(shift_rows, csv_path)
   print(f"  CSV saved to {csv_path}")
 
-  plot_shift(shifts, layer_names, config.shift_results_dir, model_name=config.model_name)
+  plot_shift(shift_rows, layer_names, config.shift_results_dir, model_name=config.model_name)
   print(f"  Plots saved to {config.shift_results_dir}/")
 
 

@@ -10,7 +10,7 @@ from tinygrad.helpers import tqdm
 from tinygrad.nn import Conv2d, Linear
 from scipy.stats import spearmanr
 
-from aciq.mean_shift import LayerStats, ShiftResult, StatsAccumulator, compute_shift
+from aciq.mean_shift import LayerStats, StatsAccumulator, compute_shift
 from aciq.distributions import Distribution, DistributionType
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.mnist import BlockName, MNISTModel, _load_normalized, evaluate_model, train_model
@@ -107,14 +107,14 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
     mm_model = quantize_model(model, "minmax")
     mm_acc = evaluate_model(mm_model, x_test, y_test)
     mm_outputs = collect_layer_outputs(mm_model, x_test)
-    mm_shift = compute_shift(fp32_outputs, mm_outputs)
+    mm_shift = {r.layer: r.mean_shift for r in compute_shift(fp32_outputs, mm_outputs, "minmax")}
     print("MinMax quantization done")
 
     # ACIQ quantization
     aciq_model = quantize_model(model, "aciq")
     aciq_acc = evaluate_model(aciq_model, x_test, y_test)
     aciq_outputs = collect_layer_outputs(aciq_model, x_test)
-    aciq_shift = compute_shift(fp32_outputs, aciq_outputs)
+    aciq_shift = {r.layer: r.mean_shift for r in compute_shift(fp32_outputs, aciq_outputs, "aciq")}
     print("ACIQ quantization done")
 
     print(f"  FP32={fp32_acc:.4f}  MinMax={mm_acc:.4f}  ACIQ={aciq_acc:.4f}")
@@ -123,8 +123,8 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
       fp32_acc=fp32_acc,
       minmax_acc=mm_acc,
       aciq_acc=aciq_acc,
-      **{f"minmax_{b}_mean_shift": mm_shift.mean_shift[b] for b in BlockName},
-      **{f"aciq_{b}_mean_shift": aciq_shift.mean_shift[b] for b in BlockName},
+      **{f"minmax_{b}_mean_shift": mm_shift[b] for b in BlockName},
+      **{f"aciq_{b}_mean_shift": aciq_shift[b] for b in BlockName},
     ))
     loss_rows.extend(
       MnistLossRow(seed=seed, step=step, train_loss=tl, test_loss=el)
