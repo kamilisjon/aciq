@@ -1,6 +1,4 @@
-import csv
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 
@@ -15,6 +13,14 @@ class LayerStats:
 class ShiftResult:
   mean_shift: dict[str, float]  # mean of |per-channel mean difference|
   var_shift: dict[str, float]  # mean of |per-channel variance difference|
+
+
+@dataclass
+class ShiftRow:
+  method: str
+  layer: str
+  mean_shift: float
+  var_shift: float
 
 
 def compute_shift(fp32_outputs: dict[str, LayerStats], quant_outputs: dict[str, LayerStats]) -> ShiftResult:
@@ -52,40 +58,3 @@ class StatsAccumulator:
       var = ((self._sq_sums[name] / n) - (self._sums[name] / n) ** 2).astype(np.float32)
       result[name] = LayerStats(mean=mean, var=var)
     return result
-
-
-def save_shifts_csv(shifts: dict[str, ShiftResult], layer_names: list[str], save_path: Path) -> None:
-  save_path.parent.mkdir(parents=True, exist_ok=True)
-  header = ["method"]
-  for name in layer_names:
-    header += [f"{name}__mean_shift", f"{name}__var_shift"]
-
-  with open(save_path, "w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerow(header)
-    for method, shift in shifts.items():
-      row: list[str | float] = [method]
-      for name in layer_names:
-        row += [shift.mean_shift[name], shift.var_shift[name]]
-      writer.writerow(row)
-
-
-def load_shifts_csv(path: Path) -> tuple[dict[str, ShiftResult], list[str]]:
-  with open(path) as f:
-    reader = csv.DictReader(f)
-    columns = reader.fieldnames
-    assert columns is not None
-
-    layer_names: list[str] = []
-    for col in columns:
-      if col.endswith("__mean_shift"):
-        layer_names.append(col.removesuffix("__mean_shift"))
-
-    shifts: dict[str, ShiftResult] = {}
-    for row in reader:
-      method = row["method"]
-      mean_shift = {name: float(row[f"{name}__mean_shift"]) for name in layer_names}
-      var_shift = {name: float(row[f"{name}__var_shift"]) for name in layer_names}
-      shifts[method] = ShiftResult(mean_shift=mean_shift, var_shift=var_shift)
-
-  return shifts, layer_names

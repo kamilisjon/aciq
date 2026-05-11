@@ -1,6 +1,5 @@
 import argparse
 import copy
-import csv
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,7 +11,7 @@ from scipy.stats import spearmanr
 
 from aciq.analysis import LayerStats, ShiftResult, StatsAccumulator, compute_shift
 from aciq.distributions import Distribution, DistributionType
-from aciq.helpers import RESULTS_DIR, get_output_dir
+from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.mnist import MNISTModel, _load_normalized, evaluate_model, train_model
 from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 
@@ -20,6 +19,32 @@ from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 BITS = 4
 BLOCK_NAMES = ["block1", "block2", "block3", "block4", "block5"]
 TEST_CHUNK_SIZE = 1000
+
+
+@dataclass
+class MnistResultRow:
+  seed: int
+  fp32_acc: float
+  minmax_acc: float
+  aciq_acc: float
+  minmax_block1_mean_shift: float
+  minmax_block2_mean_shift: float
+  minmax_block3_mean_shift: float
+  minmax_block4_mean_shift: float
+  minmax_block5_mean_shift: float
+  aciq_block1_mean_shift: float
+  aciq_block2_mean_shift: float
+  aciq_block3_mean_shift: float
+  aciq_block4_mean_shift: float
+  aciq_block5_mean_shift: float
+
+
+@dataclass
+class MnistLossRow:
+  seed: int
+  step: int
+  train_loss: float
+  test_loss: float
 
 
 # --- Quantization ---
@@ -131,65 +156,38 @@ def run_training(n_models: int, steps: int) -> list[ModelResult]:
   return results
 
 
-# --- CSV I/O ---
+# --- CSV row adapters ---
 
 
-def save_results_csv(results: list[ModelResult], save_path: Path) -> None:
-  save_path.parent.mkdir(parents=True, exist_ok=True)
-  header = ["seed", "fp32_acc", "minmax_acc", "aciq_acc"]
-  for layer in BLOCK_NAMES:
-    header += [f"minmax_{layer}_mean_shift", f"aciq_{layer}_mean_shift"]
-
-  with open(save_path, "w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerow(header)
-    for r in results:
-      row: list[float | int] = [r.seed, r.fp32_accuracy, r.minmax_accuracy, r.aciq_accuracy]
-      for layer in BLOCK_NAMES:
-        row += [r.minmax_shifts.mean_shift[layer], r.aciq_shifts.mean_shift[layer]]
-      writer.writerow(row)
+def _to_result_row(r: ModelResult) -> MnistResultRow:
+  return MnistResultRow(
+    seed=r.seed,
+    fp32_acc=r.fp32_accuracy,
+    minmax_acc=r.minmax_accuracy,
+    aciq_acc=r.aciq_accuracy,
+    **{f"minmax_{b}_mean_shift": r.minmax_shifts.mean_shift[b] for b in BLOCK_NAMES},
+    **{f"aciq_{b}_mean_shift": r.aciq_shifts.mean_shift[b] for b in BLOCK_NAMES},
+  )
 
 
-def load_results_csv(path: Path) -> list[dict[str, float]]:
-  with open(path) as f:
-    return [{k: float(v) for k, v in row.items()} for row in csv.DictReader(f)]
-
-
-def save_losses_csv(results: list[ModelResult], save_path: Path) -> None:
-  save_path.parent.mkdir(parents=True, exist_ok=True)
-  with open(save_path, "w", newline="") as f:
-    writer = csv.DictWriter(f, fieldnames=["seed", "step", "train_loss", "test_loss"])
-    writer.writeheader()
-    for r in results:
-      for idx, (tr, te) in enumerate(zip(r.train_losses, r.test_losses), start=1):
-        writer.writerow({"seed": r.seed, "step": idx, "train_loss": tr, "test_loss": te})
-
-
-def load_losses_csv(path: Path) -> list[dict[str, float | int]]:
-  with open(path) as f:
-    return [
-      {
-        "seed": int(r["seed"]),
-        "step": int(r["step"]),
-        "train_loss": float(r["train_loss"]),
-        "test_loss": float(r["test_loss"]),
-      }
-      for r in csv.DictReader(f)
-    ]
+def _to_loss_rows(r: ModelResult) -> list[MnistLossRow]:
+  return [
+    MnistLossRow(seed=r.seed, step=step, train_loss=tl, test_loss=el) for step, (tl, el) in enumerate(zip(r.train_losses, r.test_losses), start=1)
+  ]
 
 
 # --- Analysis ---
 
 
-def _plot_scatter_grid(rows: list[dict[str, float]], shift_key: str, shift_label: str, save_dir: Path, filename: str) -> None:
+def _plot_scatter_grid(rows: list[MnistResultRow], shift_key: str, shift_label: str, save_dir: Path, filename: str) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   fig, axes = plt.subplots(2, len(BLOCK_NAMES) + 1, figsize=(4 * (len(BLOCK_NAMES) + 1), 8))
   for row_idx, (method, color) in enumerate([("minmax", "steelblue"), ("aciq", "indianred")]):
-    acc_drops = np.array([r["fp32_acc"] - r[f"{method}_acc"] for r in rows])
+    acc_drops = np.array([r.fp32_acc - getattr(r, f"{method}_acc") for r in rows])
 
     for col_idx, block in enumerate(BLOCK_NAMES):
       ax = axes[row_idx, col_idx]
-      shifts = np.array([r[f"{method}_{block}_{shift_key}"] for r in rows])
+      shifts = np.array([getattr(r, f"{method}_{block}_{shift_key}") for r in rows])
       ax.scatter(shifts, acc_drops, color=color, alpha=0.6, s=20)
       rho, p = spearmanr(shifts, acc_drops)
       ax.set_title(f"{method.upper()} {block}\nrho={rho:.3f} p={p:.3g}", fontsize=9)
@@ -198,7 +196,7 @@ def _plot_scatter_grid(rows: list[dict[str, float]], shift_key: str, shift_label
       ax.grid(True, alpha=0.3)
 
     ax = axes[row_idx, len(BLOCK_NAMES)]
-    total_shifts = np.array([sum(r[f"{method}_{b}_{shift_key}"] for b in BLOCK_NAMES) for r in rows])
+    total_shifts = np.array([sum(getattr(r, f"{method}_{b}_{shift_key}") for b in BLOCK_NAMES) for r in rows])
     ax.scatter(total_shifts, acc_drops, color=color, alpha=0.6, s=20)
     rho, p = spearmanr(total_shifts, acc_drops)
     ax.set_title(f"{method.upper()} total\nrho={rho:.3f} p={p:.3g}", fontsize=9)
@@ -212,16 +210,16 @@ def _plot_scatter_grid(rows: list[dict[str, float]], shift_key: str, shift_label
   plt.close(fig)
 
 
-def plot_scatter(rows: list[dict[str, float]], save_dir: Path) -> None:
+def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
   _plot_scatter_grid(rows, "mean_shift", "Mean shift", save_dir, "scatter_mean_shift_vs_accuracy.png")
 
 
-def _plot_accumulation(rows: list[dict[str, float]], shift_key: str, ylabel: str, title: str, save_dir: Path, filename: str) -> None:
+def _plot_accumulation(rows: list[MnistResultRow], shift_key: str, ylabel: str, title: str, save_dir: Path, filename: str) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   fig, ax = plt.subplots(figsize=(10, 5))
   for color, method in [("steelblue", "minmax"), ("indianred", "aciq")]:
-    per_layer_means = [np.mean([r[f"{method}_{b}_{shift_key}"] for r in rows]) for b in BLOCK_NAMES]
-    per_layer_stds = [np.std([r[f"{method}_{b}_{shift_key}"] for r in rows]) for b in BLOCK_NAMES]
+    per_layer_means = [np.mean([getattr(r, f"{method}_{b}_{shift_key}") for r in rows]) for b in BLOCK_NAMES]
+    per_layer_stds = [np.std([getattr(r, f"{method}_{b}_{shift_key}") for r in rows]) for b in BLOCK_NAMES]
     cumulative = np.cumsum(per_layer_means)
 
     x_pos = np.arange(len(BLOCK_NAMES))
@@ -250,7 +248,7 @@ def _plot_accumulation(rows: list[dict[str, float]], shift_key: str, ylabel: str
   plt.close(fig)
 
 
-def plot_shift_accumulation(rows: list[dict[str, float]], save_dir: Path) -> None:
+def plot_shift_accumulation(rows: list[MnistResultRow], save_dir: Path) -> None:
   _plot_accumulation(
     rows,
     "mean_shift",
@@ -261,19 +259,19 @@ def plot_shift_accumulation(rows: list[dict[str, float]], save_dir: Path) -> Non
   )
 
 
-def plot_loss_curves(loss_rows: list[dict[str, float | int]], save_dir: Path, max_lines: int = 10) -> None:
+def plot_loss_curves(loss_rows: list[MnistLossRow], save_dir: Path, max_lines: int = 10) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
-  by_seed: dict[int, list[dict[str, float | int]]] = {}
+  by_seed: dict[int, list[MnistLossRow]] = {}
   for r in loss_rows:
-    by_seed.setdefault(int(r["seed"]), []).append(r)
+    by_seed.setdefault(r.seed, []).append(r)
   selected_seeds = sorted(by_seed)[:max_lines]
 
   fig, ax = plt.subplots(figsize=(8, 5))
   for i, seed in enumerate(selected_seeds):
-    seed_rows = sorted(by_seed[seed], key=lambda r: r["step"])
-    xs = [r["step"] for r in seed_rows]
-    train_losses = [r["train_loss"] for r in seed_rows]
-    test_losses = [r["test_loss"] for r in seed_rows]
+    seed_rows = sorted(by_seed[seed], key=lambda r: r.step)
+    xs = [r.step for r in seed_rows]
+    train_losses = [r.train_loss for r in seed_rows]
+    test_losses = [r.test_loss for r in seed_rows]
     ax.plot(xs, train_losses, color="steelblue", alpha=0.6, label="Training loss" if i == 0 else None)
     ax.plot(xs, test_losses, color="indianred", alpha=0.6, label="Testing set loss" if i == 0 else None)
 
@@ -299,21 +297,17 @@ if __name__ == "__main__":
   save_dir = get_output_dir(RESULTS_DIR, "mnist")
 
   if args.from_csv:
-    rows = load_results_csv(args.from_csv)
+    rows = load_csv(args.from_csv, MnistResultRow)
     print(f"Loaded {len(rows)} models from {args.from_csv}\n")
     losses_path = args.from_csv.parent / "losses.csv"
-    loss_rows = load_losses_csv(losses_path) if losses_path.exists() else []
+    loss_rows = load_csv(losses_path, MnistLossRow) if losses_path.exists() else []
   else:
     print(f"Running training with {args.n_models} models, {args.steps} steps each...")
     results = run_training(args.n_models, args.steps)
-    save_results_csv(results, save_dir / "results.csv")
-    save_losses_csv(results, save_dir / "losses.csv")
-    rows = load_results_csv(save_dir / "results.csv")
-    loss_rows = [
-      {"seed": r.seed, "step": idx + 1, "train_loss": r.train_losses[idx], "test_loss": r.test_losses[idx]}
-      for r in results
-      for idx in range(len(r.train_losses))
-    ]
+    save_csv([_to_result_row(r) for r in results], save_dir / "results.csv")
+    save_csv([row for r in results for row in _to_loss_rows(r)], save_dir / "losses.csv")
+    rows = load_csv(save_dir / "results.csv", MnistResultRow)
+    loss_rows = load_csv(save_dir / "losses.csv", MnistLossRow)
 
   plot_scatter(rows, save_dir)
   plot_shift_accumulation(rows, save_dir)

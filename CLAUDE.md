@@ -51,7 +51,7 @@ Do not produce prose in Markdown, plain text, or chat-only form unless explicitl
 ### Math + pandoc gotchas
 
 - **Avoid `\tag{...}`.** Pandoc's math parser rejects it. For a manual equation number `(N)`, use `\setcounter{equation}{N-1}` then `\begin{equation}...\end{equation}` — both engines honor this.
-- **Avoid `\;`, `\!`, and other thin-space macros inside math.** They survive in PDF but pandoc strips them and can mis-parse the result. Use a plain space or `\,`.
+- **Avoid `\;`, `\!`, and other thin-space macros inside math.** They survive in PDF but pandoc strips them and can miss-parse the result. Use a plain space or `\,`.
 - **Hard-code citations for pandoc.** Pandoc does not expand `\cite{key}` against an inline `thebibliography` block. Write the deliverable's own `[N]` directly in prose, numbered from 1 in the order references first appear. The author renumbers against the master bibliography by hand when pasting into `./docs/thesis.pdf`.
 - **Ignore the `.docx` round-trip warning.** `pandoc file.docx -t plain` warns "Could not convert TeX math…", but `word/document.xml` contains valid `<m:oMath>` and Word renders the equations natively.
 

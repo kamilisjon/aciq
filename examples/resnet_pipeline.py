@@ -1,6 +1,5 @@
 import argparse
 import copy
-import csv
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -9,14 +8,14 @@ from tinygrad import GlobalCounters, Tensor, TinyJit
 from tinygrad.helpers import tqdm
 from tinygrad.nn import BatchNorm, Conv2d, Linear
 
-from aciq.analysis import LayerStats, ShiftResult, StatsAccumulator, compute_shift, save_shifts_csv
+from aciq.analysis import LayerStats, ShiftResult, ShiftRow, StatsAccumulator, compute_shift
 from aciq.imagenet.benchmark import benchmark_accuracy, sample_imagenet_val
 from aciq.bias_correction import (
   LayerInputStats,
   apply_correction,
 )
 from aciq.bn_fusion import fuse_conv_bn
-from aciq.helpers import RESULTS_DIR, get_output_dir
+from aciq.helpers import RESULTS_DIR, get_output_dir, save_csv
 from aciq.resnet import Bottleneck, ResNet, capture_bn_params, compute_input_stats
 from aciq.preprocess import load_and_preprocess
 from aciq.quantization import quantize
@@ -24,6 +23,28 @@ from aciq.quantization import quantize
 
 METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]
 PER_CHANNEL_METHODS = {"per_channel_minmax", "per_channel_aciq"}
+
+
+@dataclass
+class MaeComparisonRow:
+  layer_idx: int
+  op_type: str
+  name: str
+  n: int
+  n_per_ch: int
+  ch_count: int
+  err: float
+  err_aciq: float
+  err_channel: float
+  err_channel_aciq: float
+
+
+@dataclass
+class BenchmarkRow:
+  method: str
+  correction_mode: str
+  top1: float
+  top5: float
 
 
 import matplotlib.pyplot as plt
@@ -313,58 +334,59 @@ def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet, fq_models
 
   config.weight_results_dir.mkdir(parents=True, exist_ok=True)
   csv_path = config.weight_results_dir / "mae_comparison.csv"
-  with open(csv_path, "w", newline="") as csv_file:
-    writer = csv.writer(csv_file)
-    writer.writerow(["layer_idx", "op_type", "name", "n", "n_per_ch", "ch_count", "err", "err_aciq", "err_channel", "err_channel_aciq"])
+  rows: list[MaeComparisonRow] = []
 
-    for layer_idx, (weight_name, module) in enumerate(weight_modules, 1):
-      op_type = "Linear" if isinstance(module, Linear) else "Conv"
-      weight_arr = module.weight.numpy().astype(np.float32)
-      vec = weight_arr.flatten()
-      safe_name = weight_name.replace("/", "_").replace(":", "_")[:60]
+  for layer_idx, (weight_name, module) in enumerate(weight_modules, 1):
+    op_type = "Linear" if isinstance(module, Linear) else "Conv"
+    weight_arr = module.weight.numpy().astype(np.float32)
+    vec = weight_arr.flatten()
+    safe_name = weight_name.replace("/", "_").replace(":", "_")[:60]
 
-      # Per-tensor
-      plot_dir = config.weight_results_dir / "per_tensor"
-      alpha_minmax, alpha_aciq = analyze_layer(vec, weight_name, layer_idx, config.bits, plot_dir)
-      q_mm = quantize(vec, alpha_minmax, config.bits)
-      q_ac = quantize(vec, alpha_aciq, config.bits)
+    # Per-tensor
+    plot_dir = config.weight_results_dir / "per_tensor"
+    alpha_minmax, alpha_aciq = analyze_layer(vec, weight_name, layer_idx, config.bits, plot_dir)
+    q_mm = quantize(vec, alpha_minmax, config.bits)
+    q_ac = quantize(vec, alpha_aciq, config.bits)
 
-      fq_lookups["per_tensor_minmax"][weight_name].weight = Tensor(q_mm.reshape(weight_arr.shape).astype(np.float32))
-      fq_lookups["per_tensor_aciq"][weight_name].weight = Tensor(q_ac.reshape(weight_arr.shape).astype(np.float32))
+    fq_lookups["per_tensor_minmax"][weight_name].weight = Tensor(q_mm.reshape(weight_arr.shape).astype(np.float32))
+    fq_lookups["per_tensor_aciq"][weight_name].weight = Tensor(q_ac.reshape(weight_arr.shape).astype(np.float32))
 
-      # Per-channel (axis 0 = output channels/features)
-      ch_plot_dir = config.weight_results_dir / "per_channel" / f"{layer_idx:03d}_{safe_name}" if config.plot_per_channel else None
-      total_err_minmax = 0.0
-      total_err_aciq = 0.0
-      fq_ch_mm = np.empty_like(weight_arr)
-      fq_ch_ac = np.empty_like(weight_arr)
-      for ch in range(weight_arr.shape[0]):
-        ch_vec = weight_arr[ch].flatten()
-        ch_alpha_minmax, ch_alpha_aciq = analyze_layer(ch_vec, f"{weight_name}/ch{ch}", ch, config.bits, ch_plot_dir)
-        q_mm_ch = quantize(ch_vec, ch_alpha_minmax, config.bits)
-        q_ac_ch = quantize(ch_vec, ch_alpha_aciq, config.bits)
-        total_err_minmax += float(np.sum(np.abs(ch_vec - q_mm_ch)))
-        total_err_aciq += float(np.sum(np.abs(ch_vec - q_ac_ch)))
-        fq_ch_mm[ch] = q_mm_ch.reshape(weight_arr[ch].shape)
-        fq_ch_ac[ch] = q_ac_ch.reshape(weight_arr[ch].shape)
+    # Per-channel (axis 0 = output channels/features)
+    ch_plot_dir = config.weight_results_dir / "per_channel" / f"{layer_idx:03d}_{safe_name}" if config.plot_per_channel else None
+    total_err_minmax = 0.0
+    total_err_aciq = 0.0
+    fq_ch_mm = np.empty_like(weight_arr)
+    fq_ch_ac = np.empty_like(weight_arr)
+    for ch in range(weight_arr.shape[0]):
+      ch_vec = weight_arr[ch].flatten()
+      ch_alpha_minmax, ch_alpha_aciq = analyze_layer(ch_vec, f"{weight_name}/ch{ch}", ch, config.bits, ch_plot_dir)
+      q_mm_ch = quantize(ch_vec, ch_alpha_minmax, config.bits)
+      q_ac_ch = quantize(ch_vec, ch_alpha_aciq, config.bits)
+      total_err_minmax += float(np.sum(np.abs(ch_vec - q_mm_ch)))
+      total_err_aciq += float(np.sum(np.abs(ch_vec - q_ac_ch)))
+      fq_ch_mm[ch] = q_mm_ch.reshape(weight_arr[ch].shape)
+      fq_ch_ac[ch] = q_ac_ch.reshape(weight_arr[ch].shape)
 
-      fq_lookups["per_channel_minmax"][weight_name].weight = Tensor(fq_ch_mm.astype(np.float32))
-      fq_lookups["per_channel_aciq"][weight_name].weight = Tensor(fq_ch_ac.astype(np.float32))
+    fq_lookups["per_channel_minmax"][weight_name].weight = Tensor(fq_ch_mm.astype(np.float32))
+    fq_lookups["per_channel_aciq"][weight_name].weight = Tensor(fq_ch_ac.astype(np.float32))
 
-      print(f"  [{layer_idx:>3}] {op_type:6s} {weight_name:40} n={len(vec):,}")
-      writer.writerow([
-        layer_idx,
-        op_type,
-        weight_name,
-        len(vec),
-        len(ch_vec),
-        int(len(vec) / len(ch_vec)),
-        float(np.sum(np.abs(vec - q_mm))),
-        float(np.sum(np.abs(vec - q_ac))),
-        total_err_minmax,
-        total_err_aciq,
-      ])
+    print(f"  [{layer_idx:>3}] {op_type:6s} {weight_name:40} n={len(vec):,}")
+    rows.append(
+      MaeComparisonRow(
+        layer_idx=layer_idx,
+        op_type=op_type,
+        name=weight_name,
+        n=len(vec),
+        n_per_ch=len(ch_vec),
+        ch_count=int(len(vec) / len(ch_vec)),
+        err=float(np.sum(np.abs(vec - q_mm))),
+        err_aciq=float(np.sum(np.abs(vec - q_ac))),
+        err_channel=total_err_minmax,
+        err_channel_aciq=total_err_aciq,
+      )
+    )
 
+  save_csv(rows, csv_path)
   print(f"  CSV written to {csv_path}")
 
 
@@ -443,7 +465,12 @@ def stage_shift_analysis(config: PipelineConfig, fp32_model: ResNet, variants: d
 
   layer_names = list(fp32_stats.keys())
   csv_path = config.shift_results_dir / "shifts.csv"
-  save_shifts_csv(shifts, layer_names, csv_path)
+  shift_rows = [
+    ShiftRow(method=method, layer=layer, mean_shift=sh.mean_shift[layer], var_shift=sh.var_shift[layer])
+    for method, sh in shifts.items()
+    for layer in layer_names
+  ]
+  save_csv(shift_rows, csv_path)
   print(f"  CSV saved to {csv_path}")
 
   plot_shift(shifts, layer_names, config.shift_results_dir, model_name=config.model_name)
@@ -457,21 +484,21 @@ def stage_shift_analysis(config: PipelineConfig, fp32_model: ResNet, variants: d
 
 def stage_benchmark(config: PipelineConfig, fp_model: ResNet, variants: dict[tuple[str, str], ResNet]) -> None:
   config.correction_results_dir.mkdir(parents=True, exist_ok=True)
+  rows: list[BenchmarkRow] = []
+
+  print("  benchmarking FP32")
+  top1, top5 = benchmark_accuracy(fp_model, config.dataset_path)
+  rows.append(BenchmarkRow(method="fp32", correction_mode="none", top1=float(top1), top5=float(top5)))
+  print(f"  FP32: top1={top1:.2f}  top5={top5:.2f}")
+
+  for (method, mode), model in variants.items():
+    print(f"  benchmarking {method}::{mode}")
+    top1, top5 = benchmark_accuracy(model, config.dataset_path)
+    rows.append(BenchmarkRow(method=method, correction_mode=mode, top1=float(top1), top5=float(top5)))
+    print(f"  {method}::{mode}: top1={top1:.2f}  top5={top5:.2f}")
+
   csv_path = config.correction_results_dir / "benchmark_results.csv"
-  with open(csv_path, "w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerow(["method", "correction_mode", "top1", "top5"])
-
-    print("  benchmarking FP32")
-    top1, top5 = benchmark_accuracy(fp_model, config.dataset_path)
-    writer.writerow(["fp32", "none", top1, top5])
-    print(f"  FP32: top1={top1:.2f}  top5={top5:.2f}")
-
-    for (method, mode), model in variants.items():
-      print(f"  benchmarking {method}::{mode}")
-      top1, top5 = benchmark_accuracy(model, config.dataset_path)
-      writer.writerow([method, mode, top1, top5])
-      print(f"  {method}::{mode}: top1={top1:.2f}  top5={top5:.2f}")
+  save_csv(rows, csv_path)
   print(f"  CSV saved to {csv_path}")
 
 

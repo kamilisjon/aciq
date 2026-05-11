@@ -1,24 +1,30 @@
-import csv
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 from tinygrad import GlobalCounters, Tensor, TinyJit
 from tinygrad.helpers import tqdm
 
+from aciq.helpers import load_csv
 from aciq.imagenet.class_containers import ImagenetClassIndex
 from aciq.resnet import ResNet
 from aciq.preprocess import load_and_preprocess
 
 
+@dataclass
+class ImagenetValLabelRow:
+  ImageId: str
+  PredictionString: str
+
+
 def parse_imagenet_val_labels(dataset_path: Path) -> dict[str, str]:
-  labels_csv = dataset_path / "LOC_val_solution.csv"
+  rows = load_csv(dataset_path / "LOC_val_solution.csv", ImagenetValLabelRow)
   imageid_to_synset: dict[str, str] = {}
-  with labels_csv.open("r", newline="") as f:
-    for row in csv.DictReader(f, delimiter=","):
-      tokens = row["PredictionString"].strip().split()
-      synsets = [tokens[i] for i in range(0, len(tokens), 5)]
-      assert len(set(synsets)) == 1  # if there are multiple ground-truth labels, they must be the same
-      imageid_to_synset[row["ImageId"]] = synsets[0]
+  for row in rows:
+    tokens = row.PredictionString.strip().split()
+    synsets = [tokens[i] for i in range(0, len(tokens), 5)]
+    assert len(set(synsets)) == 1  # if there are multiple ground-truth labels, they must be the same
+    imageid_to_synset[row.ImageId] = synsets[0]
   return imageid_to_synset
 
 
