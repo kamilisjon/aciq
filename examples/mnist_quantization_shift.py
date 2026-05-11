@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from tinygrad import Tensor
+from tinygrad.helpers import tqdm
 from tinygrad.nn import Conv2d, Linear
 from scipy.stats import spearmanr
 
@@ -81,11 +82,14 @@ def _compute_alpha(vec: np.ndarray, method: str) -> float:
 # --- Distribution shift measurement ---
 
 
-def collect_layer_outputs(model: MNISTModel, x_test: Tensor) -> dict[str, LayerStats]:
-  acts = model.get_activations(x_test)
+def collect_layer_outputs(model: MNISTModel, x_test: Tensor, batch_size: int = 100) -> dict[str, LayerStats]:
   acc = StatsAccumulator()
-  for name, act in zip(BlockName, acts):
-    acc.update(name, act.numpy())
+  n = x_test.shape[0]
+  assert n % batch_size == 0, f"test set size {n} must be divisible by batch_size {batch_size}"
+  for start in tqdm(range(0, n, batch_size), desc="  activations"):
+    idx = Tensor.arange(start, start + batch_size)
+    for name, act in model.get_activations(x_test[idx]).items():
+      acc.update(name, act.numpy())
   return acc.finalize()
 
 
