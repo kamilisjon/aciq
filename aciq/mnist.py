@@ -43,6 +43,7 @@ class MNISTModel:
     self.conv4 = nn.Conv2d(64, 128, 3, padding=1, stride=2, bias=False)
     self.bn4 = nn.BatchNorm2d(128)
     self.classifier = nn.Linear(128, 10)
+    self.fused = False
 
   def _block(self, x: Tensor, conv: nn.Conv2d, bn: nn.BatchNorm) -> Tensor:
     out = conv(x)
@@ -84,6 +85,7 @@ class MNISTModel:
     fuse_conv_bn_inplace(self.conv2, self.bn2)
     fuse_conv_bn_inplace(self.conv3, self.bn3)
     fuse_conv_bn_inplace(self.conv4, self.bn4)
+    self.fused = True
 
   @property
   def activations(self) -> dict[str, Tensor]:
