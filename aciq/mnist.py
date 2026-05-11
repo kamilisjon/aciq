@@ -6,7 +6,7 @@ import tinygrad.nn as nn
 from tinygrad import GlobalCounters, Tensor, TinyJit, function
 from tinygrad.helpers import tqdm
 from tinygrad.nn.datasets import mnist
-from tinygrad.nn.optim import AdamW
+from tinygrad.nn.optim import Adam
 from tinygrad.nn.state import get_parameters
 
 from aciq.bn_fusion import fuse_conv_bn_inplace
@@ -57,7 +57,7 @@ class MNISTModel:
 
   @TinyJit
   @Tensor.train()
-  def train_step(self, X: Tensor, Y: Tensor, opt: AdamW) -> Tensor:
+  def train_step(self, X: Tensor, Y: Tensor, opt: Adam) -> Tensor:
     opt.zero_grad()
     samples = Tensor.randint(self.batch_size, high=X.shape[0])
     loss = self(X[samples]).sparse_categorical_crossentropy(Y[samples]).backward()
@@ -96,7 +96,7 @@ def train_model(seed: int, steps: int = 1170, lr: float = 1e-3, batch_size: int 
 
   x_train, y_train, x_test, y_test = _load_normalized()
   model = MNISTModel()
-  opt = AdamW(get_parameters(model), lr=lr)
+  opt = Adam(get_parameters(model), lr=lr)
   model.batch_size = batch_size
 
   train_losses: list[float] = []
