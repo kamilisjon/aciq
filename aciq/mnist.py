@@ -115,10 +115,10 @@ def train_model(seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 
   for _ in (t := tqdm(range(steps), desc="train")):
     GlobalCounters.reset()
     train_loss = float(model.train_step(x_train, y_train, opt, batch_size).item())
-    test_loss = float(model.test_acc(x_test, y_test).item())
+    test_loss = float(model.test_loss(x_test, y_test).item())
     train_losses.append(train_loss)
     test_losses.append(test_loss)
-    t.set_description(f"train_loss: {train_loss:6.2f} test_loss: {test_loss:6.2f}%")
+    t.set_description(f"train_loss: {train_loss:6.2f} test_loss: {test_loss:6.2f}")
   return model, evaluate_model(model, x_test, y_test), train_losses, test_losses
 
 
