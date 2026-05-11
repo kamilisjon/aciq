@@ -102,9 +102,11 @@ def train_model(seed: int, steps: int = 1170, lr: float = 1e-3, batch_size: int 
   train_losses: list[float] = []
   test_losses: list[float] = []
   window_sum = 0.0
-  for i in tqdm(range(steps), desc="train"):
+  test_acc = float('nan')
+  for i in (t := tqdm(range(steps), desc="train")):
     GlobalCounters.reset()
-    window_sum += float(model.train_step(x_train, y_train, opt).item())
+    loss = float(model.train_step(x_train, y_train, opt).item())
+    window_sum += loss
     if (i + 1) % eval_every == 0:
       train_losses.append(window_sum / eval_every)
       assert x_test.shape[0] % TEST_CHUNK_SIZE == 0
@@ -114,7 +116,9 @@ def train_model(seed: int, steps: int = 1170, lr: float = 1e-3, batch_size: int 
         y_chunk = y_test[j:j + TEST_CHUNK_SIZE].contiguous()
         chunk_loss_sum += float(model.test_loss_step(x_chunk, y_chunk).item())
       test_losses.append(chunk_loss_sum / (x_test.shape[0] // TEST_CHUNK_SIZE))
+      test_acc = evaluate_model(model, x_test, y_test)
       window_sum = 0.0
+    t.set_description(f"loss: {loss:6.2f} test_accuracy: {test_acc * 100:5.2f}%")
 
   return model, evaluate_model(model, x_test, y_test), train_losses, test_losses
 
