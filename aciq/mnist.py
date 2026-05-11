@@ -15,7 +15,6 @@ from tinygrad.nn.state import get_parameters
 
 _MNIST_MEAN = 0.1307
 _MNIST_STD = 0.3081
-TEST_CHUNK_SIZE = 1000
 
 
 def _load_normalized() -> tuple[Tensor, Tensor, Tensor, Tensor]:
@@ -136,10 +135,4 @@ def train_model(seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 
 
 
 def evaluate_model(model: MNISTModel, x_test: Tensor, y_test: Tensor) -> float:
-  assert x_test.shape[0] % TEST_CHUNK_SIZE == 0
-  chunk_acc_sum = 0.0
-  for j in range(0, x_test.shape[0], TEST_CHUNK_SIZE):
-    x_chunk = x_test[j:j + TEST_CHUNK_SIZE].contiguous()
-    y_chunk = y_test[j:j + TEST_CHUNK_SIZE].contiguous()
-    chunk_acc_sum += float(model.get_test_acc(x_chunk, y_chunk).item())
-  return chunk_acc_sum / (x_test.shape[0] // TEST_CHUNK_SIZE)
+  return float(model.get_test_acc(x_test, y_test).item())
