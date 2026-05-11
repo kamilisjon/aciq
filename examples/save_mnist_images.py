@@ -1,4 +1,3 @@
-import argparse
 from pathlib import Path
 
 import numpy as np
@@ -6,6 +5,8 @@ from PIL import Image
 from tinygrad import Tensor
 from tinygrad.helpers import tqdm
 from tinygrad.nn.datasets import mnist
+
+from aciq.helpers import RESULTS_DIR, get_output_dir
 
 
 def save_split(x: Tensor, y: Tensor, out_dir: Path) -> None:
@@ -18,10 +19,8 @@ def save_split(x: Tensor, y: Tensor, out_dir: Path) -> None:
 
 
 if __name__ == "__main__":
-  parser = argparse.ArgumentParser(description="Save MNIST images to disk, organized by class")
-  parser.add_argument("--out-dir", type=Path, default=Path("results/mnist_images"))
-  args = parser.parse_args()
+  out_dir = get_output_dir(RESULTS_DIR, "mnist_images")
   x_train, y_train, x_test, y_test = mnist()
-  save_split(x_train, y_train, args.out_dir / "train")
-  save_split(x_test, y_test, args.out_dir / "test")
-  print(f"Saved to {args.out_dir}")
+  save_split(x_train, y_train, out_dir / "train")
+  save_split(x_test, y_test, out_dir / "test")
+  print(f"Saved to {out_dir}")

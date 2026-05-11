@@ -16,14 +16,13 @@ from aciq.bias_correction import (
   apply_correction,
 )
 from aciq.bn_fusion import fuse_conv_bn
-from aciq.helpers import get_output_dir
+from aciq.helpers import RESULTS_DIR, get_output_dir
 from aciq.resnet import Bottleneck, ResNet, capture_bn_params, compute_input_stats
 from aciq.preprocess import load_and_preprocess
 from aciq.quantization import quantize
 
 
 METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]
-RESULTS_DIR = Path("results")
 PER_CHANNEL_METHODS = {"per_channel_minmax", "per_channel_aciq"}
 
 
@@ -501,7 +500,6 @@ def main() -> None:
   parser.add_argument("--dataset-path", type=Path, required=True, help="Path to ImageNet dataset root")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
   parser.add_argument("--n-per-class", type=int, default=5, help="Sample N ImageNet val images per class for shift analysis.")
-  parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Root results directory")
   args = parser.parse_args()
 
   config = PipelineConfig(
@@ -509,7 +507,7 @@ def main() -> None:
     bits=args.bits,
     dataset_path=args.dataset_path,
     plot_per_channel=args.plot_per_channel,
-    output_dir=get_output_dir(args.output_dir, args.model),
+    output_dir=get_output_dir(RESULTS_DIR, args.model),
     n_per_class=args.n_per_class,
   )
   print(f"Output directory: {config.output_dir}")

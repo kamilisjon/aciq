@@ -12,12 +12,11 @@ from scipy.stats import spearmanr
 
 from aciq.analysis import LayerStats, ShiftResult, StatsAccumulator, compute_shift
 from aciq.distributions import Distribution, DistributionType
-from aciq.helpers import get_output_dir
+from aciq.helpers import RESULTS_DIR, get_output_dir
 from aciq.mnist import MNISTModel, _load_normalized, evaluate_model, train_model
 from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 
 
-RESULTS_DIR = Path("results")
 BITS = 4
 BLOCK_NAMES = ["block1", "block2", "block3", "block4", "block5"]
 TEST_CHUNK_SIZE = 1000
