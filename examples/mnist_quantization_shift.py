@@ -20,6 +20,7 @@ from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
 RESULTS_DIR = Path("results")
 BITS = 4
 BLOCK_NAMES = ["block1", "block2", "block3", "block4", "block5"]
+TEST_CHUNK_SIZE = 1000
 
 
 # --- Quantization ---
@@ -64,21 +65,23 @@ def _compute_alpha(vec: np.ndarray, method: str) -> float:
 def collect_layer_outputs(model: MNISTModel, x_test: Tensor) -> dict[str, LayerStats]:
   """Collect per-channel output means and variances for each block over the test set.
 
-  Runs the full test set through one JIT'd forward and returns the block activations as a
-  tuple. Explicit outputs avoid the stale-attribute pitfall of reading `model.activations`
-  after JIT replay (side-effect assignments only fire during the two warmup traces)."""
+  Iterates the test set in chunks of TEST_CHUNK_SIZE so each captured JIT graph holds only
+  one chunk's activation memory. StatsAccumulator combines per-chunk channel sums into the
+  global per-channel mean and variance in finalize(). Explicit return of
+  model.activations[k].realize() avoids the stale-attribute pitfall of reading
+  model.activations after JIT replay."""
 
   @TinyJit
   def get_activations(X: Tensor) -> tuple[Tensor, ...]:
     model(X)
     return tuple(model.activations[k].realize() for k in BLOCK_NAMES)
 
-  get_activations(x_test)  # warmup 1 (capture)
-  acts = get_activations(x_test)  # warmup 2 — steady-state, use these buffers
-
+  assert x_test.shape[0] % TEST_CHUNK_SIZE == 0
   acc = StatsAccumulator()
-  for name, act in zip(BLOCK_NAMES, acts):
-    acc.update(name, act.numpy())
+  for i in range(0, x_test.shape[0], TEST_CHUNK_SIZE):
+    acts = get_activations(x_test[i:i + TEST_CHUNK_SIZE])
+    for name, act in zip(BLOCK_NAMES, acts):
+      acc.update(name, act.numpy())
   return acc.finalize()
 
 

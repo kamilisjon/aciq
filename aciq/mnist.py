@@ -14,6 +14,7 @@ from aciq.bn_fusion import fuse_conv_bn_inplace
 
 _MNIST_MEAN = 0.1307
 _MNIST_STD = 0.3081
+TEST_CHUNK_SIZE = 1000
 
 
 def _load_normalized() -> tuple[Tensor, Tensor, Tensor, Tensor]:
@@ -107,12 +108,19 @@ def train_model(seed: int, steps: int = 1170, lr: float = 1e-3, batch_size: int 
     window_sum += float(model.train_step(x_train, y_train).item())
     if (i + 1) % eval_every == 0:
       train_losses.append(window_sum / eval_every)
-      test_losses.append(float(model.test_loss_step(x_test, y_test).item()))
+      assert x_test.shape[0] % TEST_CHUNK_SIZE == 0
+      chunk_loss_sum = 0.0
+      for j in range(0, x_test.shape[0], TEST_CHUNK_SIZE):
+        chunk_loss_sum += float(model.test_loss_step(x_test[j:j + TEST_CHUNK_SIZE], y_test[j:j + TEST_CHUNK_SIZE]).item())
+      test_losses.append(chunk_loss_sum / (x_test.shape[0] // TEST_CHUNK_SIZE))
       window_sum = 0.0
 
   return model, evaluate_model(model, x_test, y_test), train_losses, test_losses
 
 
 def evaluate_model(model: MNISTModel, x_test: Tensor, y_test: Tensor) -> float:
-  model.get_test_acc(x_test, y_test).item()  # warmup
-  return float(model.get_test_acc(x_test, y_test).item())
+  assert x_test.shape[0] % TEST_CHUNK_SIZE == 0
+  chunk_acc_sum = 0.0
+  for j in range(0, x_test.shape[0], TEST_CHUNK_SIZE):
+    chunk_acc_sum += float(model.get_test_acc(x_test[j:j + TEST_CHUNK_SIZE], y_test[j:j + TEST_CHUNK_SIZE]).item())
+  return chunk_acc_sum / (x_test.shape[0] // TEST_CHUNK_SIZE)
