@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from tinygrad import Tensor
 from tinygrad.helpers import tqdm
 from scipy.stats import spearmanr
@@ -201,18 +202,23 @@ def plot_loss_curves(loss_rows: list[MnistLossRow], save_dir: Path) -> None:
   for r in loss_rows:
     by_seed.setdefault(r.seed, []).append(r)
 
+  cmap = plt.get_cmap("tab10")
   fig, ax = plt.subplots(figsize=(8, 5))
   for i, seed in enumerate(sorted(by_seed)):
     seed_rows = sorted(by_seed[seed], key=lambda r: r.step)
     xs = [r.step for r in seed_rows]
-    train_losses = [r.train_loss for r in seed_rows]
-    test_losses = [r.test_loss for r in seed_rows]
-    ax.plot(xs, train_losses, color="steelblue", alpha=0.6, label="Training loss" if i == 0 else None)
-    ax.plot(xs, test_losses, color="indianred", alpha=0.6, label="Testing loss" if i == 0 else None)
+    color = cmap(i % cmap.N)
+    ax.plot(xs, [r.train_loss for r in seed_rows], color=color, linestyle="--", alpha=0.8)
+    ax.plot(xs, [r.test_loss for r in seed_rows], color=color, linestyle="-", alpha=0.8)
 
   ax.set_xlabel("Step")
   ax.set_ylabel("Loss")
-  ax.legend()
+  ax.legend(
+    handles=[
+      Line2D([0], [0], color="black", linestyle="-", label="Validation loss"),
+      Line2D([0], [0], color="black", linestyle="--", label="Train loss"),
+    ]
+  )
   ax.grid(True, alpha=0.3)
   fig.tight_layout()
   fig.savefig(save_dir / "loss_curves.png", dpi=700)
