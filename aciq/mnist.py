@@ -13,15 +13,15 @@ from tinygrad.nn.state import get_parameters
 # from aciq.bn_fusion import fuse_conv_bn_inplace
 
 
-_MNIST_MEAN = 0.1307
-_MNIST_STD = 0.3081
+# _MNIST_MEAN = 0.1307
+# _MNIST_STD = 0.3081
 
 
-def _load_normalized() -> tuple[Tensor, Tensor, Tensor, Tensor]:
-  x_train, y_train, x_test, y_test = mnist()
-  x_train = (x_train.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD
-  x_test = (x_test.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD
-  return x_train, y_train, x_test, y_test
+# def _load_normalized() -> tuple[Tensor, Tensor, Tensor, Tensor]:
+#   x_train, y_train, x_test, y_test = mnist()
+#   x_train = (x_train.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD
+#   x_test = (x_test.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD
+#   return x_train, y_train, x_test, y_test
 
 
 class MNISTModel:
@@ -107,7 +107,8 @@ def train_model(seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 
   Tensor.manual_seed(seed)
   np.random.seed(seed)
 
-  x_train, y_train, x_test, y_test = _load_normalized()
+  # x_train, y_train, x_test, y_test = _load_normalized()
+  x_train, y_train, x_test, y_test = mnist()
   model = MNISTModel()
   opt = Adam(get_parameters(model), lr=lr)
   train_losses: list[float] = []
