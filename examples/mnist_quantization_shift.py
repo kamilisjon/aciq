@@ -107,18 +107,21 @@ def run_training(n_models: int, steps: int, eval_every: int) -> list[ModelResult
     print("Model trained")
 
     fp32_outputs = collect_layer_outputs(model, x_test)
+    print("Collected activations")
 
     # MinMax quantization
     mm_model = quantize_model(model, "minmax")
     mm_acc = evaluate_model(mm_model, x_test, y_test)
     mm_outputs = collect_layer_outputs(mm_model, x_test)
     mm_shift = compute_shift(fp32_outputs, mm_outputs)
+    print("MinMax quantization done")
 
     # ACIQ quantization
     aciq_model = quantize_model(model, "aciq")
     aciq_acc = evaluate_model(aciq_model, x_test, y_test)
     aciq_outputs = collect_layer_outputs(aciq_model, x_test)
     aciq_shift = compute_shift(fp32_outputs, aciq_outputs)
+    print("ACIQ quantization done")
 
     print(f"  FP32={fp32_acc:.4f}  MinMax={mm_acc:.4f}  ACIQ={aciq_acc:.4f}")
     results.append(ModelResult(seed, fp32_acc, mm_acc, aciq_acc, mm_shift, aciq_shift, train_losses, test_losses))
