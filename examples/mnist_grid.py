@@ -2,11 +2,13 @@ import numpy as np
 from PIL import Image
 from tinygrad.nn.datasets import mnist
 
+from aciq.helpers import RESULTS_DIR
+
 IMG_SIZE = 28
 SEP = 4
 ROWS, COLS = 4, 5
 EXAMPLES_PER_DIGIT = 2
-OUT_PATH = "results/mnist_grid.png"
+OUT_PATH = RESULTS_DIR / "mnist_grid.png"
 
 x_train, y_train, _, _ = mnist()
 images = x_train.numpy().reshape(-1, IMG_SIZE, IMG_SIZE)
