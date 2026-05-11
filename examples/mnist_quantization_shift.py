@@ -101,13 +101,13 @@ class ModelResult:
   test_losses: list[float]
 
 
-def run_training(n_models: int, steps: int, eval_every: int) -> list[ModelResult]:
+def run_training(n_models: int, steps: int) -> list[ModelResult]:
   _, _, x_test, y_test = _load_normalized()
 
   results: list[ModelResult] = []
   for seed in range(n_models):
     print(f"[{seed + 1}/{n_models}] Training model (seed={seed})...")
-    model, fp32_acc, train_losses, test_losses = train_model(seed=seed, steps=steps, eval_every=eval_every)
+    model, fp32_acc, train_losses, test_losses = train_model(seed=seed, steps=steps)
     print("Model trained")
 
     fp32_outputs = collect_layer_outputs(model, x_test)
@@ -156,14 +156,14 @@ def load_results_csv(path: Path) -> list[dict[str, float]]:
     return [{k: float(v) for k, v in row.items()} for row in csv.DictReader(f)]
 
 
-def save_losses_csv(results: list[ModelResult], save_path: Path, eval_every: int) -> None:
+def save_losses_csv(results: list[ModelResult], save_path: Path) -> None:
   save_path.parent.mkdir(parents=True, exist_ok=True)
   with open(save_path, "w", newline="") as f:
     writer = csv.DictWriter(f, fieldnames=["seed", "step", "train_loss", "test_loss"])
     writer.writeheader()
     for r in results:
       for idx, (tr, te) in enumerate(zip(r.train_losses, r.test_losses), start=1):
-        writer.writerow({"seed": r.seed, "step": idx * eval_every, "train_loss": tr, "test_loss": te})
+        writer.writerow({"seed": r.seed, "step": idx, "train_loss": tr, "test_loss": te})
 
 
 def load_losses_csv(path: Path) -> list[dict[str, float | int]]:
@@ -295,7 +295,6 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="MNIST quantization distribution shift analysis")
   parser.add_argument("--n-models", type=int, default=30, help="Number of models to train")
   parser.add_argument("--steps", type=int, default=1170, help="Training steps per model")
-  parser.add_argument("--eval-every", type=int, default=10, help="Test-loss eval cadence (steps)")
   parser.add_argument("--from-csv", type=Path, default=None, help="Load results from CSV instead of training")
   args = parser.parse_args()
   save_dir = get_output_dir(RESULTS_DIR, "mnist")
@@ -306,13 +305,13 @@ if __name__ == "__main__":
     losses_path = args.from_csv.parent / "losses.csv"
     loss_rows = load_losses_csv(losses_path) if losses_path.exists() else []
   else:
-    print(f"Running training with {args.n_models} models, {args.steps} steps each (eval every {args.eval_every})...")
-    results = run_training(args.n_models, args.steps, args.eval_every)
+    print(f"Running training with {args.n_models} models, {args.steps} steps each...")
+    results = run_training(args.n_models, args.steps)
     save_results_csv(results, save_dir / "results.csv")
-    save_losses_csv(results, save_dir / "losses.csv", args.eval_every)
+    save_losses_csv(results, save_dir / "losses.csv")
     rows = load_results_csv(save_dir / "results.csv")
     loss_rows = [
-      {"seed": r.seed, "step": (idx + 1) * args.eval_every, "train_loss": r.train_losses[idx], "test_loss": r.test_losses[idx]}
+      {"seed": r.seed, "step": idx + 1, "train_loss": r.train_losses[idx], "test_loss": r.test_losses[idx]}
       for r in results
       for idx in range(len(r.train_losses))
     ]

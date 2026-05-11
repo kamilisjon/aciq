@@ -70,19 +70,19 @@ class MNISTModel:
 
   @TinyJit
   @Tensor.train()
-  def train_step(self, X: Tensor, Y: Tensor, opt: Adam, batch_size: int) -> Tensor:
+  def train_step(self, X_train: Tensor, Y_train: Tensor, opt: Adam, batch_size: int) -> Tensor:
     opt.zero_grad()
-    samples = Tensor.randint(batch_size, high=X.shape[0])
-    loss = self(X[samples]).sparse_categorical_crossentropy(Y[samples]).backward()
+    samples = Tensor.randint(batch_size, high=X_train.shape[0])
+    loss = self(X_train[samples]).sparse_categorical_crossentropy(Y_train[samples]).backward()
     return loss.realize(*opt.schedule_step())
 
-  # @TinyJit
-  # def test_loss_step(self, X: Tensor, Y: Tensor) -> Tensor:
-  #   return self(X).sparse_categorical_crossentropy(Y).realize()
+  @TinyJit
+  def test_loss(self, X_test: Tensor, Y_test: Tensor) -> Tensor:
+    return self(X_test).sparse_categorical_crossentropy(Y_test).realize()
 
   @TinyJit
-  def get_test_acc(self, X: Tensor, Y: Tensor) -> Tensor:
-    return (self(X).argmax(axis=1) == Y).mean()
+  def test_acc(self, X_test: Tensor, Y_test: Tensor) -> Tensor:
+    return (self(X_test).argmax(axis=1) == Y_test).mean()
 
   # def fuse(self) -> None:
   #   fuse_conv_bn_inplace(self.conv1, self.bn1)
@@ -103,37 +103,24 @@ class MNISTModel:
   #   }
 
 
-def train_model(seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 512, eval_every: int = 10) -> tuple[MNISTModel, float, list[float], list[float]]:
+def train_model(seed: int, steps: int = 70, lr: float = 1e-3, batch_size: int = 512) -> tuple[MNISTModel, float, list[float], list[float]]:
   Tensor.manual_seed(seed)
   np.random.seed(seed)
 
   x_train, y_train, x_test, y_test = _load_normalized()
-  # x_train, y_train, x_test, y_test = mnist()
   model = MNISTModel()
   opt = Adam(get_parameters(model), lr=lr)
   train_losses: list[float] = []
-  # test_losses: list[float] = []
-  window_sum = 0.0
-  test_acc = float('nan')
-  for i in (t := tqdm(range(steps), desc="train")):
+  test_losses: list[float] = []
+  for _ in (t := tqdm(range(steps), desc="train")):
     GlobalCounters.reset()
-    loss = float(model.train_step(x_train, y_train, opt, batch_size).item())
-    window_sum += loss
-    if (i + 1) % eval_every == 0:
-      train_losses.append(window_sum / eval_every)
-      # assert x_test.shape[0] % TEST_CHUNK_SIZE == 0
-      # chunk_loss_sum = 0.0
-      # for j in range(0, x_test.shape[0], TEST_CHUNK_SIZE):
-      #   x_chunk = x_test[j:j + TEST_CHUNK_SIZE].contiguous()
-      #   y_chunk = y_test[j:j + TEST_CHUNK_SIZE].contiguous()
-      #   chunk_loss_sum += float(model.test_loss_step(x_chunk, y_chunk).item())
-      # test_losses.append(chunk_loss_sum / (x_test.shape[0] // TEST_CHUNK_SIZE))
-      test_acc = evaluate_model(model, x_test, y_test)
-      window_sum = 0.0
-    t.set_description(f"loss: {loss:6.2f} test_accuracy: {test_acc * 100:5.2f}%")
-
-  return model, evaluate_model(model, x_test, y_test), train_losses, 0.0
+    train_loss = float(model.train_step(x_train, y_train, opt, batch_size).item())
+    test_loss = float(model.test_acc(x_test, y_test).item())
+    train_losses.append(train_loss)
+    test_losses.append(test_loss)
+    t.set_description(f"train_loss: {train_loss:6.2f} test_loss: {test_loss:6.2f}%")
+  return model, evaluate_model(model, x_test, y_test), train_losses, test_losses
 
 
 def evaluate_model(model: MNISTModel, x_test: Tensor, y_test: Tensor) -> float:
-  return float(model.get_test_acc(x_test, y_test).item())
+  return float(model.test_acc(x_test, y_test).item())
