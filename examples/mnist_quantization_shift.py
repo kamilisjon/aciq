@@ -2,6 +2,7 @@ import argparse
 import copy
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -45,29 +46,40 @@ class MnistLossRow:
   test_loss: float
 
 
+def _shifts(rows: list[MnistResultRow], method: str, block: str) -> np.ndarray:
+  return np.array([getattr(r, f"{method}_{block}_mean_shift") for r in rows])
+
+
 # --- Quantization ---
+
+
+QUANT_METHODS = ["minmax", "aciq"]
+
+
+def _aciq_alpha(vec: np.ndarray) -> float:
+  alpha_mm = minmax_alpha(vec)
+  sorted_vec = np.sort(vec)
+  fits = {dt: Distribution.fit(sorted_vec, dt) for dt in DistributionType}
+  best_dist = fits[max(fits, key=lambda dt: fits[dt].log_likelihood)]
+  return solve_symmetric_mae_alpha(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=BITS, alpha_max=alpha_mm)
+
+
+ALPHA_FUNCS: dict[str, Callable[[np.ndarray], float]] = {
+  "minmax": minmax_alpha,
+  "aciq": _aciq_alpha,
+}
 
 
 def quantize_model(model: MNISTModel, method: str) -> MNISTModel:
   qmodel = copy.deepcopy(model)
   qmodel.fuse()
+  alpha_fn = ALPHA_FUNCS[method]
   for mod in qmodel.weight_modules:
     w = mod.weight.numpy()
-    alpha = _compute_alpha(w.flatten(), method)
+    alpha = alpha_fn(w.flatten())
     mod.weight = Tensor(quantize(w.flatten(), alpha, BITS).reshape(w.shape).astype(np.float32))
   qmodel.reset_jit()
   return qmodel
-
-
-def _compute_alpha(vec: np.ndarray, method: str) -> float:
-  alpha_mm = minmax_alpha(vec)
-  if method == "minmax":
-    return alpha_mm
-  sorted_vec = np.sort(vec)
-  fits = {dt: Distribution.fit(sorted_vec, dt) for dt in DistributionType}
-  best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
-  best_dist = fits[best_type]
-  return solve_symmetric_mae_alpha(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=BITS, alpha_max=alpha_mm)
 
 
 # --- Distribution shift measurement ---
@@ -100,29 +112,23 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
     fp32_outputs = collect_layer_outputs(model, x_test)
     print("Collected activations")
 
-    # MinMax quantization
-    mm_model = quantize_model(model, "minmax")
-    mm_acc = float(mm_model.test_acc(x_test, y_test).item())
-    mm_outputs = collect_layer_outputs(mm_model, x_test)
-    mm_shift = {r.layer: r.mean_shift for r in compute_shift(fp32_outputs, mm_outputs, "minmax")}
-    print("MinMax quantization done")
+    accs: dict[str, float] = {}
+    shifts: dict[str, dict[str, float]] = {}
+    for method in QUANT_METHODS:
+      qmodel = quantize_model(model, method)
+      accs[method] = float(qmodel.test_acc(x_test, y_test).item())
+      q_outputs = collect_layer_outputs(qmodel, x_test)
+      shifts[method] = {r.layer: r.mean_shift for r in compute_shift(fp32_outputs, q_outputs, method)}
+      print(f"{method} quantization done")
 
-    # ACIQ quantization
-    aciq_model = quantize_model(model, "aciq")
-    aciq_acc = float(aciq_model.test_acc(x_test, y_test).item())
-    aciq_outputs = collect_layer_outputs(aciq_model, x_test)
-    aciq_shift = {r.layer: r.mean_shift for r in compute_shift(fp32_outputs, aciq_outputs, "aciq")}
-    print("ACIQ quantization done")
-
-    print(f"  FP32={fp32_acc:.4f}  MinMax={mm_acc:.4f}  ACIQ={aciq_acc:.4f}")
+    print(f"  FP32={fp32_acc:.4f}  MinMax={accs['minmax']:.4f}  ACIQ={accs['aciq']:.4f}")
     result_rows.append(
       MnistResultRow(
         seed=seed,
         fp32_acc=fp32_acc,
-        minmax_acc=mm_acc,
-        aciq_acc=aciq_acc,
-        **{f"minmax_{b}_mean_shift": mm_shift[b] for b in BlockName},
-        **{f"aciq_{b}_mean_shift": aciq_shift[b] for b in BlockName},
+        minmax_acc=accs["minmax"],
+        aciq_acc=accs["aciq"],
+        **{f"{m}_{b}_mean_shift": shifts[m][b] for m in QUANT_METHODS for b in BlockName},
       )
     )
     loss_rows.extend(
@@ -142,7 +148,7 @@ def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
 
     for col_idx, block in enumerate(BlockName):
       ax = axes[row_idx, col_idx]
-      shifts = np.array([getattr(r, f"{method}_{block}_mean_shift") for r in rows])
+      shifts = _shifts(rows, method, block)
       ax.scatter(shifts, acc_drops, color=color, alpha=0.6, s=20)
       rho, p = spearmanr(shifts, acc_drops)
       ax.set_title(f"{method.upper()} {block}\nrho={rho:.3f} p={p:.3g}", fontsize=9)
@@ -151,7 +157,7 @@ def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
       ax.grid(True, alpha=0.3)
 
     ax = axes[row_idx, len(BlockName)]
-    total_shifts = np.array([sum(getattr(r, f"{method}_{b}_mean_shift") for b in BlockName) for r in rows])
+    total_shifts = sum(_shifts(rows, method, b) for b in BlockName)
     ax.scatter(total_shifts, acc_drops, color=color, alpha=0.6, s=20)
     rho, p = spearmanr(total_shifts, acc_drops)
     ax.set_title(f"{method.upper()} total\nrho={rho:.3f} p={p:.3g}", fontsize=9)
@@ -169,8 +175,8 @@ def plot_shift_accumulation(rows: list[MnistResultRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   fig, ax = plt.subplots(figsize=(10, 5))
   for color, method in [("steelblue", "minmax"), ("indianred", "aciq")]:
-    per_layer_means = [np.mean([getattr(r, f"{method}_{b}_mean_shift") for r in rows]) for b in BlockName]
-    per_layer_stds = [np.std([getattr(r, f"{method}_{b}_mean_shift") for r in rows]) for b in BlockName]
+    per_layer_means = [_shifts(rows, method, b).mean() for b in BlockName]
+    per_layer_stds = [_shifts(rows, method, b).std() for b in BlockName]
     cumulative = np.cumsum(per_layer_means)
 
     x_pos = np.arange(len(BlockName))
