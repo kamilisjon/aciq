@@ -12,7 +12,7 @@ pip install -e .
 1. ResNet analysis:
     1. `DEV=NV JITBEAM=4 python -m examples.resnet_pipeline --dataset-path /home/kamilis/Downloads/imagenet-object-localization-challenge --model resnet50 --bits 8`
 1. MNIST training for evaluating layers outputs distributions shift after quantization:
-    1. `DEV=NV JITBEAM=4 python -m examples.mnist_quantization_shift --n-models 100 --epochs 5`
+    1. `DEV=NV JITBEAM=4 python -m examples.mnist_quantization_shift --n-models 2 --steps 100`
 
 ## Local testing
 ### Install extra dependencies

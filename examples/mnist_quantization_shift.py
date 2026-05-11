@@ -104,6 +104,7 @@ def run_training(n_models: int, steps: int, eval_every: int) -> list[ModelResult
   for seed in range(n_models):
     print(f"[{seed + 1}/{n_models}] Training model (seed={seed})...")
     model, fp32_acc, train_losses, test_losses = train_model(seed=seed, steps=steps, eval_every=eval_every)
+    print("Model trained")
 
     fp32_outputs = collect_layer_outputs(model, x_test)
 

@@ -1,3 +1,4 @@
+# Reference: https://github.com/tinygrad/tinygrad/blob/master/examples/beautiful_mnist.py
 from __future__ import annotations
 
 import numpy as np
