@@ -72,7 +72,6 @@ def quantize_model(model: MNISTModel, method: str) -> MNISTModel:
     w = mod.weight.numpy()
     alpha = alpha_fn(w.flatten())
     mod.weight = Tensor(quantize(w.flatten(), alpha, BITS).reshape(w.shape).astype(np.float32))
-  qmodel.reset_jit()
   return qmodel
 
 

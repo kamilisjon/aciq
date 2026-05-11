@@ -44,13 +44,6 @@ class MNISTModel:
     self.bn4 = nn.BatchNorm2d(128)
     self.classifier = nn.Linear(128, 10)
     self.fused = False
-    self.reset_jit()
-
-  def reset_jit(self) -> None:
-    self.train_step = TinyJit(self._train_step)
-    self.test_loss = TinyJit(self._test_loss)
-    self.test_acc = TinyJit(self._test_acc)
-    self.get_activations = TinyJit(self._get_activations)
 
   def _block(self, x: Tensor, conv: nn.Conv2d, bn: nn.BatchNorm) -> Tensor:
     out = conv(x)
@@ -66,20 +59,24 @@ class MNISTModel:
     self.block4 = self._block(self.block3, self.conv4, self.bn4)
     return self.classifier(self.block4.mean((2, 3)))
 
+  @TinyJit
   @Tensor.train()
-  def _train_step(self, X_train: Tensor, Y_train: Tensor, opt: AdamW, batch_size: int) -> Tensor:
+  def train_step(self, X_train: Tensor, Y_train: Tensor, opt: AdamW, batch_size: int) -> Tensor:
     opt.zero_grad()
     samples = Tensor.randint(batch_size, high=X_train.shape[0])
     loss = self(X_train[samples]).sparse_categorical_crossentropy(Y_train[samples]).backward()
     return loss.realize(*opt.schedule_step())
 
-  def _test_loss(self, X_test: Tensor, Y_test: Tensor) -> Tensor:
+  @TinyJit
+  def test_loss(self, X_test: Tensor, Y_test: Tensor) -> Tensor:
     return self(X_test).sparse_categorical_crossentropy(Y_test).realize()
 
-  def _test_acc(self, X_test: Tensor, Y_test: Tensor) -> Tensor:
+  @TinyJit
+  def test_acc(self, X_test: Tensor, Y_test: Tensor) -> Tensor:
     return (self(X_test).argmax(axis=1) == Y_test).mean()
 
-  def _get_activations(self, X: Tensor) -> dict[str, Tensor]:
+  @TinyJit
+  def get_activations(self, X: Tensor) -> dict[str, Tensor]:
     self(X)
     return {str(name): v.realize() for name, v in zip(BlockName, [self.block1, self.block2, self.block3, self.block4])}
 
