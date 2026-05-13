@@ -11,7 +11,7 @@ from tinygrad import Tensor
 from tinygrad.helpers import tqdm
 from scipy.stats import spearmanr
 
-from aciq.mean_shift import StatsAccumulator, compute_shift
+from aciq.bias_correction import StatsAccumulator, compute_shift
 from aciq.distributions import Distribution, DistributionType
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.mnist import BlockName, MNISTModel, _load_normalized, train_model

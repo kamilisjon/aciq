@@ -8,12 +8,8 @@ from tinygrad import Tensor
 from tinygrad.helpers import tqdm
 from tinygrad.nn import BatchNorm, Conv2d, Linear
 
-from aciq.mean_shift import MeanShift, StatsAccumulator, compute_shift
 from aciq.imagenet import benchmark_accuracy, load_and_preprocess, sample_imagenet_val
-from aciq.bias_correction import (
-  LayerInputStats,
-  apply_correction,
-)
+from aciq.bias_correction import LayerInputStats, MeanShift, StatsAccumulator, apply_correction, compute_shift
 from aciq.nn import fuse_conv_bn
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.resnet import Bottleneck, ResNet, capture_bn_params, compute_input_stats
