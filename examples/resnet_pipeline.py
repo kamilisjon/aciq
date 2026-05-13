@@ -84,13 +84,13 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
       ax.axvline(alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=REFERENCE_LINE_WIDTH)
 
     eda_lines = [
-      f"n        = {vec.size:,}",
-      f"Min      = {float(np.min(vec)):.5f}",
-      f"Max      = {float(np.max(vec)):.5f}",
-      f"Mean     = {float(np.mean(vec)):.5f}",
-      f"Variance = {float(np.var(vec)):.6f}",
-      f"Skewness = {float(skewness(vec)):.4f}",
-      f"Kurtosis = {float(kurtosis(vec)):.4f}",
+      f"n {vec.size:,}",
+      f"Min {float(np.min(vec)):.5f}",
+      f"Max {float(np.max(vec)):.5f}",
+      f"Mean {float(np.mean(vec)):.5f}",
+      f"Variance {float(np.var(vec)):.6f}",
+      f"Skewness {float(skewness(vec)):.4f}",
+      f"Kurtosis {float(kurtosis(vec)):.4f}",
     ]
     ax.text(0.98, 0.96, "\n".join(eda_lines), transform=ax.transAxes, **STATS_TEXT_KW)
     safe = layer_name.replace("/", "_").replace(":", "_")
@@ -108,6 +108,7 @@ def plot_shift(
   rows: list[MeanShift],
   layer_names: list[str],
   save_dir: Path,
+  filename: str = "mean_shift.png",
 ) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -132,7 +133,7 @@ def plot_shift(
   ax.set_ylabel("Output mean shift")
   ax.legend()
   fig.tight_layout()
-  fig.savefig(save_dir / "mean_shift.png")
+  fig.savefig(save_dir / filename)
   plt.close(fig)
 
 
@@ -270,8 +271,11 @@ def main() -> None:
     loaded_rows: list[MeanShift] = load_csv(shifts_path, MeanShift)
     print(f"Loaded {len(loaded_rows)} shift rows from {shifts_path}")
     layer_names = list(dict.fromkeys(r.layer for r in loaded_rows))
-    plot_shift(loaded_rows, layer_names, save_dir / "quantization_shift")
-    print(f"Plot saved to {save_dir / 'quantization_shift' / 'mean_shift.png'}")
+    none_rows = [r for r in loaded_rows if r.method.endswith("::none")]
+    bias_rows = [r for r in loaded_rows if r.method.endswith("::bias")]
+    plot_shift(none_rows, layer_names, save_dir / "quantization_shift")
+    plot_shift(bias_rows, layer_names, save_dir / "quantization_shift", filename="mean_shift_bias_corrected.png")
+    print(f"Plots saved to {save_dir / 'quantization_shift'}")
     return
 
   assert args.dataset_path is not None, "--dataset-path is required unless --from-dir is set"
@@ -319,7 +323,11 @@ def main() -> None:
   shifts_csv = config.shift_results_dir / "shifts.csv"
   save_csv(shift_rows, shifts_csv)
   print(f"  CSV saved to {shifts_csv}")
-  plot_shift(shift_rows, list(fp32_acc.channels_sums.keys()), config.shift_results_dir)
+  layer_names = list(fp32_acc.channels_sums.keys())
+  none_rows = [r for r in shift_rows if r.method.endswith("::none")]
+  bias_rows = [r for r in shift_rows if r.method.endswith("::bias")]
+  plot_shift(none_rows, layer_names, config.shift_results_dir)
+  plot_shift(bias_rows, layer_names, config.shift_results_dir, filename="mean_shift_bias_corrected.png")
   print(f"  Plots saved to {config.shift_results_dir}/")
 
   print(f"\n=== Stage 4: Benchmarking ({config.model_name}) ===")
