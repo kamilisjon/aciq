@@ -458,14 +458,14 @@ def stage_benchmark(config: PipelineConfig, fp_model: ResNet, variants: dict[tup
 
   print("  benchmarking FP32")
   ResNet.clear_jit_caches()
-  top1, top5 = benchmark_accuracy(fp_model, config.dataset_path)
+  top1, top5 = benchmark_accuracy(fp_model.infer, config.dataset_path)
   rows.append(BenchmarkRow(method="fp32", correction_mode="none", top1=float(top1), top5=float(top5)))
   print(f"  FP32: top1={top1:.2f}  top5={top5:.2f}")
 
   for (method, mode), model in variants.items():
     print(f"  benchmarking {method}::{mode}")
     ResNet.clear_jit_caches()
-    top1, top5 = benchmark_accuracy(model, config.dataset_path)
+    top1, top5 = benchmark_accuracy(model.infer, config.dataset_path)
     rows.append(BenchmarkRow(method=method, correction_mode=mode, top1=float(top1), top5=float(top5)))
     print(f"  {method}::{mode}: top1={top1:.2f}  top5={top5:.2f}")
 
