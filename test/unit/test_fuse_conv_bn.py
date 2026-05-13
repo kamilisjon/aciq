@@ -7,7 +7,7 @@ from torch.nn.utils.fusion import fuse_conv_bn_eval
 from tinygrad import Tensor
 from tinygrad.nn import BatchNorm2d as TGBatchNorm2d, Conv2d as TGConv2d
 
-from aciq.nn import fuse_conv_bn, fuse_conv_bn_inplace
+from aciq.helpers import fuse_conv_bn, fuse_conv_bn_inplace
 
 
 def _matched_pair(bias: bool):

@@ -9,7 +9,7 @@ from tinygrad.nn import BatchNorm, Conv2d, Linear
 
 from aciq.bias_correction import LayerInputStats
 from aciq.distributions import ClippedGaussian
-from aciq.nn import fuse_conv_bn_inplace
+from aciq.helpers import fuse_conv_bn_inplace
 
 
 class BasicBlock:

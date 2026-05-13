@@ -11,7 +11,7 @@ from tinygrad.nn.datasets import mnist
 from tinygrad.nn.optim import AdamW
 from tinygrad.nn.state import get_parameters
 
-from aciq.nn import fuse_conv_bn_inplace
+from aciq.helpers import fuse_conv_bn_inplace
 
 
 _MNIST_MEAN = 0.1307

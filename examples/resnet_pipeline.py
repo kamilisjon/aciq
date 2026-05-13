@@ -11,8 +11,7 @@ from tinygrad.nn import Conv2d, Linear
 
 from aciq.imagenet import benchmark_accuracy, load_and_preprocess, sample_imagenet_val
 from aciq.bias_correction import LayerInputStats, MeanShift, StatsAccumulator, apply_correction, compute_shift
-from aciq.nn import fuse_conv_bn
-from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
+from aciq.helpers import RESULTS_DIR, fuse_conv_bn, get_output_dir, load_csv, mean_absolute_error, save_csv
 from aciq.resnet import ResNet, capture_bn_params, compute_input_stats, _conv_bn_pairs, _weight_modules
 from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
 from aciq.distributions import fit_distributions, kurtosis, skewness
@@ -47,10 +46,6 @@ class BenchmarkRow:
 DEFAULT_COLORS = ["steelblue", "indianred", "seagreen", "darkorange"]
 
 
-def mae(data_array_1: np.ndarray, data_array_2: np.ndarray) -> float:
-  return float(np.mean(np.abs(data_array_1 - data_array_2)))
-
-
 def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save_path: Path | None = None) -> tuple[float, float]:
   vec_sorted = np.sort(vec)
 
@@ -58,7 +53,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
 
   # MinMax quantization
   alpha_minmax = bound_symmetric_minmax(vec)
-  mae_minmax = mae(vec, quantize_symmetric(vec, alpha_minmax, bits))
+  mae_minmax = mean_absolute_error(vec, quantize_symmetric(vec, alpha_minmax, bits))
 
   # Optimal alpha*
   best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
@@ -84,7 +79,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     ax.axvline(alpha_minmax, color="grey", linestyle=":", linewidth=1.2)
 
     if alpha_aciq != alpha_minmax:
-      mae_aciq = mae(vec, quantize_symmetric(vec, alpha_aciq, bits))
+      mae_aciq = mean_absolute_error(vec, quantize_symmetric(vec, alpha_aciq, bits))
       ax.axvline(
         -alpha_aciq, color=DistColor[best_type], linestyle="-", linewidth=0.7, label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_aciq:.2e}"
       )

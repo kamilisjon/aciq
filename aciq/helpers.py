@@ -4,6 +4,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, get_type_hints
 
+import numpy as np
+from tinygrad import Tensor
+from tinygrad.nn import BatchNorm, Conv2d
+
 
 PATH_DATETIME_FORMAT = "%Y%m%d_%H%M%S"
 RESULTS_DIR: Path = Path("results")
@@ -33,3 +37,19 @@ def load_csv(path: Path, row_type: type[Any]) -> list[Any]:
   with open(path) as f:
     reader = csv.DictReader(f, delimiter=CSV_SEPARATOR)
     return [row_type(**{k: hints[k](v) for k, v in raw.items()}) for raw in reader]
+
+
+def fuse_conv_bn(conv: Conv2d, bn: BatchNorm) -> tuple[Tensor, Tensor]:
+  scale = bn.weight / (bn.running_var + bn.eps).sqrt()
+  fused_w = conv.weight * scale.reshape(-1, 1, 1, 1)
+  conv_b = conv.bias if conv.bias is not None else Tensor.zeros(conv.weight.shape[0])
+  fused_b = scale * (conv_b - bn.running_mean) + bn.bias
+  return fused_w, fused_b
+
+
+def fuse_conv_bn_inplace(conv: Conv2d, bn: BatchNorm) -> None:
+  conv.weight, conv.bias = fuse_conv_bn(conv, bn)
+
+
+def mean_absolute_error(data_array_1: np.ndarray, data_array_2: np.ndarray) -> float:
+  return float(np.mean(np.abs(data_array_1 - data_array_2)))
