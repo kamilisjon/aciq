@@ -252,43 +252,13 @@ def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet, fq_models
   print(f"  CSV written to {csv_path}")
 
 
-# ---------------------------------------------------------------------------
-# Stage 2.5: Bias and Variance Correction (analytical, BN-derived)
-# ---------------------------------------------------------------------------
-
-
-def stage_corrections(fp_model: ResNet, fq_models: dict[str, ResNet]) -> dict[tuple[str, str], ResNet]:
-  """Build the (method × correction_mode) variant matrix.
-
-  Per-tensor methods get only the uncorrected baseline. Per-channel methods get
-  the uncorrected baseline and a bias-corrected copy; the bias copy is deep-copied
-  off the post-Stage-2 model and corrected per layer, stem included (the stem
-  uses a N(0, 1) input assumption, matching the per-channel standardization
-  applied to the network input).
-  """
-  input_stats = compute_input_stats(fp_model)
-  fp_modules = dict(_weight_modules(fp_model))
-  variants: dict[tuple[str, str], ResNet] = {}
-  for method in METHOD_NAMES:
-    base = fq_models[method]
-    variants[(method, "none")] = base
-    if method not in PER_CHANNEL_METHODS:
-      continue
-    m = copy.deepcopy(base)
-    mods = dict(_weight_modules(m))
-    for name, module in mods.items():
-      stats = input_stats[name]
-      W_fp = fp_modules[name].weight.numpy()
-      b_orig = module.bias.numpy() if module.bias is not None else np.zeros(module.weight.shape[0], dtype=np.float32)
-      apply_correction(module, W_fp, b_orig, stats)
-    variants[(method, "bias")] = m
-    print(f"  applied 'bias' correction to {method}")
-  return variants
-
-
-# ---------------------------------------------------------------------------
-# Stage 3: Quantization Shift Analysis
-# ---------------------------------------------------------------------------
+def _bias_correct_model(base: ResNet, fp_modules: dict[str, Conv2d | Linear], input_stats: dict[str, LayerInputStats]) -> ResNet:
+  m = copy.deepcopy(base)
+  for name, module in _weight_modules(m):
+    W_fp = fp_modules[name].weight.numpy()
+    b_orig = module.bias.numpy() if module.bias is not None else np.zeros(module.weight.shape[0], dtype=np.float32)
+    apply_correction(module, W_fp, b_orig, input_stats[name])
+  return m
 
 
 def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int = 32) -> dict[str, np.ndarray]:
@@ -301,58 +271,6 @@ def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int
       # slice off the zero-padded tail so accumulated stats only reflect real images
       acc.update(name, (act[:real_n] if real_n < batch_size else act).numpy())
   return acc.get_per_channel_means()
-
-
-def stage_shift_analysis(config: PipelineConfig, fp32_model: ResNet, variants: dict[tuple[str, str], ResNet]) -> None:
-  image_paths = sample_imagenet_val(config.dataset_path, config.n_per_class)
-  print(f"  Using {len(image_paths)} images")
-
-  print("  Collecting FP32 stats...")
-  ResNet.clear_jit_caches()
-  fp32_stats = _collect_activations(fp32_model, image_paths)
-
-  shift_rows: list[MeanShift] = []
-  for (method, mode), model in variants.items():
-    label = f"{method}::{mode}"
-    print(f"  Collecting {label} stats...")
-    ResNet.clear_jit_caches()
-    quant_stats = _collect_activations(model, image_paths)
-    shift_rows.extend(compute_shift(fp32_stats, quant_stats, label))
-
-  layer_names = list(fp32_stats.keys())
-  csv_path = config.shift_results_dir / "shifts.csv"
-  save_csv(shift_rows, csv_path)
-  print(f"  CSV saved to {csv_path}")
-
-  plot_shift(shift_rows, layer_names, config.shift_results_dir, model_name=config.model_name)
-  print(f"  Plots saved to {config.shift_results_dir}/")
-
-
-# ---------------------------------------------------------------------------
-# Stage 4: Benchmarking
-# ---------------------------------------------------------------------------
-
-
-def stage_benchmark(config: PipelineConfig, fp_model: ResNet, variants: dict[tuple[str, str], ResNet]) -> None:
-  config.correction_results_dir.mkdir(parents=True, exist_ok=True)
-  rows: list[BenchmarkRow] = []
-
-  print("  benchmarking FP32")
-  ResNet.clear_jit_caches()
-  top1, top5 = benchmark_accuracy(fp_model.infer, config.dataset_path)
-  rows.append(BenchmarkRow(method="fp32", correction_mode="none", top1=float(top1), top5=float(top5)))
-  print(f"  FP32: top1={top1:.2f}  top5={top5:.2f}")
-
-  for (method, mode), model in variants.items():
-    print(f"  benchmarking {method}::{mode}")
-    ResNet.clear_jit_caches()
-    top1, top5 = benchmark_accuracy(model.infer, config.dataset_path)
-    rows.append(BenchmarkRow(method=method, correction_mode=mode, top1=float(top1), top5=float(top5)))
-    print(f"  {method}::{mode}: top1={top1:.2f}  top5={top5:.2f}")
-
-  csv_path = config.correction_results_dir / "benchmark_results.csv"
-  save_csv(rows, csv_path)
-  print(f"  CSV saved to {csv_path}")
 
 
 # ---------------------------------------------------------------------------
@@ -380,10 +298,10 @@ def main() -> None:
 
   if args.from_dir:
     shifts_path = args.from_dir / "quantization_shift" / "shifts.csv"
-    shift_rows = load_csv(shifts_path, MeanShift)
-    print(f"Loaded {len(shift_rows)} shift rows from {shifts_path}")
-    layer_names = list(dict.fromkeys(r.layer for r in shift_rows))
-    plot_shift(shift_rows, layer_names, save_dir / "quantization_shift", model_name=args.model)
+    loaded_rows: list[MeanShift] = load_csv(shifts_path, MeanShift)
+    print(f"Loaded {len(loaded_rows)} shift rows from {shifts_path}")
+    layer_names = list(dict.fromkeys(r.layer for r in loaded_rows))
+    plot_shift(loaded_rows, layer_names, save_dir / "quantization_shift", model_name=args.model)
     print(f"Plot saved to {save_dir / 'quantization_shift' / 'mean_shift.png'}")
     return
 
@@ -407,13 +325,51 @@ def main() -> None:
   stage_weight_analysis(config, model, fq_models)
 
   print(f"\n=== Stage 2: Bias and Variance Correction ({config.model_name}) ===")
-  variants = stage_corrections(model, fq_models)
+  input_stats = compute_input_stats(model)
+  fp_modules = dict(_weight_modules(model))
+  variants: dict[tuple[str, str], ResNet] = {}
+  for method in METHOD_NAMES:
+    variants[(method, "none")] = fq_models[method]
+    if method in PER_CHANNEL_METHODS:
+      variants[(method, "bias")] = _bias_correct_model(fq_models[method], fp_modules, input_stats)
+      print(f"  applied 'bias' correction to {method}")
 
   print(f"\n=== Stage 3: Quantization Shift Analysis ({config.model_name}) ===")
-  stage_shift_analysis(config, model, variants)
+  image_paths = sample_imagenet_val(config.dataset_path, config.n_per_class)
+  print(f"  Using {len(image_paths)} images")
+  print("  Collecting FP32 stats...")
+  ResNet.clear_jit_caches()
+  fp32_stats = _collect_activations(model, image_paths)
+  shift_rows: list[MeanShift] = []
+  for (method, mode), m in variants.items():
+    label = f"{method}::{mode}"
+    print(f"  Collecting {label} stats...")
+    ResNet.clear_jit_caches()
+    q_stats = _collect_activations(m, image_paths)
+    shift_rows.extend(compute_shift(fp32_stats, q_stats, label))
+  shifts_csv = config.shift_results_dir / "shifts.csv"
+  save_csv(shift_rows, shifts_csv)
+  print(f"  CSV saved to {shifts_csv}")
+  plot_shift(shift_rows, list(fp32_stats.keys()), config.shift_results_dir, model_name=config.model_name)
+  print(f"  Plots saved to {config.shift_results_dir}/")
 
   print(f"\n=== Stage 4: Benchmarking ({config.model_name}) ===")
-  stage_benchmark(config, model, variants)
+  config.correction_results_dir.mkdir(parents=True, exist_ok=True)
+  bench_rows: list[BenchmarkRow] = []
+  print("  benchmarking FP32")
+  ResNet.clear_jit_caches()
+  top1, top5 = benchmark_accuracy(model.infer, config.dataset_path)
+  bench_rows.append(BenchmarkRow(method="fp32", correction_mode="none", top1=float(top1), top5=float(top5)))
+  print(f"  FP32: top1={top1:.2f}  top5={top5:.2f}")
+  for (method, mode), m in variants.items():
+    print(f"  benchmarking {method}::{mode}")
+    ResNet.clear_jit_caches()
+    top1, top5 = benchmark_accuracy(m.infer, config.dataset_path)
+    bench_rows.append(BenchmarkRow(method=method, correction_mode=mode, top1=float(top1), top5=float(top5)))
+    print(f"  {method}::{mode}: top1={top1:.2f}  top5={top5:.2f}")
+  bench_csv = config.correction_results_dir / "benchmark_results.csv"
+  save_csv(bench_rows, bench_csv)
+  print(f"  CSV saved to {bench_csv}")
 
   print(f"\nDone. All results in {config.output_dir}")
 
