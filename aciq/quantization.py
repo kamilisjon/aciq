@@ -23,11 +23,10 @@ def bound_symmetric_aciq_mae(cdf: Callable[[float], float], b: int, alpha_max: f
   return root_scalar(g, bracket=(0.0, alpha_max), method="brentq").root
 
 
-def quantize_symmetric(data: np.ndarray, alpha: float, bits: int, return_dequantized: bool = True) -> np.ndarray:
+def quantize_symmetric(data: np.ndarray, alpha: float, bits: int) -> np.ndarray:
+  # NOTE: returns dequantized weights
+  # TODO: write this in terms of thesis formulation and test against this implementation
   qmax = 2 ** (bits - 1) - 1
   scale = alpha / qmax
   quantized = np.clip(np.round(data / scale), -qmax, qmax)
-  if return_dequantized:
-    return quantized * scale
-  else:
-    return quantized
+  return quantized * scale
