@@ -25,10 +25,16 @@ DEV=CUDA DEBUG=2 JITBEAM=1 python -m examples.resnet_pipeline --dataset-path <im
 Small one-shot scripts independent of the main experiments.
 
 ```sh
-python -m examples.mnist_save_images          # export every MNIST image to results/mnist_images_<timestamp>/
-python -m examples.mnist_images_grid          # render results/mnist_grid.png with one sample per class
-DEV=CUDA JITBEAM=1 python -m examples.mnist_train  # single MNIST training run (no quantization) — sanity-checks training in isolation
-DEV=CUDA python -m examples.distribution_fits  # fit Gaussian/Laplace/Student-t/GED to one ResNet layer
+python -m examples.mnist_save_images
+python -m examples.mnist_images_grid
+python -m examples.mnist_train
+python -m examples.distribution_fits
+python -m examples.weights_per_layer --model resnet18 --rows 3 --cols 7 --quantile 99.9
+python -m examples.weights_per_layer --model resnet101 --rows 11 --cols 9 --quantile 99.9  # For appendix
+python -m examples.weight_statistics --model resnet18  # per-layer mean/variance/skewness/excess-kurtosis
+python -m examples.resnet_bn_fusion
+python -m examples.weights_per_channel --model resnet18 --layer layer1.0.conv2 --rows 3 --cols 7 --quantile 99  # small kernels
+python -m examples.weights_per_channel --model resnet18 --layer layer4.0.conv2 --rows 3 --cols 7 --quantile 99.9  # big kernels
 ```
 
 ### Full experiments
