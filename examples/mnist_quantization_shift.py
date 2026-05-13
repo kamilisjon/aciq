@@ -12,7 +12,7 @@ from tinygrad.helpers import tqdm
 from scipy.stats import spearmanr
 
 from aciq.bias_correction import StatsAccumulator, compute_shift
-from aciq.distributions import DistributionType
+from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.mnist import BlockName, MNISTModel, _load_normalized, train_model
 from aciq.quantization import bound_symmetric_minmax, quantize_symmetric, bound_symmetric_aciq_mae
@@ -61,7 +61,7 @@ class QuantMethod(StrEnum):
 def _aciq_alpha(vec: np.ndarray) -> float:
   alpha_mm = bound_symmetric_minmax(vec)
   sorted_vec = np.sort(vec)
-  fits = {cls: cls(sorted_vec) for cls in DistributionType}
+  fits = fit_distributions(sorted_vec)
   best_dist = fits[max(fits, key=lambda dt: fits[dt].log_likelihood)]
   return bound_symmetric_aciq_mae(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=BITS, alpha_max=alpha_mm)
 

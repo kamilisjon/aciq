@@ -15,7 +15,7 @@ from aciq.nn import fuse_conv_bn
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.resnet import Bottleneck, ResNet, capture_bn_params, compute_input_stats
 from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
-from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
+from aciq.distributions import Distribution, fit_distributions, kurtosis, skewness
 from aciq.plotting_style import DistColor
 
 
@@ -45,9 +45,6 @@ class BenchmarkRow:
   top5: float
 
 DEFAULT_COLORS = ["steelblue", "indianred", "seagreen", "darkorange"]
-
-def fit_distributions(data_array: np.ndarray) -> dict[type[Distribution], Distribution]:
-  return {distribution: distribution(data_array) for distribution in DistributionType}
 
 
 def mae(data_array_1: np.ndarray, data_array_2: np.ndarray) -> float:

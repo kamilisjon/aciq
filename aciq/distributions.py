@@ -139,6 +139,10 @@ class GeneralizedGaussian(Distribution):
 DistributionType: set[type[Distribution]] = {Gaussian, Laplace, StudentT, GeneralizedGaussian}
 
 
+def fit_distributions(data: np.ndarray) -> dict[type[Distribution], Distribution]:
+  return {cls: cls(data) for cls in DistributionType}
+
+
 class ClippedGaussian:
   """Analytical mean / variance for N(beta, gamma**2) clipped to [a, b].
 
