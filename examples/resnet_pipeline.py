@@ -49,7 +49,7 @@ DEFAULT_COLORS = ["steelblue", "indianred", "seagreen", "darkorange"]
 
 
 from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
-from aciq.plotting_style import DIST_COLORS
+from aciq.plotting_style import DistColor
 from aciq.quantization import bound_symmetric_minmax, bound_symmetric_aciq_mae
 
 
@@ -84,7 +84,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
       ax.plot(
         vec_sorted,
         fitted.pdf(),
-        color=DIST_COLORS[dist_type],
+        color=DistColor[dist_type],
         linewidth=0.7,
         linestyle="--",
         label=f"{repr(fitted):30s} ll={fitted.log_likelihood:.3g}",
@@ -96,9 +96,9 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     if alpha_aciq != alpha_minmax:
       mae_aciq = mae(vec, quantize_symmetric(vec, alpha_aciq, bits))
       ax.axvline(
-        -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7, label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_aciq:.2e}"
+        -alpha_aciq, color=DistColor[best_type], linestyle="-", linewidth=0.7, label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_aciq:.2e}"
       )
-      ax.axvline(alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7)
+      ax.axvline(alpha_aciq, color=DistColor[best_type], linestyle="-", linewidth=0.7)
 
     eda_lines = [
       f"n        = {vec.size:,}",
