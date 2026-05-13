@@ -234,7 +234,12 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="MNIST quantization distribution shift analysis")
   parser.add_argument("--n-models", type=int, default=100, help="Number of models to train")
   parser.add_argument("--steps", type=int, default=100, help="Training steps per model")
-  parser.add_argument("--from-dir", type=Path, default=None, help="Load `results.csv` and `losses.csv` from this experiment directory and re-render plots only (no training).")
+  parser.add_argument(
+    "--from-dir",
+    type=Path,
+    default=None,
+    help="Load `results.csv` and `losses.csv` from this experiment directory and re-render plots only (no training).",
+  )
   args = parser.parse_args()
   save_dir = get_output_dir(RESULTS_DIR, "mnist")
 

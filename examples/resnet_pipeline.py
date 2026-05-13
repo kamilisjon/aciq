@@ -485,7 +485,12 @@ def main() -> None:
   parser.add_argument("--dataset-path", type=Path, default=None, help="Path to ImageNet dataset root (required unless --from-dir is set).")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
   parser.add_argument("--n-per-class", type=int, default=5, help="Sample N ImageNet val images per class for shift analysis.")
-  parser.add_argument("--from-dir", type=Path, default=None, help="Load `quantization_shift/shifts.csv` from this experiment directory and re-render the shift plot only (no model loading, no inference).")
+  parser.add_argument(
+    "--from-dir",
+    type=Path,
+    default=None,
+    help="Load `quantization_shift/shifts.csv` from this experiment directory and re-render the shift plot only (no model loading, no inference).",
+  )
   args = parser.parse_args()
 
   save_dir = get_output_dir(RESULTS_DIR, args.model)
