@@ -187,6 +187,11 @@ class ResNet:
       obj.assign(Tensor(dat_t.detach().numpy()).to(obj.device).cast(obj.dtype).reshape(obj.shape))
 
 
+# -----------------------------------------------------------------------------
+# Bias correction
+# -----------------------------------------------------------------------------
+
+
 def _bn_effective_params(bn: nn.BatchNorm) -> tuple[np.ndarray, np.ndarray]:
   assert bn.weight is not None and bn.bias is not None, "expected affine BatchNorm"
   gamma_eff = np.abs(bn.weight.numpy().astype(np.float64))
