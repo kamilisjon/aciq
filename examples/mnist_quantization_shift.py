@@ -142,7 +142,7 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
 def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   fig, axes = plt.subplots(2, len(BlockName) + 1, figsize=(4 * (len(BlockName) + 1), 8))
-  for row_idx, (method, color) in enumerate([(QuantMethod.MINMAX, TailwindColor.BLUE), (QuantMethod.ACIQ, TailwindColor.ROSE)]):
+  for row_idx, (method, color) in enumerate([(QuantMethod.MINMAX, TailwindColor.VIOLET), (QuantMethod.ACIQ, TailwindColor.EMERALD)]):
     acc_drops = np.array([r.fp32_acc - getattr(r, f"{method}_acc") for r in rows])
 
     for col_idx, block in enumerate(BlockName):
@@ -171,7 +171,7 @@ def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
 def plot_per_layer_shift(rows: list[MnistResultRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   fig, ax = plt.subplots(figsize=(10, 5))
-  for color, method in [(TailwindColor.BLUE, QuantMethod.MINMAX), (TailwindColor.ROSE, QuantMethod.ACIQ)]:
+  for color, method in [(TailwindColor.VIOLET, QuantMethod.MINMAX), (TailwindColor.EMERALD, QuantMethod.ACIQ)]:
     per_layer_means = [_shifts(rows, method, b).mean() for b in BlockName]
     per_layer_stds = [_shifts(rows, method, b).std() for b in BlockName]
 
