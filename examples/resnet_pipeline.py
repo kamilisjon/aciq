@@ -13,7 +13,7 @@ from aciq.bias_correction import LayerInputStats, MeanShift, StatsAccumulator, a
 from aciq.nn import fuse_conv_bn
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.resnet import Bottleneck, ResNet, capture_bn_params, compute_input_stats
-from aciq.quantization import quantize
+from aciq.quantization import quantize_symmetric
 
 
 METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]
@@ -49,7 +49,7 @@ DEFAULT_COLORS = ["steelblue", "indianred", "seagreen", "darkorange"]
 
 
 from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
-from aciq.quantization import minmax_alpha, solve_symmetric_mae_alpha
+from aciq.quantization import bound_symmetric_minmax, bound_symmetric_aciq_mae
 
 
 DIST_COLORS = {
@@ -74,13 +74,13 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
   fits = fit_distributions(vec_sorted)
 
   # MinMax quantization
-  alpha_minmax = minmax_alpha(vec)
-  mae_minmax = mae(vec, quantize(vec, alpha_minmax, bits))
+  alpha_minmax = bound_symmetric_minmax(vec)
+  mae_minmax = mae(vec, quantize_symmetric(vec, alpha_minmax, bits))
 
   # Optimal alpha*
   best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
   best_dist = fits[best_type]
-  alpha_aciq = solve_symmetric_mae_alpha(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_minmax)
+  alpha_aciq = bound_symmetric_aciq_mae(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_minmax)
 
   if save_path is not None:
     save_path.mkdir(parents=True, exist_ok=True)
@@ -101,7 +101,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     ax.axvline(alpha_minmax, color="grey", linestyle=":", linewidth=1.2)
 
     if alpha_aciq != alpha_minmax:
-      mae_aciq = mae(vec, quantize(vec, alpha_aciq, bits))
+      mae_aciq = mae(vec, quantize_symmetric(vec, alpha_aciq, bits))
       ax.axvline(
         -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7, label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_aciq:.2e}"
       )
@@ -318,8 +318,8 @@ def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet, fq_models
     # Per-tensor
     plot_dir = config.weight_results_dir / "per_tensor"
     alpha_minmax, alpha_aciq = analyze_layer(vec, weight_name, layer_idx, config.bits, plot_dir)
-    q_mm = quantize(vec, alpha_minmax, config.bits)
-    q_ac = quantize(vec, alpha_aciq, config.bits)
+    q_mm = quantize_symmetric(vec, alpha_minmax, config.bits)
+    q_ac = quantize_symmetric(vec, alpha_aciq, config.bits)
 
     fq_lookups["per_tensor_minmax"][weight_name].weight = Tensor(q_mm.reshape(weight_arr.shape).astype(np.float32))
     fq_lookups["per_tensor_aciq"][weight_name].weight = Tensor(q_ac.reshape(weight_arr.shape).astype(np.float32))
@@ -333,8 +333,8 @@ def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet, fq_models
     for ch in range(weight_arr.shape[0]):
       ch_vec = weight_arr[ch].flatten()
       ch_alpha_minmax, ch_alpha_aciq = analyze_layer(ch_vec, f"{weight_name}/ch{ch}", ch, config.bits, ch_plot_dir)
-      q_mm_ch = quantize(ch_vec, ch_alpha_minmax, config.bits)
-      q_ac_ch = quantize(ch_vec, ch_alpha_aciq, config.bits)
+      q_mm_ch = quantize_symmetric(ch_vec, ch_alpha_minmax, config.bits)
+      q_ac_ch = quantize_symmetric(ch_vec, ch_alpha_aciq, config.bits)
       total_err_minmax += float(np.sum(np.abs(ch_vec - q_mm_ch)))
       total_err_aciq += float(np.sum(np.abs(ch_vec - q_ac_ch)))
       fq_ch_mm[ch] = q_mm_ch.reshape(weight_arr[ch].shape)

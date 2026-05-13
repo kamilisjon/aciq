@@ -15,7 +15,7 @@ from aciq.bias_correction import StatsAccumulator, compute_shift
 from aciq.distributions import Distribution, DistributionType
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.mnist import BlockName, MNISTModel, _load_normalized, train_model
-from aciq.quantization import minmax_alpha, quantize, solve_symmetric_mae_alpha
+from aciq.quantization import bound_symmetric_minmax, quantize_symmetric, bound_symmetric_aciq_mae
 
 
 BITS = 4
@@ -59,21 +59,21 @@ class QuantMethod(StrEnum):
 
 
 def _aciq_alpha(vec: np.ndarray) -> float:
-  alpha_mm = minmax_alpha(vec)
+  alpha_mm = bound_symmetric_minmax(vec)
   sorted_vec = np.sort(vec)
   fits = {dt: Distribution.fit(sorted_vec, dt) for dt in DistributionType}
   best_dist = fits[max(fits, key=lambda dt: fits[dt].log_likelihood)]
-  return solve_symmetric_mae_alpha(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=BITS, alpha_max=alpha_mm)
+  return bound_symmetric_aciq_mae(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=BITS, alpha_max=alpha_mm)
 
 
 def quantize_model(model: MNISTModel, method: QuantMethod) -> MNISTModel:
   qmodel = copy.deepcopy(model)
   qmodel.fuse()
-  alpha_fn = minmax_alpha if method == QuantMethod.MINMAX else _aciq_alpha
+  alpha_fn = bound_symmetric_minmax if method == QuantMethod.MINMAX else _aciq_alpha
   for mod in qmodel.weight_modules:
     w = mod.weight.numpy()
     alpha = alpha_fn(w.flatten())
-    mod.weight = Tensor(quantize(w.flatten(), alpha, BITS).reshape(w.shape).astype(np.float32))
+    mod.weight = Tensor(quantize_symmetric(w.flatten(), alpha, BITS).reshape(w.shape).astype(np.float32))
   MNISTModel.clear_jit_caches()
   return qmodel
 

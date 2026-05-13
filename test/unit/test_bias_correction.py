@@ -8,12 +8,12 @@ from aciq.bias_correction import apply_correction, bias_correction_delta, LayerI
 from aciq.distributions import ClippedGaussian
 from aciq.resnet import capture_bn_params, compute_input_stats, _post_residual_stats
 from aciq.resnet import ResNet
-from aciq.quantization import quantize
+from aciq.quantization import quantize_symmetric
 
 
 def _quantize_weight(w: np.ndarray, bits: int = 4) -> np.ndarray:
   alpha = float(np.max(np.abs(w))) or 1.0
-  return quantize(w.flatten(), alpha, bits).reshape(w.shape).astype(np.float32)
+  return quantize_symmetric(w.flatten(), alpha, bits).reshape(w.shape).astype(np.float32)
 
 
 class TestClippedNormal(unittest.TestCase):
