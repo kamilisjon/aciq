@@ -8,14 +8,44 @@ pip install -e .
 ```
 
 ## Usage
-1. Download imagenet validation dataset from https://www.kaggle.com/competitions/imagenet-object-localization-challenge/overview
-1. ResNet analysis:
-    1. `DEV=NV JITBEAM=4 python -m examples.resnet_pipeline --dataset-path /home/kamilis/Downloads/imagenet-object-localization-challenge --model resnet50 --bits 8`
-1. MNIST training for evaluating layers outputs distributions shift after quantization:
-    1. `DEV=NV JITBEAM=4 python -m examples.mnist_quantization_shift --n-models 2 --steps 100`
-1. Single MNIST training run (no quantization, useful for sanity-checking the training pipeline in isolation):
-    1. `DEV=NV JITBEAM=4 python -m examples.train_mnist --steps 1170 --eval-every 10`
-    1. Flags: `--seed` (default 0), `--steps` (default 1170), `--lr` (default 1e-3), `--batch-size` (default 512), `--eval-every` (default 10). Progress bar shows live `loss: X.XX test_accuracy: YY.YY%`; the script prints the final accuracy and last logged train/test losses on exit.
+
+The two main experiments are `examples.mnist_quantization_shift` and `examples.resnet_pipeline`. ResNet requires the ImageNet validation set — download it from <https://www.kaggle.com/competitions/imagenet-object-localization-challenge/overview> and pass the extracted root via `--dataset-path`.
+
+### Smoke runs
+
+Exercise the full pipeline logic with minimal data; each finishes in seconds. Use after refactors to verify nothing is structurally broken.
+
+```sh
+DEV=NV JITBEAM=1 python -m examples.mnist_quantization_shift --n-models 1 --steps 5
+DEV=NV JITBEAM=1 python -m examples.resnet_pipeline --dataset-path <imagenet-root> --model resnet18 --bits 8 --n-per-class 1
+```
+
+### Standalone utilities
+
+Small one-shot scripts independent of the main experiments.
+
+```sh
+python -m examples.mnist_save_images          # export every MNIST image to results/mnist_images_<timestamp>/
+python -m examples.mnist_images_grid          # render results/mnist_grid.png with one sample per class
+DEV=NV JITBEAM=1 python -m examples.mnist_train  # single MNIST training run (no quantization) — sanity-checks training in isolation
+```
+
+### Full experiments
+
+Realistic settings — these produce the thesis-grade numbers and plots.
+
+```sh
+DEV=NV JITBEAM=4 python -m examples.mnist_quantization_shift --n-models 100 --steps 100
+DEV=NV JITBEAM=4 python -m examples.resnet_pipeline --dataset-path <imagenet-root> --model resnet50 --bits 8
+```
+
+### Replot MNIST from a previous experiment
+
+Re-render `mnist_quantization_shift`'s plots from a prior run's CSVs without retraining. Output goes to a new timestamped dir; the source dir is never written to.
+
+```sh
+python -m examples.mnist_quantization_shift --from-dir results/mnist_<timestamp>
+```
 
 ## Local testing
 ### Install extra dependencies
