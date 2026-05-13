@@ -2,7 +2,6 @@ from __future__ import annotations
 import functools
 import math
 from abc import ABC, abstractmethod
-from enum import Enum, auto
 from typing import Any
 
 from scipy import stats
@@ -17,13 +16,6 @@ def skewness(data: np.ndarray) -> np.floating[Any]:
 def kurtosis(data: np.ndarray) -> np.floating[Any]:
   d = data - np.mean(data)
   return np.mean(d**4) / np.mean(d**2) ** 2 - 3.0
-
-
-class DistributionType(Enum):
-  GAUSSIAN = auto()
-  LAPLACE = auto()
-  STUDENT_T = auto()
-  GENERALIZED_GAUSSIAN = auto()
 
 
 class Distribution(ABC):
@@ -49,20 +41,6 @@ class Distribution(ABC):
   @functools.cached_property
   def log_likelihood(self) -> float:
     return float(np.sum(self.logpdf()))
-
-  @staticmethod
-  def fit(data: np.ndarray, dist_type: DistributionType) -> Distribution:
-    match dist_type:
-      case DistributionType.GAUSSIAN:
-        return Gaussian(data)
-      case DistributionType.LAPLACE:
-        return Laplace(data)
-      case DistributionType.STUDENT_T:
-        return StudentT(data)
-      case DistributionType.GENERALIZED_GAUSSIAN:
-        return GeneralizedGaussian(data)
-      case _:
-        raise ValueError(f"Unsupported distribution type: {dist_type}")
 
 
 class Gaussian(Distribution):
@@ -156,6 +134,16 @@ class GeneralizedGaussian(Distribution):
 
   def cdf_at(self, x: np.ndarray) -> np.ndarray:
     return stats.gennorm.cdf(x, self.beta, loc=self.loc, scale=self.scale)
+
+
+DistributionType: set[type[Distribution]] = {Gaussian, Laplace, StudentT, GeneralizedGaussian}
+
+DIST_COLORS: dict[type[Distribution], str] = {
+  Gaussian: "#3B82F6",
+  Laplace: "#10B981",
+  StudentT: "#F59E0B",
+  GeneralizedGaussian: "#EC4899",
+}
 
 
 class ClippedGaussian:

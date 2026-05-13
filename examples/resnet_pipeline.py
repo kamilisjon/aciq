@@ -48,20 +48,12 @@ import matplotlib.pyplot as plt
 DEFAULT_COLORS = ["steelblue", "indianred", "seagreen", "darkorange"]
 
 
-from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
+from aciq.distributions import DIST_COLORS, Distribution, DistributionType, kurtosis, skewness
 from aciq.quantization import bound_symmetric_minmax, bound_symmetric_aciq_mae
 
 
-DIST_COLORS = {
-  DistributionType.GAUSSIAN: "red",
-  DistributionType.LAPLACE: "green",
-  DistributionType.STUDENT_T: "orange",
-  DistributionType.GENERALIZED_GAUSSIAN: "blue",
-}
-
-
-def fit_distributions(data_array: np.ndarray) -> dict[DistributionType, Distribution]:
-  return {dist_type: Distribution.fit(data_array, dist_type) for dist_type in DistributionType}
+def fit_distributions(data_array: np.ndarray) -> dict[type[Distribution], Distribution]:
+  return {distribution: distribution(data_array) for distribution in DistributionType}
 
 
 def mae(data_array_1: np.ndarray, data_array_2: np.ndarray) -> float:

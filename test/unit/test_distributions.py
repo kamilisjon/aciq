@@ -1,10 +1,9 @@
 import unittest
 
 import numpy as np
-import pytest
 from scipy import stats
 
-from aciq.distributions import Distribution, DistributionType, Gaussian, GeneralizedGaussian, Laplace, StudentT, skewness, kurtosis
+from aciq.distributions import DistributionType, Gaussian, GeneralizedGaussian, Laplace, StudentT, skewness, kurtosis
 from test.helpers import make_gaussian_data, make_ged_data, make_laplace_data, make_student_t_data, make_nonpositive_kurtosis_data
 
 
@@ -199,65 +198,14 @@ class TestGeneralizedGaussian(unittest.TestCase):
       np.testing.assert_allclose(g.pdf_at(x), expected)
 
 
-class TestDistributionFit(unittest.TestCase):
-  def test_fit_gaussian_returns_gaussian(self):
+class TestDistributionTypeSet(unittest.TestCase):
+  def test_every_class_in_set_is_instantiable_on_real_data(self):
     data = make_gaussian_data()
-    assert isinstance(Distribution.fit(data, DistributionType.GAUSSIAN), Gaussian)
+    for cls in DistributionType:
+      cls(data)
 
-  def test_fit_laplace_returns_laplace(self):
-    data = make_gaussian_data()
-    assert isinstance(Distribution.fit(data, DistributionType.LAPLACE), Laplace)
-
-  def test_fit_student_t_returns_student_t(self):
-    data = make_gaussian_data()
-    assert isinstance(Distribution.fit(data, DistributionType.STUDENT_T), StudentT)
-
-  def test_fit_gaussian_matches_direct(self):
-    data = make_gaussian_data()
-    fitted = Distribution.fit(data, DistributionType.GAUSSIAN)
-    assert isinstance(fitted, Gaussian)
-    direct = Gaussian(data)
-    assert fitted.mu == direct.mu
-    assert fitted.sigma == direct.sigma
-
-  def test_fit_laplace_matches_direct(self):
-    data = make_gaussian_data()
-    fitted = Distribution.fit(data, DistributionType.LAPLACE)
-    assert isinstance(fitted, Laplace)
-    direct = Laplace(data)
-    assert fitted.mu == direct.mu
-    assert fitted.b == direct.b
-
-  def test_fit_student_t_matches_direct(self):
-    data = make_gaussian_data()
-    fitted = Distribution.fit(data, DistributionType.STUDENT_T)
-    assert isinstance(fitted, StudentT)
-    direct = StudentT(data)
-    assert fitted.df == direct.df
-    assert fitted.loc == direct.loc
-    assert fitted.scale == direct.scale
-
-  def test_all_distribution_types_have_fit(self):
-    data = make_gaussian_data()
-    for dist_type in DistributionType:
-      Distribution.fit(data, dist_type)
-
-  def test_fit_generalized_gaussian_returns_generalized_gaussian(self):
-    data = make_gaussian_data()
-    assert isinstance(Distribution.fit(data, DistributionType.GENERALIZED_GAUSSIAN), GeneralizedGaussian)
-
-  def test_fit_generalized_gaussian_matches_direct(self):
-    data = make_gaussian_data()
-    fitted = Distribution.fit(data, DistributionType.GENERALIZED_GAUSSIAN)
-    assert isinstance(fitted, GeneralizedGaussian)
-    direct = GeneralizedGaussian(data)
-    assert fitted.beta == direct.beta
-    assert fitted.loc == direct.loc
-    assert fitted.scale == direct.scale
-
-  def test_fit_raises_for_unsupported_type(self):
-    with pytest.raises(ValueError):
-      Distribution.fit(make_gaussian_data(), "unsupported")  # type: ignore[arg-type]
+  def test_set_contains_all_four_classes(self):
+    assert DistributionType == {Gaussian, Laplace, StudentT, GeneralizedGaussian}
 
 
 class TestCaching(unittest.TestCase):

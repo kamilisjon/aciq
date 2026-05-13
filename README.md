@@ -28,6 +28,7 @@ Small one-shot scripts independent of the main experiments.
 python -m examples.mnist_save_images          # export every MNIST image to results/mnist_images_<timestamp>/
 python -m examples.mnist_images_grid          # render results/mnist_grid.png with one sample per class
 DEV=CUDA JITBEAM=1 python -m examples.mnist_train  # single MNIST training run (no quantization) — sanity-checks training in isolation
+DEV=CUDA python -m examples.distribution_fits  # fit Gaussian/Laplace/Student-t/GED to one ResNet layer
 ```
 
 ### Full experiments
