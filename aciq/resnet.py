@@ -8,7 +8,7 @@ from tinygrad.helpers import fetch, get_child
 from tinygrad.nn.state import torch_load
 
 
-from aciq.bias_correction import LayerInputStats, apply_correction
+from aciq.bias_correction import LayerInputStats, apply_bias_correction
 from aciq.distributions import ClippedGaussian
 from aciq.helpers import fuse_conv_bn_inplace
 
@@ -265,10 +265,6 @@ def _capture_bn_params(model: ResNet) -> dict[str, tuple[np.ndarray, np.ndarray]
   return out
 
 
-def _post_relu_stats_from_bn(beta: np.ndarray, gamma: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-  return ClippedGaussian.mean(beta, gamma), ClippedGaussian.variance(beta, gamma)
-
-
 def _post_residual_stats(beta_main: np.ndarray, gamma_main: np.ndarray, mu_skip: np.ndarray, var_skip: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
   mu = beta_main + mu_skip
   var = gamma_main**2 + var_skip
@@ -290,7 +286,7 @@ def compute_input_stats(model: ResNet) -> dict[str, LayerInputStats]:
 
   # Post-stem ReLU(BN_stem) gives the input to the first block's conv1.
   gamma_stem, beta_stem = bn_params["stem"]
-  current_mu, current_var = _post_relu_stats_from_bn(beta_stem, gamma_stem)
+  current_mu, current_var = ClippedGaussian.mean(beta_stem, gamma_stem), ClippedGaussian.variance(beta_stem, gamma_stem)
   # Spatial size after stem (stride 2 conv + stride 2 maxpool from 224 input) = 56x56.
   # layer1 keeps the same size (stride 1); layer2/3/4 each halve it via the first block's stride-2 conv.
   spatial_hw = 56 * 56
@@ -308,14 +304,12 @@ def compute_input_stats(model: ResNet) -> dict[str, LayerInputStats]:
 
       # conv2 input = ReLU(BN of conv1)
       gamma_bn1, beta_bn1 = bn_params[f"{prefix}.conv1"]
-      mu_h1, var_h1 = _post_relu_stats_from_bn(beta_bn1, gamma_bn1)
-      out[f"{prefix}.conv2"] = LayerInputStats(E_x=mu_h1, Var_x=var_h1)
+      out[f"{prefix}.conv2"] = LayerInputStats(E_x=ClippedGaussian.mean(beta_bn1, gamma_bn1), Var_x=ClippedGaussian.variance(beta_bn1, gamma_bn1))
 
       if isinstance(block, Bottleneck):
         # conv3 input = ReLU(BN of conv2)
         gamma_bn2, beta_bn2 = bn_params[f"{prefix}.conv2"]
-        mu_h2, var_h2 = _post_relu_stats_from_bn(beta_bn2, gamma_bn2)
-        out[f"{prefix}.conv3"] = LayerInputStats(E_x=mu_h2, Var_x=var_h2)
+        out[f"{prefix}.conv3"] = LayerInputStats(E_x=ClippedGaussian.mean(beta_bn2, gamma_bn2), Var_x=ClippedGaussian.variance(beta_bn2, gamma_bn2))
         last_bn_key = f"{prefix}.conv3"
       else:
         last_bn_key = f"{prefix}.conv2"
@@ -342,5 +336,5 @@ def _bias_correct_model(base: ResNet, fp_modules: dict[str, nn.Conv2d | nn.Linea
   for name, module in _weight_modules(m):
     W_fp = fp_modules[name].weight.numpy()
     b_orig = module.bias.numpy() if module.bias is not None else np.zeros(module.weight.shape[0], dtype=np.float32)
-    apply_correction(module, W_fp, b_orig, input_stats[name])
+    apply_bias_correction(module, W_fp, b_orig, input_stats[name])
   return m

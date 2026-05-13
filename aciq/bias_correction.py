@@ -7,6 +7,8 @@ from tinygrad import Tensor
 from tinygrad.nn import Conv2d, Linear
 
 
+MATH_DTYPE = PARAMETERS_DTYPE = np.float32
+
 # -----------------------------------------------------------------------------
 # Mean-shift measurement
 # -----------------------------------------------------------------------------
@@ -29,7 +31,7 @@ class StatsAccumulator:
     self._counts: dict[str, int] = {}
 
   def update(self, name: str, activation: np.ndarray) -> None:
-    channel_sum = activation.sum(axis=(0, 2, 3)).astype(np.float64)
+    channel_sum = activation.sum(axis=(0, 2, 3)).astype(MATH_DTYPE)
     b, _, h, w = activation.shape
     if name not in self._sums:
       self._sums[name] = np.zeros_like(channel_sum)
@@ -38,7 +40,7 @@ class StatsAccumulator:
     self._counts[name] += b * h * w
 
   def get_per_channel_means(self) -> dict[str, np.ndarray]:
-    return {name: (self._sums[name] / self._counts[name]).astype(np.float32) for name in self._sums}
+    return {name: (self._sums[name] / self._counts[name]).astype(MATH_DTYPE) for name in self._sums}
 
 
 # -----------------------------------------------------------------------------
@@ -52,10 +54,8 @@ class LayerInputStats:
   Var_x: np.ndarray  # (C_in,)
 
 
-def _epsilon_input_contracted(W_fp: np.ndarray, W_q: np.ndarray) -> np.ndarray:
-  """Returns ε_summed of shape (C_out, C_in): sum of ε over kernel spatial dims for conv,
-  identity for linear."""
-  eps = (W_q - W_fp).astype(np.float64)
+def _quantization_error_epsilon(w_fp: np.ndarray, w_dequant: np.ndarray) -> np.ndarray:
+  eps = (w_dequant - w_fp).astype(MATH_DTYPE)
   if eps.ndim == 4:
     return eps.sum(axis=(2, 3))
   if eps.ndim == 2:
@@ -63,16 +63,6 @@ def _epsilon_input_contracted(W_fp: np.ndarray, W_q: np.ndarray) -> np.ndarray:
   raise ValueError(f"unsupported weight rank {eps.ndim}")
 
 
-def bias_correction_delta(W_fp: np.ndarray, W_q: np.ndarray, E_x: np.ndarray) -> np.ndarray:
-  """Per-output-channel bias error introduced by quantization: Δb = ε_sum @ E[x].
-
-  Subtract the returned vector from the layer's bias to absorb the mean shift.
-  """
-  return _epsilon_input_contracted(W_fp, W_q) @ E_x.astype(np.float64)
-
-
-def apply_correction(module: Conv2d | Linear, W_fp: np.ndarray, b_orig: np.ndarray, stats: LayerInputStats) -> None:
-  W_q = module.weight.numpy().astype(np.float64)
-  delta_b = bias_correction_delta(W_fp, W_q, stats.E_x)
-  new_b = b_orig.astype(np.float64) - delta_b
-  module.bias = Tensor(new_b.astype(np.float32))
+def apply_bias_correction(module: Conv2d | Linear, W_fp: np.ndarray, b_orig: np.ndarray, stats: LayerInputStats) -> None:
+  delta_b = _quantization_error_epsilon(W_fp, module.weight.numpy().astype(MATH_DTYPE)) @ stats.E_x.astype(MATH_DTYPE)
+  module.bias = Tensor((b_orig.astype(MATH_DTYPE) - delta_b).astype(PARAMETERS_DTYPE))

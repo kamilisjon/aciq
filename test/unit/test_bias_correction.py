@@ -4,7 +4,7 @@ import numpy as np
 from tinygrad import Tensor
 from tinygrad.nn import Conv2d, Linear
 
-from aciq.bias_correction import apply_correction, bias_correction_delta, LayerInputStats
+from aciq.bias_correction import apply_bias_correction, bias_correction_delta, LayerInputStats
 from aciq.distributions import ClippedGaussian
 from aciq.resnet import compute_input_stats, _post_residual_stats
 from aciq.resnet import ResNet
@@ -102,7 +102,7 @@ class TestApplyCorrection(unittest.TestCase):
     W_q = _quantize_weight(W_fp, bits=3)
     layer = self._make_linear(W_q, b)
     stats = LayerInputStats(E_x=rng.normal(size=(16,)), Var_x=np.ones(16))
-    apply_correction(layer, W_fp, b, stats)
+    apply_bias_correction(layer, W_fp, b, stats)
     np.testing.assert_allclose(layer.weight.numpy(), W_q)
     assert not np.allclose(layer.bias.numpy(), b)
 
