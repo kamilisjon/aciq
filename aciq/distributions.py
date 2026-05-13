@@ -138,13 +138,6 @@ class GeneralizedGaussian(Distribution):
 
 DistributionType: set[type[Distribution]] = {Gaussian, Laplace, StudentT, GeneralizedGaussian}
 
-DIST_COLORS: dict[type[Distribution], str] = {
-  Gaussian: "#3B82F6",
-  Laplace: "#10B981",
-  StudentT: "#F59E0B",
-  GeneralizedGaussian: "#EC4899",
-}
-
 
 class ClippedGaussian:
   """Analytical mean / variance for N(beta, gamma**2) clipped to [a, b].

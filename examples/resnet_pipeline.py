@@ -48,7 +48,8 @@ import matplotlib.pyplot as plt
 DEFAULT_COLORS = ["steelblue", "indianred", "seagreen", "darkorange"]
 
 
-from aciq.distributions import DIST_COLORS, Distribution, DistributionType, kurtosis, skewness
+from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
+from aciq.plotting_style import DIST_COLORS
 from aciq.quantization import bound_symmetric_minmax, bound_symmetric_aciq_mae
 
 
