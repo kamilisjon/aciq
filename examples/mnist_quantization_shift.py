@@ -11,7 +11,7 @@ from tinygrad import Tensor
 from tinygrad.helpers import tqdm
 from scipy.stats import spearmanr
 
-from aciq.bias_correction import StatsAccumulator, compute_shift
+from aciq.bias_correction import MeanShiftAccumulator, compute_shift
 from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.mnist import BlockName, MNISTModel, _load_normalized, train_model
@@ -82,7 +82,7 @@ def quantize_model(model: MNISTModel, method: QuantMethod) -> MNISTModel:
 
 
 def collect_layer_outputs(model: MNISTModel, x_test: Tensor, batch_size: int = 100) -> dict[str, np.ndarray]:
-  acc = StatsAccumulator()
+  acc = MeanShiftAccumulator()
   n = x_test.shape[0]
   assert n % batch_size == 0, f"test set size {n} must be divisible by batch_size {batch_size}"
   for start in tqdm(range(0, n, batch_size), desc="  activations"):

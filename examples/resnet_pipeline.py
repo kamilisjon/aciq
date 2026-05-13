@@ -10,7 +10,7 @@ from tinygrad.helpers import tqdm
 from tinygrad.nn import Conv2d, Linear
 
 from aciq.imagenet import benchmark_accuracy, load_and_preprocess, sample_imagenet_val
-from aciq.bias_correction import MeanShift, StatsAccumulator, compute_shift
+from aciq.bias_correction import MeanShift, MeanShiftAccumulator, compute_shift
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, mean_absolute_error, save_csv
 from aciq.resnet import ResNet, compute_input_stats, _weight_modules, _bias_correct_model
 from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
@@ -252,7 +252,7 @@ def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet, fq_models
   print(f"  CSV written to {csv_path}")
 
 def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int = 32) -> dict[str, np.ndarray]:
-  acc = StatsAccumulator()
+  acc = MeanShiftAccumulator()
   for start in tqdm(range(0, len(image_paths), batch_size), desc="  activations"):
     batch_paths = image_paths[start : start + batch_size]
     real_n = len(batch_paths)

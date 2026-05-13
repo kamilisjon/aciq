@@ -25,7 +25,7 @@ def compute_shift(fp32_outputs: dict[str, np.ndarray], quant_outputs: dict[str, 
   return [MeanShift(method=method, layer=name, mean_shift=float(np.mean(np.abs(fp32_outputs[name] - quant_outputs[name])))) for name in fp32_outputs]
 
 
-class StatsAccumulator:
+class MeanShiftAccumulator:
   def __init__(self) -> None:
     self._sums: dict[str, np.ndarray] = {}
     self._counts: dict[str, int] = {}
