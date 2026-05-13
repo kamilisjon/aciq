@@ -169,27 +169,24 @@ def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
   plt.close(fig)
 
 
-def plot_shift_accumulation(rows: list[MnistResultRow], save_dir: Path) -> None:
+def plot_per_layer_shift(rows: list[MnistResultRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   fig, ax = plt.subplots(figsize=(10, 5))
   for color, method in [("steelblue", QuantMethod.MINMAX), ("indianred", QuantMethod.ACIQ)]:
     per_layer_means = [_shifts(rows, method, b).mean() for b in BlockName]
     per_layer_stds = [_shifts(rows, method, b).std() for b in BlockName]
-    cumulative = np.cumsum(per_layer_means)
 
     x_pos = np.arange(len(BlockName))
-    label = method.upper()
     ax.bar(
       x_pos + (-0.2 if method == QuantMethod.MINMAX else 0.2),
       per_layer_means,
       width=0.35,
       color=color,
       alpha=0.5,
-      label=f"{label} per-layer shift",
+      label=method.upper(),
       yerr=per_layer_stds,
       capsize=3,
     )
-    ax.plot(x_pos, cumulative, color=color, marker="o", linewidth=2, linestyle="--", label=f"{label} cumulative shift")
   ax.set_xticks(np.arange(len(BlockName)))
   ax.set_xticklabels(BlockName)
   ax.set_xlabel("Layer")
@@ -197,7 +194,7 @@ def plot_shift_accumulation(rows: list[MnistResultRow], save_dir: Path) -> None:
   ax.legend(fontsize=8, prop={"family": "monospace", "size": 8})
   ax.grid(True, alpha=0.3, axis="y")
   fig.tight_layout()
-  fig.savefig(save_dir / "mean_shift_accumulation.png", dpi=700)
+  fig.savefig(save_dir / "per_layer_mean_shift.png", dpi=700)
   plt.close(fig)
 
 
@@ -254,7 +251,7 @@ if __name__ == "__main__":
       save_csv(loss_rows, save_dir / "losses.csv")
 
   plot_scatter(rows, save_dir)
-  plot_shift_accumulation(rows, save_dir)
+  plot_per_layer_shift(rows, save_dir)
   if loss_rows:
     plot_loss_curves(loss_rows, save_dir)
   print(f"Plots saved to {save_dir}/")
