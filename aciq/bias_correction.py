@@ -7,8 +7,6 @@ from tinygrad import Tensor
 from tinygrad.nn import Conv2d, Linear
 
 
-MATH_DTYPE = PARAMETERS_DTYPE = np.float32
-
 # -----------------------------------------------------------------------------
 # Mean-shift measurement
 # -----------------------------------------------------------------------------
@@ -29,7 +27,7 @@ class ChannelMeansAccumulator:
     self.param_counts: dict[str, int] = {}
 
   def update(self, layer_name: str, activation: np.ndarray) -> None:
-    channel_sum = activation.sum(axis=(0, 2, 3)).astype(MATH_DTYPE)
+    channel_sum = activation.sum(axis=(0, 2, 3)).astype(np.float32)
     b, _, h, w = activation.shape
     if layer_name not in self.channels_sums:
       self.channels_sums[layer_name] = np.zeros_like(channel_sum)
@@ -38,7 +36,7 @@ class ChannelMeansAccumulator:
     self.param_counts[layer_name] += b * h * w
 
   def _get_per_layer_means(self) -> dict[str, np.ndarray]:
-    return {layer_name: (self.channels_sums[layer_name] / self.param_counts[layer_name]).astype(MATH_DTYPE) for layer_name in self.channels_sums}
+    return {layer_name: (self.channels_sums[layer_name] / self.param_counts[layer_name]).astype(np.float32) for layer_name in self.channels_sums}
 
   def layers_means_shifts(self, other: "ChannelMeansAccumulator", method: str) -> list[MeanShift]:
     self_means, other_means = self._get_per_layer_means(), other._get_per_layer_means()
@@ -51,7 +49,7 @@ class ChannelMeansAccumulator:
 
 
 def _quantization_error_epsilon(w_fp: np.ndarray, w_dequant: np.ndarray) -> np.ndarray:
-  eps = (w_dequant - w_fp).astype(MATH_DTYPE)
+  eps = (w_dequant - w_fp).astype(np.float32)
   if eps.ndim == 4:
     return eps.sum(axis=(2, 3))
   if eps.ndim == 2:
@@ -60,5 +58,5 @@ def _quantization_error_epsilon(w_fp: np.ndarray, w_dequant: np.ndarray) -> np.n
 
 
 def apply_bias_correction(module: Conv2d | Linear, W_fp: np.ndarray, b_orig: np.ndarray, E_x: np.ndarray) -> None:
-  delta_b = _quantization_error_epsilon(W_fp, module.weight.numpy().astype(MATH_DTYPE)) @ E_x.astype(MATH_DTYPE)
-  module.bias = Tensor((b_orig.astype(MATH_DTYPE) - delta_b).astype(PARAMETERS_DTYPE))
+  delta_b = _quantization_error_epsilon(W_fp, module.weight.numpy().astype(np.float32)) @ E_x.astype(np.float32)
+  module.bias = Tensor((b_orig.astype(np.float32) - delta_b).astype(np.float32))
