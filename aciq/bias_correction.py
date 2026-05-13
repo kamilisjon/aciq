@@ -23,7 +23,7 @@ class MeanShift:
 
 class ChannelMeansAccumulator:
   def __init__(self) -> None:
-    # Holds 1D verctors, which holds running sum of channel params. One value per layer channel.
+    # Holds 1D vectors, which holds running sum of channel params. One value per layer channel.
     self.channels_sums: dict[str, np.ndarray] = {}
     # Holds parameters counts. It is enough to hold parameters count of a single channel as other channels have same parameter counts.
     self.param_counts: dict[str, int] = {}
