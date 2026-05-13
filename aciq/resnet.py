@@ -1,4 +1,6 @@
 # Reference: tinygrad/extra/models/resnet.py @ commit f28ea84de235cdeaa7e028a2034b34f27b67d30f
+import copy
+
 import numpy as np
 import tinygrad.nn as nn
 from tinygrad import Tensor, TinyJit, dtypes, function
@@ -6,7 +8,7 @@ from tinygrad.helpers import fetch, get_child
 from tinygrad.nn.state import torch_load
 
 
-from aciq.bias_correction import LayerInputStats
+from aciq.bias_correction import LayerInputStats, apply_correction
 from aciq.distributions import ClippedGaussian
 from aciq.helpers import fuse_conv_bn_inplace
 
@@ -333,3 +335,12 @@ def compute_input_stats(model: ResNet) -> dict[str, LayerInputStats]:
   # variance shrinks by 1/(H*W) under spatial i.i.d. assumption.
   out["fc"] = LayerInputStats(E_x=current_mu, Var_x=current_var / float(spatial_hw))
   return out
+
+
+def _bias_correct_model(base: ResNet, fp_modules: dict[str, nn.Conv2d | nn.Linear], input_stats: dict[str, LayerInputStats]) -> ResNet:
+  m = copy.deepcopy(base)
+  for name, module in _weight_modules(m):
+    W_fp = fp_modules[name].weight.numpy()
+    b_orig = module.bias.numpy() if module.bias is not None else np.zeros(module.weight.shape[0], dtype=np.float32)
+    apply_correction(module, W_fp, b_orig, input_stats[name])
+  return m

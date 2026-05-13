@@ -10,9 +10,9 @@ from tinygrad.helpers import tqdm
 from tinygrad.nn import Conv2d, Linear
 
 from aciq.imagenet import benchmark_accuracy, load_and_preprocess, sample_imagenet_val
-from aciq.bias_correction import LayerInputStats, MeanShift, StatsAccumulator, apply_correction, compute_shift
+from aciq.bias_correction import MeanShift, StatsAccumulator, compute_shift
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, mean_absolute_error, save_csv
-from aciq.resnet import ResNet, compute_input_stats, _weight_modules
+from aciq.resnet import ResNet, compute_input_stats, _weight_modules, _bias_correct_model
 from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
 from aciq.distributions import fit_distributions, kurtosis, skewness
 from aciq.plotting_style import DistColor
@@ -250,16 +250,6 @@ def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet, fq_models
 
   save_csv(rows, csv_path)
   print(f"  CSV written to {csv_path}")
-
-
-def _bias_correct_model(base: ResNet, fp_modules: dict[str, Conv2d | Linear], input_stats: dict[str, LayerInputStats]) -> ResNet:
-  m = copy.deepcopy(base)
-  for name, module in _weight_modules(m):
-    W_fp = fp_modules[name].weight.numpy()
-    b_orig = module.bias.numpy() if module.bias is not None else np.zeros(module.weight.shape[0], dtype=np.float32)
-    apply_correction(module, W_fp, b_orig, input_stats[name])
-  return m
-
 
 def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int = 32) -> dict[str, np.ndarray]:
   acc = StatsAccumulator()
