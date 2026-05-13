@@ -257,11 +257,7 @@ def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet, fq_models
 # ---------------------------------------------------------------------------
 
 
-def stage_corrections(
-  fp_model: ResNet,
-  fq_models: dict[str, ResNet],
-  input_stats: dict[str, LayerInputStats],
-) -> dict[tuple[str, str], ResNet]:
+def stage_corrections(fp_model: ResNet, fq_models: dict[str, ResNet]) -> dict[tuple[str, str], ResNet]:
   """Build the (method × correction_mode) variant matrix.
 
   Per-tensor methods get only the uncorrected baseline. Per-channel methods get
@@ -270,6 +266,7 @@ def stage_corrections(
   uses a N(0, 1) input assumption, matching the per-channel standardization
   applied to the network input).
   """
+  input_stats = compute_input_stats(fp_model)
   fp_modules = dict(_weight_modules(fp_model))
   variants: dict[tuple[str, str], ResNet] = {}
   for method in METHOD_NAMES:
@@ -403,17 +400,14 @@ def main() -> None:
 
   model = ResNet(config.model_depth)
   model.load_from_pretrained()
-
   model.fuse()
   fq_models = {m: copy.deepcopy(model) for m in METHOD_NAMES}
 
-  print(f"\n=== Stage 2: Weight Distribution Analysis ({config.model_name}) ===")
+  print(f"\n=== Stage 1: Weight Distribution Analysis ({config.model_name}) ===")
   stage_weight_analysis(config, model, fq_models)
 
-  print(f"\n=== Stage 2.5: Bias and Variance Correction ({config.model_name}) ===")
-  input_stats = compute_input_stats(model)
-  variants = stage_corrections(model, fq_models, input_stats)
-  print(f"  built {len(variants)} quantized variants (per-tensor: none only; per-channel: none/bias/variance/joint)")
+  print(f"\n=== Stage 2: Bias and Variance Correction ({config.model_name}) ===")
+  variants = stage_corrections(model, fq_models)
 
   print(f"\n=== Stage 3: Quantization Shift Analysis ({config.model_name}) ===")
   stage_shift_analysis(config, model, variants)
