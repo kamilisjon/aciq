@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from tinygrad import GlobalCounters, Tensor, TinyJit
+from tinygrad import Tensor
 from tinygrad.helpers import tqdm
 from tinygrad.nn import BatchNorm, Conv2d, Linear
 
@@ -411,17 +411,12 @@ def stage_corrections(
 
 
 def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int = 32) -> dict[str, np.ndarray]:
-  jmodel = TinyJit(model)
-  jmodel(Tensor.rand(batch_size, 3, 224, 224)).realize()
-  GlobalCounters.reset()
-  jmodel(Tensor.rand(batch_size, 3, 224, 224)).realize()
-
   acc = StatsAccumulator()
   for start in tqdm(range(0, len(image_paths), batch_size), desc="  activations"):
     batch_paths = image_paths[start : start + batch_size]
-    jmodel(load_and_preprocess(batch_paths, pad_to_batch_size=batch_size))
     real_n = len(batch_paths)
-    for name, act in model.activations.items():
+    activations = model.get_activations(load_and_preprocess(batch_paths, pad_to_batch_size=batch_size))
+    for name, act in activations.items():
       # slice off the zero-padded tail so accumulated stats only reflect real images
       acc.update(name, (act[:real_n] if real_n < batch_size else act).numpy())
   return acc.get_per_channel_means()
@@ -432,12 +427,14 @@ def stage_shift_analysis(config: PipelineConfig, fp32_model: ResNet, variants: d
   print(f"  Using {len(image_paths)} images")
 
   print("  Collecting FP32 stats...")
+  ResNet.clear_jit_caches()
   fp32_stats = _collect_activations(fp32_model, image_paths)
 
   shift_rows: list[MeanShift] = []
   for (method, mode), model in variants.items():
     label = f"{method}::{mode}"
     print(f"  Collecting {label} stats...")
+    ResNet.clear_jit_caches()
     quant_stats = _collect_activations(model, image_paths)
     shift_rows.extend(compute_shift(fp32_stats, quant_stats, label))
 
@@ -460,12 +457,14 @@ def stage_benchmark(config: PipelineConfig, fp_model: ResNet, variants: dict[tup
   rows: list[BenchmarkRow] = []
 
   print("  benchmarking FP32")
+  ResNet.clear_jit_caches()
   top1, top5 = benchmark_accuracy(fp_model, config.dataset_path)
   rows.append(BenchmarkRow(method="fp32", correction_mode="none", top1=float(top1), top5=float(top5)))
   print(f"  FP32: top1={top1:.2f}  top5={top5:.2f}")
 
   for (method, mode), model in variants.items():
     print(f"  benchmarking {method}::{mode}")
+    ResNet.clear_jit_caches()
     top1, top5 = benchmark_accuracy(model, config.dataset_path)
     rows.append(BenchmarkRow(method=method, correction_mode=mode, top1=float(top1), top5=float(top5)))
     print(f"  {method}::{mode}: top1={top1:.2f}  top5={top5:.2f}")

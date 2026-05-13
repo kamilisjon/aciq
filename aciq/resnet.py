@@ -1,7 +1,7 @@
 # Vendored from tinygrad/extra/models/resnet.py @ commit f28ea84de235cdeaa7e028a2034b34f27b67d30f
 import numpy as np
 import tinygrad.nn as nn
-from tinygrad import Tensor, dtypes
+from tinygrad import Tensor, TinyJit, dtypes, function
 from tinygrad.helpers import fetch, get_child
 from tinygrad.nn.state import torch_load
 
@@ -118,7 +118,8 @@ class ResNet:
       self.in_planes = planes * block.expansion
     return layers
 
-  def forward(self, x):
+  @function
+  def __call__(self, x: Tensor) -> Tensor:
     out = self.conv1(x)
     if not self.fused:
       out = self.bn1(out)
@@ -129,11 +130,21 @@ class ResNet:
     out = out.sequential(self.layer3)
     out = out.sequential(self.layer4)
     out = out.mean([2, 3])
-    out = self.fc(out.cast(dtypes.float32))
-    return out
+    return self.fc(out.cast(dtypes.float32))
 
-  def __call__(self, x: Tensor) -> Tensor:
-    return self.forward(x)
+  @TinyJit
+  def infer(self, X: Tensor) -> Tensor:
+    return self(X).realize()
+
+  @TinyJit
+  def get_activations(self, X: Tensor) -> dict[str, Tensor]:
+    self(X)
+    return {name: act.realize() for name, act in self.activations.items()}
+
+  @classmethod
+  def clear_jit_caches(cls) -> None:
+    for name in ("infer", "get_activations"):
+      cls.__dict__[name].reset()
 
   def fuse(self):
     fuse_conv_bn_inplace(self.conv1, self.bn1)
