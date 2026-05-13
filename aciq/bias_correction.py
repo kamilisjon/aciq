@@ -40,9 +40,11 @@ class StatsAccumulator:
   def get_per_channel_means(self) -> dict[str, np.ndarray]:
     return {name: (self._sums[name] / self._counts[name]).astype(np.float32) for name in self._sums}
 
+
 # -----------------------------------------------------------------------------
 # Bias correction
 # -----------------------------------------------------------------------------
+
 
 @dataclass
 class LayerInputStats:

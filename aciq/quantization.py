@@ -16,7 +16,7 @@ def _bound_symmetric_aciq_mae(alpha: float, cdf: Callable[[float], float], b: in
 def bound_symmetric_aciq_mae(cdf: Callable[[float], float], b: int, alpha_max: float) -> float:
   def g(alpha: float) -> float:
     return _bound_symmetric_aciq_mae(alpha, cdf, b)
-  
+
   if g(alpha_max) <= 0:
     return alpha_max
 
