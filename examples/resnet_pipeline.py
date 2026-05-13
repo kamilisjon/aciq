@@ -15,7 +15,7 @@ from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, mean_absolute_er
 from aciq.resnet import ResNet, compute_input_stats, _weight_modules, _bias_correct_model
 from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
 from aciq.distributions import fit_distributions, kurtosis, skewness
-from aciq.plotting_style import DIST_COLORS, HIST_BINS, NEUTRAL_COLOR, PDF_LINE_WIDTH, REFERENCE_LINE_WIDTH, SERIES_COLORS, STATS_TEXT_KW, TailwindColor
+from aciq.plotting_style import DIST_COLORS, HIST_BINS, NEUTRAL_COLOR, LINE_WIDTH , LINE_WIDTH , SERIES_COLORS, STATS_TEXT_KW, TailwindColor
 
 
 METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]
@@ -68,20 +68,20 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
         vec_sorted,
         fitted.pdf(),
         color=DIST_COLORS[dist_type],
-        linewidth=PDF_LINE_WIDTH,
+        linewidth=LINE_WIDTH ,
         linestyle="--",
         label=f"{repr(fitted)} ll={fitted.log_likelihood:.3g}",
       )
 
-    ax.axvline(-alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=REFERENCE_LINE_WIDTH, label=f"MinMax α={alpha_minmax:.4f} MAE={mae_minmax:.2e}")
-    ax.axvline(alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=REFERENCE_LINE_WIDTH)
+    ax.axvline(-alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=LINE_WIDTH , label=f"MinMax α={alpha_minmax:.4f} MAE={mae_minmax:.2e}")
+    ax.axvline(alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=LINE_WIDTH )
 
     if alpha_aciq != alpha_minmax:
       mae_aciq = mean_absolute_error(vec, quantize_symmetric(vec, alpha_aciq, bits))
       ax.axvline(
-        -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=REFERENCE_LINE_WIDTH, label=f"ACIQ {best_dist.name} α={alpha_aciq:.4f} MAE={mae_aciq:.2e}"
+        -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=LINE_WIDTH , label=f"ACIQ {best_dist.name} α={alpha_aciq:.4f} MAE={mae_aciq:.2e}"
       )
-      ax.axvline(alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=REFERENCE_LINE_WIDTH)
+      ax.axvline(alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=LINE_WIDTH )
 
     eda_lines = [
       f"n {vec.size:,}",
