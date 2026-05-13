@@ -15,7 +15,7 @@ from aciq.bias_correction import (
   apply_correction,
 )
 from aciq.bn_fusion import fuse_conv_bn
-from aciq.helpers import RESULTS_DIR, get_output_dir, save_csv
+from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.resnet import Bottleneck, ResNet, capture_bn_params, compute_input_stats
 from aciq.imagenet.preprocess import load_and_preprocess
 from aciq.quantization import quantize
@@ -483,20 +483,34 @@ def main() -> None:
   parser = argparse.ArgumentParser(description="Full ACIQ quantization analysis pipeline")
   parser.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet34", "resnet50", "resnet101", "resnet152"])
   parser.add_argument("--bits", type=int, default=8)
-  parser.add_argument("--dataset-path", type=Path, required=True, help="Path to ImageNet dataset root")
+  parser.add_argument("--dataset-path", type=Path, default=None, help="Path to ImageNet dataset root (required unless --from-dir is set).")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
   parser.add_argument("--n-per-class", type=int, default=5, help="Sample N ImageNet val images per class for shift analysis.")
+  parser.add_argument("--from-dir", type=Path, default=None, help="Load `quantization_shift/shifts.csv` from this experiment directory and re-render the shift plot only (no model loading, no inference).")
   args = parser.parse_args()
+
+  save_dir = get_output_dir(RESULTS_DIR, args.model)
+  print(f"Output directory: {save_dir}")
+
+  if args.from_dir:
+    shifts_path = args.from_dir / "quantization_shift" / "shifts.csv"
+    shift_rows = load_csv(shifts_path, MeanShift)
+    print(f"Loaded {len(shift_rows)} shift rows from {shifts_path}")
+    layer_names = list(dict.fromkeys(r.layer for r in shift_rows))
+    plot_shift(shift_rows, layer_names, save_dir / "quantization_shift", model_name=args.model)
+    print(f"Plot saved to {save_dir / 'quantization_shift' / 'mean_shift.png'}")
+    return
+
+  assert args.dataset_path is not None, "--dataset-path is required unless --from-dir is set"
 
   config = PipelineConfig(
     model_depth=int(args.model.removeprefix("resnet")),
     bits=args.bits,
     dataset_path=args.dataset_path,
     plot_per_channel=args.plot_per_channel,
-    output_dir=get_output_dir(RESULTS_DIR, args.model),
+    output_dir=save_dir,
     n_per_class=args.n_per_class,
   )
-  print(f"Output directory: {config.output_dir}")
 
   model = ResNet(config.model_depth)
   model.load_from_pretrained()

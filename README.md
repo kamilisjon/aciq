@@ -47,6 +47,16 @@ Re-render `mnist_quantization_shift`'s plots from a prior run's CSVs without ret
 python -m examples.mnist_quantization_shift --from-dir results/mnist_<timestamp>
 ```
 
+### Replot ResNet from a previous experiment
+
+Re-render `resnet_pipeline`'s per-layer mean-shift plot from a prior run's `quantization_shift/shifts.csv`. No model load, no ImageNet, no GPU. Other ResNet plots (weight distributions, BN fusion effects) need raw model state and can't be replotted from CSV alone.
+
+```sh
+python -m examples.resnet_pipeline --model resnet50 --from-dir results/resnet50_<timestamp>
+```
+
+`--model` must match the model from the original run (used for the plot title).
+
 ## Local testing
 ### Install extra dependencies
 ```sh
