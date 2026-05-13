@@ -8,11 +8,11 @@ license = 'MIT'
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "numpy",
-  "scipy",
-  "matplotlib",
-  "pillow",
-  "tinygrad @ git+https://github.com/tinygrad/tinygrad.git@master",
+  "numpy==2.4.4",
+  "scipy==1.17.1",
+  "matplotlib==3.10.8",
+  "pillow==12.2.0",
+  "tinygrad @ git+https://github.com/tinygrad/tinygrad.git@59a81559d46c29ed695b7314945e573185df5ecd",
 ]
 
 [build-system]
@@ -28,13 +28,13 @@ packages = [
 [project.optional-dependencies]
 linting = [
   "mypy==1.19.1",
-  "typing-extensions",
+  "typing-extensions==4.15.0",
   "ruff==0.14.10",
-  "typos",
+  "typos==1.45.1",
 ]
 testing = [
-  "pytest",
-  "pre-commit",
+  "pytest==9.0.3",
+  "pre-commit==4.6.0",
   "torch==2.6.0",
   "torchvision==0.21.0",
 ]
