@@ -6,7 +6,8 @@ from tinygrad.helpers import fetch, get_child
 from tinygrad.nn.state import torch_load
 
 
-from aciq.bias_correction import LayerInputStats, clipped_normal_mean, clipped_normal_var
+from aciq.bias_correction import LayerInputStats
+from aciq.distributions import ClippedGaussian
 from aciq.nn import fuse_conv_bn_inplace
 
 
@@ -209,14 +210,14 @@ def capture_bn_params(model: ResNet) -> dict[str, tuple[np.ndarray, np.ndarray]]
 
 
 def _post_relu_stats_from_bn(beta: np.ndarray, gamma: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-  return clipped_normal_mean(beta, gamma), clipped_normal_var(beta, gamma)
+  return ClippedGaussian.mean(beta, gamma), ClippedGaussian.variance(beta, gamma)
 
 
 def _post_residual_stats(beta_main: np.ndarray, gamma_main: np.ndarray, mu_skip: np.ndarray, var_skip: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
   mu = beta_main + mu_skip
   var = gamma_main**2 + var_skip
   sigma = np.sqrt(np.maximum(var, 0.0))
-  return clipped_normal_mean(mu, sigma), clipped_normal_var(mu, sigma)
+  return ClippedGaussian.mean(mu, sigma), ClippedGaussian.variance(mu, sigma)
 
 
 def compute_input_stats(model: ResNet, bn_params: dict[str, tuple[np.ndarray, np.ndarray]]) -> dict[str, LayerInputStats]:

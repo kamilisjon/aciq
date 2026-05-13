@@ -156,3 +156,53 @@ class GeneralizedGaussian(Distribution):
 
   def cdf_at(self, x: np.ndarray) -> np.ndarray:
     return stats.gennorm.cdf(x, self.beta, loc=self.loc, scale=self.scale)
+
+
+class ClippedGaussian:
+  """Analytical mean / variance for N(beta, gamma**2) clipped to [a, b].
+
+  Source: arXiv:1906.04721. ReLU is the special case (a=0, b=+inf)."""
+
+  @classmethod
+  def mean(cls, beta: np.ndarray, gamma: np.ndarray, a: float = 0.0, b: float = np.inf) -> np.ndarray:
+    beta = np.asarray(beta, dtype=np.float64)
+    gamma = np.asarray(gamma, dtype=np.float64)
+    sigma = np.abs(gamma)
+    alpha_n = (a - beta) / sigma
+    beta_n = np.full_like(beta, np.inf) if not np.isfinite(b) else (b - beta) / sigma
+
+    Phi_alpha = stats.norm.cdf(alpha_n)
+    Phi_beta = np.ones_like(beta) if not np.isfinite(b) else stats.norm.cdf(beta_n)
+    phi_alpha = stats.norm.pdf(alpha_n)
+    phi_beta = np.zeros_like(beta) if not np.isfinite(b) else stats.norm.pdf(beta_n)
+
+    term_low = a * Phi_alpha
+    term_high = 0.0 if not np.isfinite(b) else b * (1.0 - Phi_beta)
+    return term_low + term_high + sigma * (phi_alpha - phi_beta) + beta * (Phi_beta - Phi_alpha)
+
+  @classmethod
+  def variance(cls, beta: np.ndarray, gamma: np.ndarray, a: float = 0.0, b: float = np.inf) -> np.ndarray:
+    beta = np.asarray(beta, dtype=np.float64)
+    gamma = np.asarray(gamma, dtype=np.float64)
+    sigma = np.abs(gamma)
+    alpha_n = (a - beta) / sigma
+    beta_n = np.full_like(beta, np.inf) if not np.isfinite(b) else (b - beta) / sigma
+
+    Phi_alpha = stats.norm.cdf(alpha_n)
+    Phi_beta = np.ones_like(beta) if not np.isfinite(b) else stats.norm.cdf(beta_n)
+    phi_alpha = stats.norm.pdf(alpha_n)
+    phi_beta = np.zeros_like(beta) if not np.isfinite(b) else stats.norm.pdf(beta_n)
+
+    mu_clip = cls.mean(beta, gamma, a, b)
+    Z = Phi_beta - Phi_alpha
+    b_phi_beta = 0.0 if not np.isfinite(b) else b * phi_beta
+    term_high = 0.0 if not np.isfinite(b) else (b - mu_clip) ** 2 * (1.0 - Phi_beta)
+
+    var = (
+      Z * (beta**2 + sigma**2 + mu_clip**2 - 2.0 * mu_clip * beta)
+      + sigma * (a * phi_alpha - b_phi_beta)
+      + sigma * (beta - 2.0 * mu_clip) * (phi_alpha - phi_beta)
+      + (a - mu_clip) ** 2 * Phi_alpha
+      + term_high
+    )
+    return np.maximum(var, 0.0)

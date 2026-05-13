@@ -7,10 +7,9 @@ from tinygrad.nn import Conv2d, Linear
 from aciq.bias_correction import (
   apply_correction,
   bias_correction_delta,
-  clipped_normal_mean,
-  clipped_normal_var,
   LayerInputStats,
 )
+from aciq.distributions import ClippedGaussian
 from aciq.resnet import capture_bn_params, compute_input_stats, _post_residual_stats
 from aciq.resnet import ResNet
 from aciq.quantization import quantize
@@ -29,7 +28,7 @@ class TestClippedNormal(unittest.TestCase):
     samples = rng.normal(loc=beta, scale=gamma, size=(2_000_000, 5))
     relu = np.maximum(samples, 0.0)
     expected = relu.mean(axis=0)
-    got = clipped_normal_mean(beta, gamma)
+    got = ClippedGaussian.mean(beta, gamma)
     np.testing.assert_allclose(got, expected, atol=5e-3)
 
   def test_relu_var_matches_monte_carlo(self):
@@ -39,14 +38,14 @@ class TestClippedNormal(unittest.TestCase):
     samples = rng.normal(loc=beta, scale=gamma, size=(2_000_000, 3))
     relu = np.maximum(samples, 0.0)
     expected = relu.var(axis=0)
-    got = clipped_normal_var(beta, gamma)
+    got = ClippedGaussian.variance(beta, gamma)
     np.testing.assert_allclose(got, expected, atol=5e-3)
 
   def test_gamma_sign_invariant(self):
     # |gamma| should be used internally so a negative gamma doesn't flip the mean
     np.testing.assert_allclose(
-      clipped_normal_mean(np.array([0.5]), np.array([-1.0])),
-      clipped_normal_mean(np.array([0.5]), np.array([1.0])),
+      ClippedGaussian.mean(np.array([0.5]), np.array([-1.0])),
+      ClippedGaussian.mean(np.array([0.5]), np.array([1.0])),
     )
 
 
