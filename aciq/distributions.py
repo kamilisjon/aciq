@@ -136,11 +136,10 @@ class GeneralizedGaussian(Distribution):
     return stats.gennorm.cdf(x, self.beta, loc=self.loc, scale=self.scale)
 
 
-DistributionType: set[type[Distribution]] = {Gaussian, Laplace, StudentT, GeneralizedGaussian}
-
+Distributions: set[type[Distribution]] = {Gaussian, Laplace, StudentT, GeneralizedGaussian}
 
 def fit_distributions(data: np.ndarray) -> dict[type[Distribution], Distribution]:
-  return {cls: cls(data) for cls in DistributionType}
+  return {distribution: distribution(data) for distribution in Distributions}
 
 
 class ClippedGaussian:

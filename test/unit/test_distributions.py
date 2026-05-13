@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from scipy import stats
 
-from aciq.distributions import DistributionType, Gaussian, GeneralizedGaussian, Laplace, StudentT, skewness, kurtosis
+from aciq.distributions import Distributions, Gaussian, GeneralizedGaussian, Laplace, StudentT, skewness, kurtosis
 from test.helpers import make_gaussian_data, make_ged_data, make_laplace_data, make_student_t_data, make_nonpositive_kurtosis_data
 
 
@@ -201,11 +201,11 @@ class TestGeneralizedGaussian(unittest.TestCase):
 class TestDistributionTypeSet(unittest.TestCase):
   def test_every_class_in_set_is_instantiable_on_real_data(self):
     data = make_gaussian_data()
-    for cls in DistributionType:
+    for cls in Distributions:
       cls(data)
 
   def test_set_contains_all_four_classes(self):
-    assert DistributionType == {Gaussian, Laplace, StudentT, GeneralizedGaussian}
+    assert Distributions == {Gaussian, Laplace, StudentT, GeneralizedGaussian}
 
 
 class TestCaching(unittest.TestCase):
