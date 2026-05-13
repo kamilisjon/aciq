@@ -4,6 +4,7 @@ import tinygrad.nn as nn
 from tinygrad import Tensor, TinyJit, dtypes, function
 from tinygrad.helpers import fetch, get_child
 from tinygrad.nn.state import torch_load
+from tinygrad.nn import BatchNorm, Conv2d, Linear
 
 
 from aciq.bias_correction import LayerInputStats
@@ -186,6 +187,40 @@ class ResNet:
         assert tuple(obj.shape) == dat_shape, (k, obj.shape, dat_shape)
       obj.assign(Tensor(dat_t.detach().numpy()).to(obj.device).cast(obj.dtype).reshape(obj.shape))
 
+# ---------------------------------------------------------------------------
+# ResNet structural walkers
+# ---------------------------------------------------------------------------
+
+
+def _conv_bn_pairs(model: ResNet) -> list[tuple[str, Conv2d, BatchNorm]]:
+  """Every (conv, bn) pair in forward order with a qualified name."""
+  pairs: list[tuple[str, Conv2d, BatchNorm]] = [("stem", model.conv1, model.bn1)]
+  for li, layer in enumerate((model.layer1, model.layer2, model.layer3, model.layer4), 1):
+    for bi, block in enumerate(layer):
+      prefix = f"layer{li}.{bi}"
+      pairs.append((f"{prefix}.conv1", block.conv1, block.bn1))
+      pairs.append((f"{prefix}.conv2", block.conv2, block.bn2))
+      if isinstance(block, Bottleneck):
+        pairs.append((f"{prefix}.conv3", block.conv3, block.bn3))
+      if block.downsample:
+        pairs.append((f"{prefix}.downsample", block.downsample[0], block.downsample[1]))
+  return pairs
+
+
+def _weight_modules(model: ResNet) -> list[tuple[str, Conv2d | Linear]]:
+  """Every weight-bearing module (Conv + fc) in forward order."""
+  mods: list[tuple[str, Conv2d | Linear]] = [("stem", model.conv1)]
+  for li, layer in enumerate((model.layer1, model.layer2, model.layer3, model.layer4), 1):
+    for bi, block in enumerate(layer):
+      prefix = f"layer{li}.{bi}"
+      mods.append((f"{prefix}.conv1", block.conv1))
+      mods.append((f"{prefix}.conv2", block.conv2))
+      if isinstance(block, Bottleneck):
+        mods.append((f"{prefix}.conv3", block.conv3))
+      if block.downsample:
+        mods.append((f"{prefix}.downsample", block.downsample[0]))
+  mods.append(("fc", model.fc))
+  return mods
 
 # -----------------------------------------------------------------------------
 # Bias correction

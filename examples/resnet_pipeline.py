@@ -7,15 +7,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tinygrad import Tensor
 from tinygrad.helpers import tqdm
-from tinygrad.nn import BatchNorm, Conv2d, Linear
+from tinygrad.nn import Conv2d, Linear
 
 from aciq.imagenet import benchmark_accuracy, load_and_preprocess, sample_imagenet_val
 from aciq.bias_correction import LayerInputStats, MeanShift, StatsAccumulator, apply_correction, compute_shift
 from aciq.nn import fuse_conv_bn
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
-from aciq.resnet import Bottleneck, ResNet, capture_bn_params, compute_input_stats
+from aciq.resnet import ResNet, capture_bn_params, compute_input_stats, _conv_bn_pairs, _weight_modules
 from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
-from aciq.distributions import Distribution, fit_distributions, kurtosis, skewness
+from aciq.distributions import fit_distributions, kurtosis, skewness
 from aciq.plotting_style import DistColor
 
 
@@ -228,42 +228,6 @@ class PipelineConfig:
   @property
   def correction_results_dir(self) -> Path:
     return self.output_dir / "bias_variance_correction"
-
-
-# ---------------------------------------------------------------------------
-# ResNet structural walkers
-# ---------------------------------------------------------------------------
-
-
-def _conv_bn_pairs(model: ResNet) -> list[tuple[str, Conv2d, BatchNorm]]:
-  """Every (conv, bn) pair in forward order with a qualified name."""
-  pairs: list[tuple[str, Conv2d, BatchNorm]] = [("stem", model.conv1, model.bn1)]
-  for li, layer in enumerate((model.layer1, model.layer2, model.layer3, model.layer4), 1):
-    for bi, block in enumerate(layer):
-      prefix = f"layer{li}.{bi}"
-      pairs.append((f"{prefix}.conv1", block.conv1, block.bn1))
-      pairs.append((f"{prefix}.conv2", block.conv2, block.bn2))
-      if isinstance(block, Bottleneck):
-        pairs.append((f"{prefix}.conv3", block.conv3, block.bn3))
-      if block.downsample:
-        pairs.append((f"{prefix}.downsample", block.downsample[0], block.downsample[1]))
-  return pairs
-
-
-def _weight_modules(model: ResNet) -> list[tuple[str, Conv2d | Linear]]:
-  """Every weight-bearing module (Conv + fc) in forward order."""
-  mods: list[tuple[str, Conv2d | Linear]] = [("stem", model.conv1)]
-  for li, layer in enumerate((model.layer1, model.layer2, model.layer3, model.layer4), 1):
-    for bi, block in enumerate(layer):
-      prefix = f"layer{li}.{bi}"
-      mods.append((f"{prefix}.conv1", block.conv1))
-      mods.append((f"{prefix}.conv2", block.conv2))
-      if isinstance(block, Bottleneck):
-        mods.append((f"{prefix}.conv3", block.conv3))
-      if block.downsample:
-        mods.append((f"{prefix}.downsample", block.downsample[0]))
-  mods.append(("fc", model.fc))
-  return mods
 
 
 # ---------------------------------------------------------------------------
