@@ -15,7 +15,7 @@ from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, mean_absolute_er
 from aciq.resnet import ResNet, compute_input_stats, _weight_modules, _bias_correct_model
 from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
 from aciq.distributions import fit_distributions, kurtosis, skewness
-from aciq.plotting_style import DIST_COLORS, HIST_BINS, NEUTRAL_COLOR, LINE_WIDTH , LINE_WIDTH , SERIES_COLORS, STATS_TEXT_KW, TailwindColor
+from aciq.plotting_style import DIST_COLORS, HIST_BINS, LINE_WIDTH, NEUTRAL_COLOR, SERIES_COLORS, STATS_TEXT_KW
 
 
 METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]
@@ -61,7 +61,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
   if save_path is not None:
     save_path.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(9, 5))
-    ax.hist(vec, bins=HIST_BINS, density=True, alpha=0.5, color=TailwindColor.BLUE, label="Empirical")
+    ax.hist(vec, bins=HIST_BINS, density=True, alpha=0.5, color=NEUTRAL_COLOR, label="Empirical")
 
     for dist_type, fitted in sorted(fits.items(), key=lambda kv: kv[1].log_likelihood, reverse=True):
       ax.plot(

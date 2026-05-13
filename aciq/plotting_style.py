@@ -33,10 +33,10 @@ class TailwindColor(StrEnum):
 NEUTRAL_COLOR = TailwindColor.SLATE
 
 DIST_COLORS: dict[type[Distribution], TailwindColor] = {
-  Gaussian: TailwindColor.BLUE,
-  Laplace: TailwindColor.EMERALD,
+  Gaussian: TailwindColor.PURPLE,
+  Laplace: TailwindColor.TEAL,
   StudentT: TailwindColor.AMBER,
-  GeneralizedGaussian: TailwindColor.PINK,
+  GeneralizedGaussian: TailwindColor.RED,
 }
 
 SERIES_COLORS: list[TailwindColor] = [
@@ -79,5 +79,5 @@ STATS_TEXT_KW: dict[str, object] = {
   "bbox": {"facecolor": "lightgrey"},
 }
 
-LINE_WIDTH  = 1.0
+LINE_WIDTH  = 1.1
 HIST_BINS = 300
