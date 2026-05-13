@@ -108,7 +108,6 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
       family="monospace",
     )
     safe = layer_name.replace("/", "_").replace(":", "_")
-    ax.set_title(f"Layer {layer_idx}: {layer_name} ({bits}bit)", fontsize=10)
     ax.set_xlabel("Weight value")
     ax.set_ylabel("Density")
     ax.legend(fontsize=7.5, loc="upper left", prop={"family": "monospace", "size": 7.5})
@@ -124,7 +123,6 @@ def plot_shift(
   rows: list[MeanShift],
   layer_names: list[str],
   save_dir: Path,
-  model_name: str = "",
   colors: list[str] | None = None,
 ) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
@@ -148,9 +146,7 @@ def plot_shift(
   ax.set_xticks(x_pos)
   ax.set_xticklabels(layer_names, rotation=45, ha="right", fontsize=7)
   ax.set_xlabel("Layer")
-  ax.set_ylabel("Output mean shift |E[fp32] - E[quant]|")
-  prefix = f"{model_name} — " if model_name else ""
-  ax.set_title(f"{prefix}Per-layer mean shift")
+  ax.set_ylabel("Output mean shift")
   ax.legend(fontsize=7, prop={"family": "monospace", "size": 7})
   ax.grid(True, alpha=0.3, axis="y")
   fig.tight_layout()
@@ -292,7 +288,7 @@ def main() -> None:
     loaded_rows: list[MeanShift] = load_csv(shifts_path, MeanShift)
     print(f"Loaded {len(loaded_rows)} shift rows from {shifts_path}")
     layer_names = list(dict.fromkeys(r.layer for r in loaded_rows))
-    plot_shift(loaded_rows, layer_names, save_dir / "quantization_shift", model_name=args.model)
+    plot_shift(loaded_rows, layer_names, save_dir / "quantization_shift")
     print(f"Plot saved to {save_dir / 'quantization_shift' / 'mean_shift.png'}")
     return
 
@@ -341,7 +337,7 @@ def main() -> None:
   shifts_csv = config.shift_results_dir / "shifts.csv"
   save_csv(shift_rows, shifts_csv)
   print(f"  CSV saved to {shifts_csv}")
-  plot_shift(shift_rows, list(fp32_acc.channels_sums.keys()), config.shift_results_dir, model_name=config.model_name)
+  plot_shift(shift_rows, list(fp32_acc.channels_sums.keys()), config.shift_results_dir)
   print(f"  Plots saved to {config.shift_results_dir}/")
 
   print(f"\n=== Stage 4: Benchmarking ({config.model_name}) ===")

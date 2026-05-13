@@ -33,7 +33,6 @@ def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, 
   ax.axhline(y=post_tensor_alpha, color="firebrick", linestyle="--", linewidth=1)
   ax.axhline(y=0, color="black", linewidth=0.5)
 
-  ax.set_title(f"Layer {layer_idx}: {conv_name} ({out_ch} channels)", fontsize=10)
   ax.set_xlabel("Output channel")
   ax.set_ylabel("Weight value")
   ax.legend(fontsize=7.5, loc="upper left", prop={"family": "monospace", "size": 7.5})
