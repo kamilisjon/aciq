@@ -11,7 +11,7 @@ from tinygrad import Tensor
 from tinygrad.helpers import tqdm
 from scipy.stats import spearmanr
 
-from aciq.bias_correction import MeanShiftAccumulator, compute_shift
+from aciq.bias_correction import ChannelMeansAccumulator
 from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.mnist import BlockName, MNISTModel, _load_normalized, train_model
@@ -81,15 +81,15 @@ def quantize_model(model: MNISTModel, method: QuantMethod) -> MNISTModel:
 # --- Distribution shift measurement ---
 
 
-def collect_layer_outputs(model: MNISTModel, x_test: Tensor, batch_size: int = 100) -> dict[str, np.ndarray]:
-  acc = MeanShiftAccumulator()
+def collect_layer_outputs(model: MNISTModel, x_test: Tensor, batch_size: int = 100) -> ChannelMeansAccumulator:
+  acc = ChannelMeansAccumulator()
   n = x_test.shape[0]
   assert n % batch_size == 0, f"test set size {n} must be divisible by batch_size {batch_size}"
   for start in tqdm(range(0, n, batch_size), desc="  activations"):
     idx = Tensor.arange(start, start + batch_size)
     for name, act in model.get_activations(x_test[idx]).items():
       acc.update(name, act.numpy())
-  return acc.get_per_channel_means()
+  return acc
 
 
 # --- Training + measurement ---
@@ -114,7 +114,7 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
       qmodel = quantize_model(model, method)
       accs[method] = float(qmodel.test_acc(x_test, y_test).item())
       q_outputs = collect_layer_outputs(qmodel, x_test)
-      shifts[method] = {r.layer: r.mean_shift for r in compute_shift(fp32_outputs, q_outputs, method)}
+      shifts[method] = {r.layer: r.mean_shift for r in fp32_outputs.layers_means_shifts(q_outputs, method)}
       print(f"{method} quantization done")
       # del qmodel, q_outputs
 

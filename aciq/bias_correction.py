@@ -21,26 +21,28 @@ class MeanShift:
   mean_shift: float
 
 
-def compute_shift(fp32_outputs: dict[str, np.ndarray], quant_outputs: dict[str, np.ndarray], method: str) -> list[MeanShift]:
-  return [MeanShift(method=method, layer=name, mean_shift=float(np.mean(np.abs(fp32_outputs[name] - quant_outputs[name])))) for name in fp32_outputs]
-
-
-class MeanShiftAccumulator:
+class ChannelMeansAccumulator:
   def __init__(self) -> None:
-    self._sums: dict[str, np.ndarray] = {}
-    self._counts: dict[str, int] = {}
+    # Holds 1D verctors, which holds running sum of channel params. One value per layer channel.
+    self.channels_sums: dict[str, np.ndarray] = {}
+    # Holds parameters counts. It is enough to hold parameters count of a single channel as other channels have same parameter counts.
+    self.param_counts: dict[str, int] = {}
 
-  def update(self, name: str, activation: np.ndarray) -> None:
+  def update(self, layer_name: str, activation: np.ndarray) -> None:
     channel_sum = activation.sum(axis=(0, 2, 3)).astype(MATH_DTYPE)
     b, _, h, w = activation.shape
-    if name not in self._sums:
-      self._sums[name] = np.zeros_like(channel_sum)
-      self._counts[name] = 0
-    self._sums[name] += channel_sum
-    self._counts[name] += b * h * w
+    if layer_name not in self.channels_sums:
+      self.channels_sums[layer_name] = np.zeros_like(channel_sum)
+      self.param_counts[layer_name] = 0
+    self.channels_sums[layer_name] += channel_sum
+    self.param_counts[layer_name] += b * h * w
 
-  def get_per_channel_means(self) -> dict[str, np.ndarray]:
-    return {name: (self._sums[name] / self._counts[name]).astype(MATH_DTYPE) for name in self._sums}
+  def _get_per_layer_means(self) -> dict[str, np.ndarray]:
+    return {layer_name: (self.channels_sums[layer_name] / self.param_counts[layer_name]).astype(MATH_DTYPE) for layer_name in self.channels_sums}
+
+  def layers_means_shifts(self, other: "ChannelMeansAccumulator", method: str) -> list[MeanShift]:
+    self_means, other_means = self._get_per_layer_means(), other._get_per_layer_means()
+    return [MeanShift(method, layer_name, float(np.mean(np.abs(self_means[layer_name] - other_means[layer_name])))) for layer_name in self_means]
 
 
 # -----------------------------------------------------------------------------

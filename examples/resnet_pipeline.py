@@ -10,7 +10,7 @@ from tinygrad.helpers import tqdm
 from tinygrad.nn import Conv2d, Linear
 
 from aciq.imagenet import benchmark_accuracy, load_and_preprocess, sample_imagenet_val
-from aciq.bias_correction import MeanShift, MeanShiftAccumulator, compute_shift
+from aciq.bias_correction import ChannelMeansAccumulator, MeanShift
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, mean_absolute_error, save_csv
 from aciq.resnet import ResNet, compute_input_stats, _weight_modules, _bias_correct_model
 from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
@@ -252,8 +252,8 @@ def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet, fq_models
   print(f"  CSV written to {csv_path}")
 
 
-def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int = 32) -> dict[str, np.ndarray]:
-  acc = MeanShiftAccumulator()
+def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int = 32) -> ChannelMeansAccumulator:
+  acc = ChannelMeansAccumulator()
   for start in tqdm(range(0, len(image_paths), batch_size), desc="  activations"):
     batch_paths = image_paths[start : start + batch_size]
     real_n = len(batch_paths)
@@ -261,7 +261,7 @@ def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int
     for name, act in activations.items():
       # slice off the zero-padded tail so accumulated stats only reflect real images
       acc.update(name, (act[:real_n] if real_n < batch_size else act).numpy())
-  return acc.get_per_channel_means()
+  return acc
 
 
 # ---------------------------------------------------------------------------
@@ -330,18 +330,18 @@ def main() -> None:
   print(f"  Using {len(image_paths)} images")
   print("  Collecting FP32 stats...")
   ResNet.clear_jit_caches()
-  fp32_stats = _collect_activations(model, image_paths)
+  fp32_acc = _collect_activations(model, image_paths)
   shift_rows: list[MeanShift] = []
   for (method, mode), m in variants.items():
     label = f"{method}::{mode}"
     print(f"  Collecting {label} stats...")
     ResNet.clear_jit_caches()
-    q_stats = _collect_activations(m, image_paths)
-    shift_rows.extend(compute_shift(fp32_stats, q_stats, label))
+    q_acc = _collect_activations(m, image_paths)
+    shift_rows.extend(fp32_acc.layers_means_shifts(q_acc, label))
   shifts_csv = config.shift_results_dir / "shifts.csv"
   save_csv(shift_rows, shifts_csv)
   print(f"  CSV saved to {shifts_csv}")
-  plot_shift(shift_rows, list(fp32_stats.keys()), config.shift_results_dir, model_name=config.model_name)
+  plot_shift(shift_rows, list(fp32_acc.channels_sums.keys()), config.shift_results_dir, model_name=config.model_name)
   print(f"  Plots saved to {config.shift_results_dir}/")
 
   print(f"\n=== Stage 4: Benchmarking ({config.model_name}) ===")
