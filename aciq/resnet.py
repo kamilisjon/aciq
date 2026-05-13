@@ -1,4 +1,4 @@
-# Vendored from tinygrad/extra/models/resnet.py @ commit f28ea84de235cdeaa7e028a2034b34f27b67d30f
+# Reference: tinygrad/extra/models/resnet.py @ commit f28ea84de235cdeaa7e028a2034b34f27b67d30f
 import numpy as np
 import tinygrad.nn as nn
 from tinygrad import Tensor, TinyJit, dtypes, function
