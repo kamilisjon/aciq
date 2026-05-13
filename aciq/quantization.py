@@ -16,11 +16,11 @@ def _bound_symmetric_aciq_mae(alpha: float, cdf: Callable[[float], float], b: in
 def bound_symmetric_aciq_mae(cdf: Callable[[float], float], b: int, alpha_max: float) -> float:
   def g(alpha: float) -> float:
     return _bound_symmetric_aciq_mae(alpha, cdf, b)
-
-  lo, hi = 0.0, alpha_max
-  if g(hi) <= 0:
+  
+  if g(alpha_max) <= 0:
     return alpha_max
-  return root_scalar(g, bracket=(lo, hi), method="brentq").root
+
+  return root_scalar(g, bracket=(0.0, alpha_max), method="brentq").root
 
 
 def quantize_symmetric(data: np.ndarray, alpha: float, bits: int, return_dequantized: bool = True) -> np.ndarray:
