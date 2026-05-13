@@ -1,6 +1,6 @@
 import unittest
 
-from aciq.imagenet.class_containers import ImagenetClass, ImagenetClassIndex
+from aciq.imagenet import ImagenetClass, ImagenetClassIndex
 
 
 class TestImagenetClassIndexLoad(unittest.TestCase):
