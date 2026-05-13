@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import matplotlib.pyplot as plt
 from tinygrad import Tensor
 from tinygrad.helpers import tqdm
 from tinygrad.nn import BatchNorm, Conv2d, Linear
@@ -13,7 +14,9 @@ from aciq.bias_correction import LayerInputStats, MeanShift, StatsAccumulator, a
 from aciq.nn import fuse_conv_bn
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.resnet import Bottleneck, ResNet, capture_bn_params, compute_input_stats
-from aciq.quantization import quantize_symmetric
+from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
+from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
+from aciq.plotting_style import DistColor
 
 
 METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]
@@ -41,17 +44,7 @@ class BenchmarkRow:
   top1: float
   top5: float
 
-
-import matplotlib.pyplot as plt
-
-
 DEFAULT_COLORS = ["steelblue", "indianred", "seagreen", "darkorange"]
-
-
-from aciq.distributions import Distribution, DistributionType, kurtosis, skewness
-from aciq.plotting_style import DistColor
-from aciq.quantization import bound_symmetric_minmax, bound_symmetric_aciq_mae
-
 
 def fit_distributions(data_array: np.ndarray) -> dict[type[Distribution], Distribution]:
   return {distribution: distribution(data_array) for distribution in DistributionType}
