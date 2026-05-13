@@ -162,6 +162,8 @@ def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
     ax.set_xlabel("Total mean shift")
     ax.set_ylabel("Accuracy drop")
 
+  for ax in axes.flat:
+    ax.grid(False)
   fig.suptitle("Mean shift vs accuracy drop (Spearman correlation)", y=1.02)
   fig.tight_layout()
   fig.savefig(save_dir / "scatter_mean_shift_vs_accuracy.png")

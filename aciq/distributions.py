@@ -19,6 +19,8 @@ def kurtosis(data: np.ndarray) -> np.floating[Any]:
 
 
 class Distribution(ABC):
+  name: str
+
   def __init__(self, data: np.ndarray):
     self._data = data
 
@@ -44,8 +46,10 @@ class Distribution(ABC):
 
 
 class Gaussian(Distribution):
+  name = "Gaussian"
+
   def __repr__(self) -> str:
-    return f"Gaussian({self.mu:.4f}, {self.sigma:.4f})"
+    return f"{self.name}({self.mu:.4f}, {self.sigma:.4f})"
 
   @property
   def mu(self) -> np.floating[Any]:
@@ -63,8 +67,10 @@ class Gaussian(Distribution):
 
 
 class Laplace(Distribution):
+  name = "Laplace"
+
   def __repr__(self) -> str:
-    return f"Laplace({self.mu:.4f}, {self.b:.4f})"
+    return f"{self.name}({self.mu:.4f}, {self.b:.4f})"
 
   @property
   def mu(self) -> np.floating[Any]:
@@ -82,8 +88,10 @@ class Laplace(Distribution):
 
 
 class StudentT(Distribution):
+  name = "Student-t"
+
   def __repr__(self) -> str:
-    return f"Student-t({self.df:.4f}, {self.loc:.4f}, {self.scale:.4f})"
+    return f"{self.name}({self.df:.4f}, {self.loc:.4f}, {self.scale:.4f})"
 
   @functools.cached_property
   def _fit(self) -> tuple[float, float, float]:
@@ -110,8 +118,10 @@ class StudentT(Distribution):
 
 
 class GeneralizedGaussian(Distribution):
+  name = "GED"
+
   def __repr__(self) -> str:
-    return f"GED({self.beta:.4f}, {self.loc:.4f}, {self.scale:.4f})"
+    return f"{self.name}({self.beta:.4f}, {self.loc:.4f}, {self.scale:.4f})"
 
   @functools.cached_property
   def _fit(self) -> tuple[float, float, float]:

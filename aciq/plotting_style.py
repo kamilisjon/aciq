@@ -78,6 +78,6 @@ STATS_TEXT_KW: dict[str, object] = {
   "bbox": {"facecolor": "lightgrey"},
 }
 
-PDF_LINE_WIDTH = 1.5
+PDF_LINE_WIDTH = 1.4
 REFERENCE_LINE_WIDTH = 1.0
-HIST_BINS = 500
+HIST_BINS = 300

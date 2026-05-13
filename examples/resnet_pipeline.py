@@ -73,13 +73,13 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
         label=f"{repr(fitted)} ll={fitted.log_likelihood:.3g}",
       )
 
-    ax.axvline(-alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=REFERENCE_LINE_WIDTH, label=f"MinMax α={alpha_minmax:.2f} MAE={mae_minmax:.2e}")
+    ax.axvline(-alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=REFERENCE_LINE_WIDTH, label=f"MinMax α={alpha_minmax:.4f} MAE={mae_minmax:.2e}")
     ax.axvline(alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=REFERENCE_LINE_WIDTH)
 
     if alpha_aciq != alpha_minmax:
       mae_aciq = mean_absolute_error(vec, quantize_symmetric(vec, alpha_aciq, bits))
       ax.axvline(
-        -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=REFERENCE_LINE_WIDTH, label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_aciq:.2e}"
+        -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=REFERENCE_LINE_WIDTH, label=f"ACIQ {best_dist.name} α={alpha_aciq:.4f} MAE={mae_aciq:.2e}"
       )
       ax.axvline(alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=REFERENCE_LINE_WIDTH)
 
@@ -97,6 +97,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     ax.set_xlabel("Weight value")
     ax.set_ylabel("Density")
     ax.legend(loc="upper left")
+    ax.grid(False)
     fig.tight_layout()
     fig.savefig(save_path / f"layer_{layer_idx:03d}_{safe[:60]}.png")
     plt.close(fig)
