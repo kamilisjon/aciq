@@ -11,8 +11,8 @@ from tinygrad.nn import Conv2d, Linear
 
 from aciq.imagenet import benchmark_accuracy, load_and_preprocess, sample_imagenet_val
 from aciq.bias_correction import LayerInputStats, MeanShift, StatsAccumulator, apply_correction, compute_shift
-from aciq.helpers import RESULTS_DIR, fuse_conv_bn, get_output_dir, load_csv, mean_absolute_error, save_csv
-from aciq.resnet import ResNet, capture_bn_params, compute_input_stats, _conv_bn_pairs, _weight_modules
+from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, mean_absolute_error, save_csv
+from aciq.resnet import ResNet, capture_bn_params, compute_input_stats, _weight_modules
 from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
 from aciq.distributions import fit_distributions, kurtosis, skewness
 from aciq.plotting_style import DistColor
@@ -119,44 +119,6 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
   return alpha_minmax, alpha_aciq
 
 
-def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, post_weight: np.ndarray, save_dir: Path) -> None:
-  out_ch = pre_weight.shape[0]
-  pre_flat = pre_weight.reshape(out_ch, -1)
-  post_flat = post_weight.reshape(out_ch, -1)
-
-  pre_min, pre_max = pre_flat.min(axis=1), pre_flat.max(axis=1)
-  post_min, post_max = post_flat.min(axis=1), post_flat.max(axis=1)
-
-  # Symmetric per-tensor alpha for quantization clip
-  pre_tensor_alpha = float(np.abs(pre_weight).max())
-  post_tensor_alpha = float(np.abs(post_weight).max())
-
-  channels = np.arange(out_ch)
-
-  fig, ax = plt.subplots(figsize=(12, 5))
-
-  ax.vlines(channels - 0.15, pre_min, pre_max, colors="steelblue", linewidth=0.8, alpha=0.7, label="Per-channel [min,max] before BN fusion")
-  ax.vlines(channels + 0.15, post_min, post_max, colors="firebrick", linewidth=0.8, alpha=0.7, label="Per-channel [min,max] after BN fusion")
-
-  ax.axhline(y=-pre_tensor_alpha, color="steelblue", linestyle="--", linewidth=1, label=f"Per-tensor clip α={pre_tensor_alpha:.4f} before BN fusion")
-  ax.axhline(y=pre_tensor_alpha, color="steelblue", linestyle="--", linewidth=1)
-  ax.axhline(y=-post_tensor_alpha, color="firebrick", linestyle="--", linewidth=1, label=f"Per-tensor clip α={post_tensor_alpha:.4f} after BN fusion")
-  ax.axhline(y=post_tensor_alpha, color="firebrick", linestyle="--", linewidth=1)
-  ax.axhline(y=0, color="black", linewidth=0.5)
-
-  ax.set_title(f"Layer {layer_idx}: {conv_name} ({out_ch} channels)", fontsize=10)
-  ax.set_xlabel("Output channel")
-  ax.set_ylabel("Weight value")
-  ax.legend(fontsize=7.5, loc="upper left", prop={"family": "monospace", "size": 7.5})
-  ax.grid(True, alpha=0.3)
-  fig.tight_layout()
-
-  safe = conv_name.replace("/", "_").replace(":", "_").replace(".", "_")[:60]
-  save_dir.mkdir(parents=True, exist_ok=True)
-  fig.savefig(save_dir / f"layer_{layer_idx:03d}_{safe}.png", dpi=500)
-  plt.close(fig)
-
-
 def plot_shift(
   rows: list[MeanShift],
   layer_names: list[str],
@@ -209,10 +171,6 @@ class PipelineConfig:
     return f"resnet{self.model_depth}"
 
   @property
-  def bn_results_dir(self) -> Path:
-    return self.output_dir / "bn_fusion_effects"
-
-  @property
   def weight_results_dir(self) -> Path:
     return self.output_dir / "weight_analysis"
 
@@ -223,18 +181,6 @@ class PipelineConfig:
   @property
   def correction_results_dir(self) -> Path:
     return self.output_dir / "bias_variance_correction"
-
-
-# ---------------------------------------------------------------------------
-# Stage 1: BN Fusion Analysis
-# ---------------------------------------------------------------------------
-
-
-def stage_bn_analysis(config: PipelineConfig, model: ResNet) -> None:
-  for idx, (name, conv, bn) in enumerate(tqdm(_conv_bn_pairs(model))):
-    pre_weight = conv.weight.numpy()
-    post_weight, _ = fuse_conv_bn(conv, bn)
-    plot_channel_ranges(idx, name, pre_weight, post_weight.numpy(), config.bn_results_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -456,9 +402,6 @@ def main() -> None:
 
   model = ResNet(config.model_depth)
   model.load_from_pretrained()
-
-  print(f"\n=== Stage 1: BN Fusion Analysis ({config.model_name}) ===")
-  stage_bn_analysis(config, model)
 
   print("\n=== Capturing BN parameters (analytical bias/variance correction) ===")
   bn_params = capture_bn_params(model)
