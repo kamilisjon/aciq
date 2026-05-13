@@ -12,7 +12,7 @@ from tinygrad.nn import Conv2d, Linear
 from aciq.imagenet import benchmark_accuracy, load_and_preprocess, sample_imagenet_val
 from aciq.bias_correction import LayerInputStats, MeanShift, StatsAccumulator, apply_correction, compute_shift
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, mean_absolute_error, save_csv
-from aciq.resnet import ResNet, capture_bn_params, compute_input_stats, _weight_modules
+from aciq.resnet import ResNet, compute_input_stats, _weight_modules
 from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
 from aciq.distributions import fit_distributions, kurtosis, skewness
 from aciq.plotting_style import DistColor
@@ -42,6 +42,7 @@ class BenchmarkRow:
   correction_mode: str
   top1: float
   top5: float
+
 
 DEFAULT_COLORS = ["steelblue", "indianred", "seagreen", "darkorange"]
 
@@ -403,18 +404,14 @@ def main() -> None:
   model = ResNet(config.model_depth)
   model.load_from_pretrained()
 
-  print("\n=== Capturing BN parameters (analytical bias/variance correction) ===")
-  bn_params = capture_bn_params(model)
   model.fuse()
-  input_stats = compute_input_stats(model, bn_params)
-  print(f"  captured BN params for {len(bn_params)} layers; input stats for {len(input_stats)} weight modules")
-
   fq_models = {m: copy.deepcopy(model) for m in METHOD_NAMES}
 
   print(f"\n=== Stage 2: Weight Distribution Analysis ({config.model_name}) ===")
   stage_weight_analysis(config, model, fq_models)
 
   print(f"\n=== Stage 2.5: Bias and Variance Correction ({config.model_name}) ===")
+  input_stats = compute_input_stats(model)
   variants = stage_corrections(model, fq_models, input_stats)
   print(f"  built {len(variants)} quantized variants (per-tensor: none only; per-channel: none/bias/variance/joint)")
 

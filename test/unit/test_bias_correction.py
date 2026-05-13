@@ -6,7 +6,7 @@ from tinygrad.nn import Conv2d, Linear
 
 from aciq.bias_correction import apply_correction, bias_correction_delta, LayerInputStats
 from aciq.distributions import ClippedGaussian
-from aciq.resnet import capture_bn_params, compute_input_stats, _post_residual_stats
+from aciq.resnet import compute_input_stats, _post_residual_stats
 from aciq.resnet import ResNet
 from aciq.quantization import quantize_symmetric
 
@@ -128,8 +128,7 @@ class TestResidualPropagation(unittest.TestCase):
 class TestResnetIntegration(unittest.TestCase):
   def test_capture_and_input_stats_resnet18(self):
     model = ResNet(18)
-    bn_params = capture_bn_params(model)
-    stats = compute_input_stats(model, bn_params)
+    stats = compute_input_stats(model)
     # Every weight module should have a stats entry with C_in matching weight shape
     expected_keys = {"stem", "fc"}
     for li in range(1, 5):
@@ -137,7 +136,7 @@ class TestResnetIntegration(unittest.TestCase):
       for bi in range(len(layer)):
         prefix = f"layer{li}.{bi}"
         expected_keys |= {f"{prefix}.conv1", f"{prefix}.conv2"}
-        if layer[bi].downsample:
+        if layer[bi].downsample_conv is not None:
           expected_keys.add(f"{prefix}.downsample")
     assert set(stats.keys()) == expected_keys
     # Stem stats: N(0, 1) per input channel, shape derived from conv1

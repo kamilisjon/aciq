@@ -138,6 +138,7 @@ class GeneralizedGaussian(Distribution):
 
 Distributions: set[type[Distribution]] = {Gaussian, Laplace, StudentT, GeneralizedGaussian}
 
+
 def fit_distributions(data: np.ndarray) -> dict[type[Distribution], Distribution]:
   return {distribution: distribution(data) for distribution in Distributions}
 

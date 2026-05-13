@@ -4,7 +4,6 @@ import tinygrad.nn as nn
 from tinygrad import Tensor, TinyJit, dtypes, function
 from tinygrad.helpers import fetch, get_child
 from tinygrad.nn.state import torch_load
-from tinygrad.nn import BatchNorm, Conv2d, Linear
 
 
 from aciq.bias_correction import LayerInputStats
@@ -17,15 +16,14 @@ class BasicBlock:
 
   def __init__(self, in_planes, planes, stride=1):
     self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
-    self.bn1 = nn.BatchNorm2d(planes)
+    self.bn1 = nn.BatchNorm(planes)
     self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, stride=1, bias=False)
-    self.bn2 = nn.BatchNorm2d(planes)
-    self.downsample: list = []
+    self.bn2 = nn.BatchNorm(planes)
+    self.downsample_conv: nn.Conv2d | None = None
+    self.downsample_bn: nn.BatchNorm | None = None
     if stride != 1 or in_planes != self.expansion * planes:
-      self.downsample = [
-        nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
-        nn.BatchNorm2d(self.expansion * planes),
-      ]
+      self.downsample_conv = nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False)
+      self.downsample_bn = nn.BatchNorm(self.expansion * planes)
     self.fused = False
 
   def __call__(self, x):
@@ -36,15 +34,21 @@ class BasicBlock:
     out = self.conv2(self.activation_1)
     if not self.fused:
       out = self.bn2(out)
-    self.activation_2 = (out + x.sequential(self.downsample)).relu()
+    residual_connection = x
+    if self.downsample_conv:
+      assert self.downsample_bn is not None
+      residual_connection = self.downsample_conv(x)
+      if not self.fused:
+        residual_connection = self.downsample_bn(residual_connection)
+    self.activation_2 = (out + residual_connection).relu()
     return self.activation_2
 
   def fuse(self):
     fuse_conv_bn_inplace(self.conv1, self.bn1)
     fuse_conv_bn_inplace(self.conv2, self.bn2)
-    if self.downsample:
-      fuse_conv_bn_inplace(self.downsample[0], self.downsample[1])
-      self.downsample = [self.downsample[0]]
+    if self.downsample_conv:
+      assert self.downsample_bn is not None
+      fuse_conv_bn_inplace(self.downsample_conv, self.downsample_bn)
     self.fused = True
 
 
@@ -54,17 +58,16 @@ class Bottleneck:
 
   def __init__(self, in_planes, planes, stride=1):
     self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, stride=1, bias=False)
-    self.bn1 = nn.BatchNorm2d(planes)
+    self.bn1 = nn.BatchNorm(planes)
     self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, stride=stride, bias=False)
-    self.bn2 = nn.BatchNorm2d(planes)
+    self.bn2 = nn.BatchNorm(planes)
     self.conv3 = nn.Conv2d(planes, self.expansion * planes, kernel_size=1, bias=False)
-    self.bn3 = nn.BatchNorm2d(self.expansion * planes)
-    self.downsample: list = []
+    self.bn3 = nn.BatchNorm(self.expansion * planes)
+    self.downsample_conv: nn.Conv2d | None = None
+    self.downsample_bn: nn.BatchNorm | None = None
     if stride != 1 or in_planes != self.expansion * planes:
-      self.downsample = [
-        nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
-        nn.BatchNorm2d(self.expansion * planes),
-      ]
+      self.downsample_conv = nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False)
+      self.downsample_bn = nn.BatchNorm(self.expansion * planes)
     self.fused = False
 
   def __call__(self, x):
@@ -79,16 +82,22 @@ class Bottleneck:
     out = self.conv3(self.activation_2)
     if not self.fused:
       out = self.bn3(out)
-    self.activation_3 = (out + x.sequential(self.downsample)).relu()
+    residual_connection = x
+    if self.downsample_conv:
+      assert self.downsample_bn is not None
+      residual_connection = self.downsample_conv(x)
+      if not self.fused:
+        residual_connection = self.downsample_bn(residual_connection)
+    self.activation_3 = (out + residual_connection).relu()
     return self.activation_3
 
   def fuse(self):
     fuse_conv_bn_inplace(self.conv1, self.bn1)
     fuse_conv_bn_inplace(self.conv2, self.bn2)
     fuse_conv_bn_inplace(self.conv3, self.bn3)
-    if self.downsample:
-      fuse_conv_bn_inplace(self.downsample[0], self.downsample[1])
-      self.downsample = [self.downsample[0]]
+    if self.downsample_conv:
+      assert self.downsample_bn is not None
+      fuse_conv_bn_inplace(self.downsample_conv, self.downsample_bn)
     self.fused = True
 
 
@@ -104,7 +113,7 @@ class ResNet:
     self.in_planes = 64
 
     self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, bias=False, padding=3)
-    self.bn1 = nn.BatchNorm2d(64)
+    self.bn1 = nn.BatchNorm(64)
     self.layer1 = self._make_layer(self.block, 64, self.num_blocks[0], stride=1)
     self.layer2 = self._make_layer(self.block, 128, self.num_blocks[1], stride=2)
     self.layer3 = self._make_layer(self.block, 256, self.num_blocks[2], stride=2)
@@ -177,6 +186,7 @@ class ResNet:
 
     self.url = model_urls[self.num]
     for k, dat_t in torch_load(fetch(self.url)).items():
+      k = k.replace(".downsample.0", ".downsample_conv").replace(".downsample.1", ".downsample_bn")
       obj: Tensor = get_child(self, k)
       dat_shape = tuple(dat_t.shape)
       if "fc." in k and tuple(obj.shape) != dat_shape:
@@ -187,14 +197,15 @@ class ResNet:
         assert tuple(obj.shape) == dat_shape, (k, obj.shape, dat_shape)
       obj.assign(Tensor(dat_t.detach().numpy()).to(obj.device).cast(obj.dtype).reshape(obj.shape))
 
+
 # ---------------------------------------------------------------------------
 # ResNet structural walkers
 # ---------------------------------------------------------------------------
 
 
-def _conv_bn_pairs(model: ResNet) -> list[tuple[str, Conv2d, BatchNorm]]:
+def _conv_bn_pairs(model: ResNet) -> list[tuple[str, nn.Conv2d, nn.BatchNorm]]:
   """Every (conv, bn) pair in forward order with a qualified name."""
-  pairs: list[tuple[str, Conv2d, BatchNorm]] = [("stem", model.conv1, model.bn1)]
+  pairs: list[tuple[str, nn.Conv2d, nn.BatchNorm]] = [("stem", model.conv1, model.bn1)]
   for li, layer in enumerate((model.layer1, model.layer2, model.layer3, model.layer4), 1):
     for bi, block in enumerate(layer):
       prefix = f"layer{li}.{bi}"
@@ -202,14 +213,15 @@ def _conv_bn_pairs(model: ResNet) -> list[tuple[str, Conv2d, BatchNorm]]:
       pairs.append((f"{prefix}.conv2", block.conv2, block.bn2))
       if isinstance(block, Bottleneck):
         pairs.append((f"{prefix}.conv3", block.conv3, block.bn3))
-      if block.downsample:
-        pairs.append((f"{prefix}.downsample", block.downsample[0], block.downsample[1]))
+      if block.downsample_conv is not None:
+        assert block.downsample_bn is not None
+        pairs.append((f"{prefix}.downsample", block.downsample_conv, block.downsample_bn))
   return pairs
 
 
-def _weight_modules(model: ResNet) -> list[tuple[str, Conv2d | Linear]]:
+def _weight_modules(model: ResNet) -> list[tuple[str, nn.Conv2d | nn.Linear]]:
   """Every weight-bearing module (Conv + fc) in forward order."""
-  mods: list[tuple[str, Conv2d | Linear]] = [("stem", model.conv1)]
+  mods: list[tuple[str, nn.Conv2d | nn.Linear]] = [("stem", model.conv1)]
   for li, layer in enumerate((model.layer1, model.layer2, model.layer3, model.layer4), 1):
     for bi, block in enumerate(layer):
       prefix = f"layer{li}.{bi}"
@@ -217,10 +229,11 @@ def _weight_modules(model: ResNet) -> list[tuple[str, Conv2d | Linear]]:
       mods.append((f"{prefix}.conv2", block.conv2))
       if isinstance(block, Bottleneck):
         mods.append((f"{prefix}.conv3", block.conv3))
-      if block.downsample:
-        mods.append((f"{prefix}.downsample", block.downsample[0]))
+      if block.downsample_conv is not None:
+        mods.append((f"{prefix}.downsample", block.downsample_conv))
   mods.append(("fc", model.fc))
   return mods
+
 
 # -----------------------------------------------------------------------------
 # Bias correction
@@ -234,7 +247,7 @@ def _bn_effective_params(bn: nn.BatchNorm) -> tuple[np.ndarray, np.ndarray]:
   return gamma_eff, beta_eff
 
 
-def capture_bn_params(model: ResNet) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+def _capture_bn_params(model: ResNet) -> dict[str, tuple[np.ndarray, np.ndarray]]:
   out: dict[str, tuple[np.ndarray, np.ndarray]] = {}
   out["stem"] = _bn_effective_params(model.bn1)
   for li, layer in enumerate((model.layer1, model.layer2, model.layer3, model.layer4), 1):
@@ -244,8 +257,9 @@ def capture_bn_params(model: ResNet) -> dict[str, tuple[np.ndarray, np.ndarray]]
       out[f"{prefix}.conv2"] = _bn_effective_params(block.bn2)
       if isinstance(block, Bottleneck):
         out[f"{prefix}.conv3"] = _bn_effective_params(block.bn3)
-      if block.downsample:
-        out[f"{prefix}.downsample"] = _bn_effective_params(block.downsample[1])
+      if block.downsample_conv is not None:
+        assert block.downsample_bn is not None
+        out[f"{prefix}.downsample"] = _bn_effective_params(block.downsample_bn)
   return out
 
 
@@ -260,7 +274,8 @@ def _post_residual_stats(beta_main: np.ndarray, gamma_main: np.ndarray, mu_skip:
   return ClippedGaussian.mean(mu, sigma), ClippedGaussian.variance(mu, sigma)
 
 
-def compute_input_stats(model: ResNet, bn_params: dict[str, tuple[np.ndarray, np.ndarray]]) -> dict[str, LayerInputStats]:
+def compute_input_stats(model: ResNet) -> dict[str, LayerInputStats]:
+  bn_params = _capture_bn_params(model)
   out: dict[str, LayerInputStats] = {}
 
   # Stem input: per-channel zero mean and unit variance, matching the
@@ -286,7 +301,7 @@ def compute_input_stats(model: ResNet, bn_params: dict[str, tuple[np.ndarray, np
 
       # conv1 input = previous block's post-residual activation
       out[f"{prefix}.conv1"] = LayerInputStats(E_x=current_mu.copy(), Var_x=current_var.copy())
-      if block.downsample:
+      if block.downsample_conv is not None:
         out[f"{prefix}.downsample"] = LayerInputStats(E_x=current_mu.copy(), Var_x=current_var.copy())
 
       # conv2 input = ReLU(BN of conv1)
@@ -305,7 +320,7 @@ def compute_input_stats(model: ResNet, bn_params: dict[str, tuple[np.ndarray, np
 
       # Update post-residual stats after this block
       gamma_last, beta_last = bn_params[last_bn_key]
-      if block.downsample:
+      if block.downsample_conv is not None:
         gamma_ds, beta_ds = bn_params[f"{prefix}.downsample"]
         mu_skip = beta_ds
         var_skip = gamma_ds**2
