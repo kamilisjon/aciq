@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from tinygrad.helpers import tqdm
 
 from aciq.helpers import RESULTS_DIR, fuse_conv_bn, get_output_dir
-from aciq.plotting_style import BLUE, ROSE
+from aciq.plotting_style import MONOSPACE_LEGEND_KW, TailwindColor
 from aciq.resnet import ResNet, _conv_bn_pairs
 
 
@@ -25,18 +25,18 @@ def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, 
 
   fig, ax = plt.subplots(figsize=(12, 5))
 
-  ax.vlines(channels - 0.15, pre_min, pre_max, colors=BLUE, linewidth=0.8, alpha=0.7, label="Per-channel [min,max] before BN fusion")
-  ax.vlines(channels + 0.15, post_min, post_max, colors=ROSE, linewidth=0.8, alpha=0.7, label="Per-channel [min,max] after BN fusion")
+  ax.vlines(channels - 0.15, pre_min, pre_max, colors=TailwindColor.BLUE, linewidth=0.8, alpha=0.7, label="Per-channel [min,max] before BN fusion")
+  ax.vlines(channels + 0.15, post_min, post_max, colors=TailwindColor.ROSE, linewidth=0.8, alpha=0.7, label="Per-channel [min,max] after BN fusion")
 
-  ax.axhline(y=-pre_tensor_alpha, color=BLUE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={pre_tensor_alpha:.4f} before BN fusion")
-  ax.axhline(y=pre_tensor_alpha, color=BLUE, linestyle="--", linewidth=1)
-  ax.axhline(y=-post_tensor_alpha, color=ROSE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={post_tensor_alpha:.4f} after BN fusion")
-  ax.axhline(y=post_tensor_alpha, color=ROSE, linestyle="--", linewidth=1)
+  ax.axhline(y=-pre_tensor_alpha, color=TailwindColor.BLUE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={pre_tensor_alpha:.4f} before BN fusion")
+  ax.axhline(y=pre_tensor_alpha, color=TailwindColor.BLUE, linestyle="--", linewidth=1)
+  ax.axhline(y=-post_tensor_alpha, color=TailwindColor.ROSE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={post_tensor_alpha:.4f} after BN fusion")
+  ax.axhline(y=post_tensor_alpha, color=TailwindColor.ROSE, linestyle="--", linewidth=1)
   ax.axhline(y=0, color="black", linewidth=0.5)
 
   ax.set_xlabel("Output channel")
   ax.set_ylabel("Weight value")
-  ax.legend(loc="upper left", prop={"family": "monospace"})
+  ax.legend(loc="upper left", **MONOSPACE_LEGEND_KW)
   fig.tight_layout()
 
   safe = conv_name.replace("/", "_").replace(":", "_").replace(".", "_")[:60]
