@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from tinygrad.helpers import tqdm
 
 from aciq.helpers import RESULTS_DIR, fuse_conv_bn, get_output_dir
+from aciq.plotting_style import BLUE, ROSE
 from aciq.resnet import ResNet, _conv_bn_pairs
 
 
@@ -24,24 +25,23 @@ def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, 
 
   fig, ax = plt.subplots(figsize=(12, 5))
 
-  ax.vlines(channels - 0.15, pre_min, pre_max, colors="steelblue", linewidth=0.8, alpha=0.7, label="Per-channel [min,max] before BN fusion")
-  ax.vlines(channels + 0.15, post_min, post_max, colors="firebrick", linewidth=0.8, alpha=0.7, label="Per-channel [min,max] after BN fusion")
+  ax.vlines(channels - 0.15, pre_min, pre_max, colors=BLUE, linewidth=0.8, alpha=0.7, label="Per-channel [min,max] before BN fusion")
+  ax.vlines(channels + 0.15, post_min, post_max, colors=ROSE, linewidth=0.8, alpha=0.7, label="Per-channel [min,max] after BN fusion")
 
-  ax.axhline(y=-pre_tensor_alpha, color="steelblue", linestyle="--", linewidth=1, label=f"Per-tensor clip α={pre_tensor_alpha:.4f} before BN fusion")
-  ax.axhline(y=pre_tensor_alpha, color="steelblue", linestyle="--", linewidth=1)
-  ax.axhline(y=-post_tensor_alpha, color="firebrick", linestyle="--", linewidth=1, label=f"Per-tensor clip α={post_tensor_alpha:.4f} after BN fusion")
-  ax.axhline(y=post_tensor_alpha, color="firebrick", linestyle="--", linewidth=1)
+  ax.axhline(y=-pre_tensor_alpha, color=BLUE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={pre_tensor_alpha:.4f} before BN fusion")
+  ax.axhline(y=pre_tensor_alpha, color=BLUE, linestyle="--", linewidth=1)
+  ax.axhline(y=-post_tensor_alpha, color=ROSE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={post_tensor_alpha:.4f} after BN fusion")
+  ax.axhline(y=post_tensor_alpha, color=ROSE, linestyle="--", linewidth=1)
   ax.axhline(y=0, color="black", linewidth=0.5)
 
   ax.set_xlabel("Output channel")
   ax.set_ylabel("Weight value")
-  ax.legend(fontsize=7.5, loc="upper left", prop={"family": "monospace", "size": 7.5})
-  ax.grid(True, alpha=0.3)
+  ax.legend(loc="upper left", prop={"family": "monospace"})
   fig.tight_layout()
 
   safe = conv_name.replace("/", "_").replace(":", "_").replace(".", "_")[:60]
   save_dir.mkdir(parents=True, exist_ok=True)
-  fig.savefig(save_dir / f"layer_{layer_idx:03d}_{safe}.png", dpi=500)
+  fig.savefig(save_dir / f"layer_{layer_idx:03d}_{safe}.png")
   plt.close(fig)
 
 

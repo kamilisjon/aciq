@@ -15,7 +15,7 @@ from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, mean_absolute_er
 from aciq.resnet import ResNet, compute_input_stats, _weight_modules, _bias_correct_model
 from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
 from aciq.distributions import fit_distributions, kurtosis, skewness
-from aciq.plotting_style import DistColor
+from aciq.plotting_style import BLUE, DistColor, NEUTRAL, SERIES_COLORS
 
 
 METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]
@@ -44,9 +44,6 @@ class BenchmarkRow:
   top5: float
 
 
-DEFAULT_COLORS = ["steelblue", "indianred", "seagreen", "darkorange"]
-
-
 def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, save_path: Path | None = None) -> tuple[float, float]:
   vec_sorted = np.sort(vec)
 
@@ -64,7 +61,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
   if save_path is not None:
     save_path.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(9, 5))
-    ax.hist(vec, bins=300, density=True, alpha=0.5, color="steelblue", label="Empirical")
+    ax.hist(vec, bins=300, density=True, alpha=0.5, color=BLUE, label="Empirical")
 
     for dist_type, fitted in fits.items():
       ax.plot(
@@ -76,8 +73,8 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
         label=f"{repr(fitted):30s} ll={fitted.log_likelihood:.3g}",
       )
 
-    ax.axvline(-alpha_minmax, color="grey", linestyle=":", linewidth=1.2, label=f"MinMax α={alpha_minmax:.2f} MAE={mae_minmax:.2e}")
-    ax.axvline(alpha_minmax, color="grey", linestyle=":", linewidth=1.2)
+    ax.axvline(-alpha_minmax, color=NEUTRAL, linestyle=":", linewidth=1.2, label=f"MinMax α={alpha_minmax:.2f} MAE={mae_minmax:.2e}")
+    ax.axvline(alpha_minmax, color=NEUTRAL, linestyle=":", linewidth=1.2)
 
     if alpha_aciq != alpha_minmax:
       mae_aciq = mean_absolute_error(vec, quantize_symmetric(vec, alpha_aciq, bits))
@@ -110,10 +107,9 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     safe = layer_name.replace("/", "_").replace(":", "_")
     ax.set_xlabel("Weight value")
     ax.set_ylabel("Density")
-    ax.legend(fontsize=7.5, loc="upper left", prop={"family": "monospace", "size": 7.5})
-    ax.grid(True, alpha=0.3)
+    ax.legend(loc="upper left", prop={"family": "monospace"})
     fig.tight_layout()
-    fig.savefig(save_path / f"layer_{layer_idx:03d}_{safe[:60]}.png", dpi=500)
+    fig.savefig(save_path / f"layer_{layer_idx:03d}_{safe[:60]}.png")
     plt.close(fig)
 
   return alpha_minmax, alpha_aciq
@@ -123,10 +119,8 @@ def plot_shift(
   rows: list[MeanShift],
   layer_names: list[str],
   save_dir: Path,
-  colors: list[str] | None = None,
 ) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
-  colors = colors or DEFAULT_COLORS
 
   by_method: dict[str, dict[str, float]] = {}
   for r in rows:
@@ -141,16 +135,16 @@ def plot_shift(
   fig, ax = plt.subplots(figsize=(max(10, len(layer_names) * 1.2), 5))
   for i, method in enumerate(methods):
     per_layer = [by_method[method][name] for name in layer_names]
-    ax.bar(x_pos + offsets[i], per_layer, width=bar_width, color=colors[i % len(colors)], alpha=0.5, label=method)
+    ax.bar(x_pos + offsets[i], per_layer, width=bar_width, color=SERIES_COLORS[i % len(SERIES_COLORS)], alpha=0.5, label=method)
 
   ax.set_xticks(x_pos)
-  ax.set_xticklabels(layer_names, rotation=45, ha="right", fontsize=7)
+  ax.set_xticklabels(layer_names, rotation=45, ha="right")
   ax.set_xlabel("Layer")
   ax.set_ylabel("Output mean shift")
-  ax.legend(fontsize=7, prop={"family": "monospace", "size": 7})
+  ax.legend(prop={"family": "monospace"})
   ax.grid(True, alpha=0.3, axis="y")
   fig.tight_layout()
-  fig.savefig(save_dir / "mean_shift.png", dpi=700)
+  fig.savefig(save_dir / "mean_shift.png")
   plt.close(fig)
 
 

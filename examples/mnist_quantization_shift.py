@@ -14,6 +14,7 @@ from scipy.stats import spearmanr
 from aciq.bias_correction import ChannelMeansAccumulator
 from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
+from aciq.plotting_style import BLUE, ROSE, SERIES_COLORS
 from aciq.mnist import BlockName, MNISTModel, _load_normalized, train_model
 from aciq.quantization import bound_symmetric_minmax, quantize_symmetric, bound_symmetric_aciq_mae
 
@@ -141,7 +142,7 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
 def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   fig, axes = plt.subplots(2, len(BlockName) + 1, figsize=(4 * (len(BlockName) + 1), 8))
-  for row_idx, (method, color) in enumerate([(QuantMethod.MINMAX, "steelblue"), (QuantMethod.ACIQ, "indianred")]):
+  for row_idx, (method, color) in enumerate([(QuantMethod.MINMAX, BLUE), (QuantMethod.ACIQ, ROSE)]):
     acc_drops = np.array([r.fp32_acc - getattr(r, f"{method}_acc") for r in rows])
 
     for col_idx, block in enumerate(BlockName):
@@ -149,30 +150,28 @@ def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
       shifts = _shifts(rows, method, block)
       ax.scatter(shifts, acc_drops, color=color, alpha=0.6, s=20)
       rho, p = spearmanr(shifts, acc_drops)
-      ax.set_title(f"{method.upper()} {block}\nrho={rho:.3f} p={p:.3g}", fontsize=9)
-      ax.set_xlabel("Mean shift", fontsize=8)
-      ax.set_ylabel("Accuracy drop", fontsize=8)
-      ax.grid(True, alpha=0.3)
+      ax.set_title(f"{method.upper()} {block}\nrho={rho:.3f} p={p:.3g}")
+      ax.set_xlabel("Mean shift")
+      ax.set_ylabel("Accuracy drop")
 
     ax = axes[row_idx, len(BlockName)]
     total_shifts = np.sum([_shifts(rows, method, b) for b in BlockName], axis=0)
     ax.scatter(total_shifts, acc_drops, color=color, alpha=0.6, s=20)
     rho, p = spearmanr(total_shifts, acc_drops)
-    ax.set_title(f"{method.upper()} total\nrho={rho:.3f} p={p:.3g}", fontsize=9)
-    ax.set_xlabel("Total mean shift", fontsize=8)
-    ax.set_ylabel("Accuracy drop", fontsize=8)
-    ax.grid(True, alpha=0.3)
+    ax.set_title(f"{method.upper()} total\nrho={rho:.3f} p={p:.3g}")
+    ax.set_xlabel("Total mean shift")
+    ax.set_ylabel("Accuracy drop")
 
-  fig.suptitle("Mean shift vs accuracy drop (Spearman correlation)", fontsize=12, y=1.02)
+  fig.suptitle("Mean shift vs accuracy drop (Spearman correlation)", y=1.02)
   fig.tight_layout()
-  fig.savefig(save_dir / "scatter_mean_shift_vs_accuracy.png", dpi=700, bbox_inches="tight")
+  fig.savefig(save_dir / "scatter_mean_shift_vs_accuracy.png")
   plt.close(fig)
 
 
 def plot_per_layer_shift(rows: list[MnistResultRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   fig, ax = plt.subplots(figsize=(10, 5))
-  for color, method in [("steelblue", QuantMethod.MINMAX), ("indianred", QuantMethod.ACIQ)]:
+  for color, method in [(BLUE, QuantMethod.MINMAX), (ROSE, QuantMethod.ACIQ)]:
     per_layer_means = [_shifts(rows, method, b).mean() for b in BlockName]
     per_layer_stds = [_shifts(rows, method, b).std() for b in BlockName]
 
@@ -191,10 +190,10 @@ def plot_per_layer_shift(rows: list[MnistResultRow], save_dir: Path) -> None:
   ax.set_xticklabels(BlockName)
   ax.set_xlabel("Layer")
   ax.set_ylabel("Output mean shift")
-  ax.legend(fontsize=8, prop={"family": "monospace", "size": 8})
+  ax.legend(prop={"family": "monospace"})
   ax.grid(True, alpha=0.3, axis="y")
   fig.tight_layout()
-  fig.savefig(save_dir / "per_layer_mean_shift.png", dpi=700)
+  fig.savefig(save_dir / "per_layer_mean_shift.png")
   plt.close(fig)
 
 
@@ -204,12 +203,11 @@ def plot_loss_curves(loss_rows: list[MnistLossRow], save_dir: Path) -> None:
   for r in loss_rows:
     by_seed.setdefault(r.seed, []).append(r)
 
-  cmap = plt.get_cmap("tab10")
   fig, ax = plt.subplots(figsize=(8, 5))
   for i, seed in enumerate(sorted(by_seed)):
     seed_rows = sorted(by_seed[seed], key=lambda r: r.step)
     xs = [r.step for r in seed_rows]
-    color = cmap(i % cmap.N)
+    color = SERIES_COLORS[i % len(SERIES_COLORS)]
     ax.plot(xs, [r.train_loss for r in seed_rows], color=color, linestyle="--", alpha=0.8)
     ax.plot(xs, [r.test_loss for r in seed_rows], color=color, linestyle="-", alpha=0.8)
 
@@ -221,9 +219,8 @@ def plot_loss_curves(loss_rows: list[MnistLossRow], save_dir: Path) -> None:
       Line2D([0], [0], color="black", linestyle="--", label="Train loss"),
     ]
   )
-  ax.grid(True, alpha=0.3)
   fig.tight_layout()
-  fig.savefig(save_dir / "loss_curves.png", dpi=700)
+  fig.savefig(save_dir / "loss_curves.png")
   plt.close(fig)
 
 
