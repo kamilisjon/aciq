@@ -234,14 +234,14 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="MNIST quantization distribution shift analysis")
   parser.add_argument("--n-models", type=int, default=100, help="Number of models to train")
   parser.add_argument("--steps", type=int, default=100, help="Training steps per model")
-  parser.add_argument("--from-csv", type=Path, default=None, help="Load results from CSV instead of training")
+  parser.add_argument("--from-dir", type=Path, default=None, help="Load `results.csv` and `losses.csv` from this experiment directory and re-render plots only (no training).")
   args = parser.parse_args()
   save_dir = get_output_dir(RESULTS_DIR, "mnist")
 
-  if args.from_csv:
-    rows = load_csv(args.from_csv, MnistResultRow)
-    print(f"Loaded {len(rows)} models from {args.from_csv}\n")
-    losses_path = args.from_csv.parent / "losses.csv"
+  if args.from_dir:
+    rows = load_csv(args.from_dir / "results.csv", MnistResultRow)
+    print(f"Loaded {len(rows)} models from {args.from_dir / 'results.csv'}")
+    losses_path = args.from_dir / "losses.csv"
     loss_rows = load_csv(losses_path, MnistLossRow) if losses_path.exists() else []
   else:
     print(f"Running training with {args.n_models} models, {args.steps} steps each...")
