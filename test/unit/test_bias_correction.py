@@ -4,11 +4,7 @@ import numpy as np
 from tinygrad import Tensor
 from tinygrad.nn import Conv2d, Linear
 
-from aciq.bias_correction import (
-  apply_correction,
-  bias_correction_delta,
-  LayerInputStats,
-)
+from aciq.bias_correction import apply_correction, bias_correction_delta, LayerInputStats
 from aciq.distributions import ClippedGaussian
 from aciq.resnet import capture_bn_params, compute_input_stats, _post_residual_stats
 from aciq.resnet import ResNet
