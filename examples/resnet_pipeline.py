@@ -251,6 +251,7 @@ def stage_weight_analysis(config: PipelineConfig, fused_model: ResNet, fq_models
   save_csv(rows, csv_path)
   print(f"  CSV written to {csv_path}")
 
+
 def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int = 32) -> dict[str, np.ndarray]:
   acc = MeanShiftAccumulator()
   for start in tqdm(range(0, len(image_paths), batch_size), desc="  activations"):

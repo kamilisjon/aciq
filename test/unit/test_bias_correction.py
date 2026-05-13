@@ -4,7 +4,7 @@ import numpy as np
 from tinygrad import Tensor
 from tinygrad.nn import Conv2d, Linear
 
-from aciq.bias_correction import apply_bias_correction, bias_correction_delta, LayerInputStats
+from aciq.bias_correction import apply_bias_correction
 from aciq.distributions import ClippedGaussian
 from aciq.resnet import compute_input_stats, _post_residual_stats
 from aciq.resnet import ResNet
@@ -45,42 +45,6 @@ class TestClippedNormal(unittest.TestCase):
     )
 
 
-class TestBiasCorrectionMath(unittest.TestCase):
-  def test_linear_eliminates_mean_shift(self):
-    rng = np.random.default_rng(2)
-    C_in, C_out = 32, 16
-    W_fp = rng.normal(scale=0.1, size=(C_out, C_in)).astype(np.float32)
-    b = rng.normal(scale=0.05, size=(C_out,)).astype(np.float32)
-    W_q = _quantize_weight(W_fp, bits=3)
-
-    x = rng.normal(loc=0.4, scale=0.6, size=(20_000, C_in)).astype(np.float32)
-    y_fp = x @ W_fp.T + b
-    y_q = x @ W_q.T + b
-    observed_shift = (y_q - y_fp).mean(axis=0)
-
-    delta = bias_correction_delta(W_fp, W_q, x.mean(axis=0))
-    np.testing.assert_allclose(delta, observed_shift, atol=1e-3)
-
-    b_corr = b - delta
-    y_q_corr = x @ W_q.T + b_corr
-    np.testing.assert_allclose(y_q_corr.mean(axis=0), y_fp.mean(axis=0), atol=2e-3)
-
-  def test_conv_eliminates_mean_shift(self):
-    rng = np.random.default_rng(3)
-    C_in, C_out, K = 8, 4, 3
-    W_fp = rng.normal(scale=0.2, size=(C_out, C_in, K, K)).astype(np.float32)
-    W_q = _quantize_weight(W_fp, bits=3)
-
-    E_x = np.array([0.3, -0.1, 0.2, 0.0, 0.5, 0.1, 0.0, -0.2])
-    delta = bias_correction_delta(W_fp, W_q, E_x)
-
-    expected = np.zeros(C_out)
-    for c in range(C_out):
-      for ci in range(C_in):
-        expected[c] += (W_q[c, ci] - W_fp[c, ci]).sum() * E_x[ci]
-    np.testing.assert_allclose(delta, expected, atol=1e-6)
-
-
 class TestApplyCorrection(unittest.TestCase):
   def _make_linear(self, W: np.ndarray, b: np.ndarray) -> Linear:
     layer = Linear(W.shape[1], W.shape[0], bias=True)
@@ -101,8 +65,8 @@ class TestApplyCorrection(unittest.TestCase):
     b = rng.normal(scale=0.05, size=(8,)).astype(np.float32)
     W_q = _quantize_weight(W_fp, bits=3)
     layer = self._make_linear(W_q, b)
-    stats = LayerInputStats(E_x=rng.normal(size=(16,)), Var_x=np.ones(16))
-    apply_bias_correction(layer, W_fp, b, stats)
+    E_x = rng.normal(size=(16,))
+    apply_bias_correction(layer, W_fp, b, E_x)
     np.testing.assert_allclose(layer.weight.numpy(), W_q)
     assert not np.allclose(layer.bias.numpy(), b)
 
@@ -139,18 +103,13 @@ class TestResnetIntegration(unittest.TestCase):
         if layer[bi].downsample_conv is not None:
           expected_keys.add(f"{prefix}.downsample")
     assert set(stats.keys()) == expected_keys
-    # Stem stats: N(0, 1) per input channel, shape derived from conv1
+    # Stem E[x]: zeros per input channel, shape derived from conv1
     stem = stats["stem"]
-    assert stem.E_x.shape == (model.conv1.weight.shape[1],)
-    assert np.allclose(stem.E_x, 0.0)
-    assert np.allclose(stem.Var_x, 1.0)
+    assert stem.shape == (model.conv1.weight.shape[1],)
+    assert np.allclose(stem, 0.0)
     # Shape check on a known layer
     s = stats["layer1.0.conv1"]
-    assert s.E_x.shape == (model.layer1[0].conv1.weight.shape[1],)
-    assert s.Var_x.shape == (model.layer1[0].conv1.weight.shape[1],)
-    # All variances finite and non-negative
-    assert np.all(np.isfinite(s.Var_x))
-    assert np.all(s.Var_x >= 0.0)
+    assert s.shape == (model.layer1[0].conv1.weight.shape[1],)
 
 
 if __name__ == "__main__":

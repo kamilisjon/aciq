@@ -8,7 +8,7 @@ from tinygrad.helpers import fetch, get_child
 from tinygrad.nn.state import torch_load
 
 
-from aciq.bias_correction import LayerInputStats, apply_bias_correction
+from aciq.bias_correction import apply_bias_correction
 from aciq.distributions import ClippedGaussian
 from aciq.helpers import fuse_conv_bn_inplace
 
@@ -272,44 +272,36 @@ def _post_residual_stats(beta_main: np.ndarray, gamma_main: np.ndarray, mu_skip:
   return ClippedGaussian.mean(mu, sigma), ClippedGaussian.variance(mu, sigma)
 
 
-def compute_input_stats(model: ResNet) -> dict[str, LayerInputStats]:
+def compute_input_stats(model: ResNet) -> dict[str, np.ndarray]:
   bn_params = _capture_bn_params(model)
-  out: dict[str, LayerInputStats] = {}
+  out: dict[str, np.ndarray] = {}
 
   # Stem input: per-channel zero mean and unit variance, matching the
   # per-channel input standardization that precedes the network (arXiv 1906.04721, p. 7).
   c_in_stem = int(model.conv1.weight.shape[1])
-  out["stem"] = LayerInputStats(
-    E_x=np.zeros(c_in_stem, dtype=np.float64),
-    Var_x=np.ones(c_in_stem, dtype=np.float64),
-  )
+  out["stem"] = np.zeros(c_in_stem, dtype=np.float64)
 
   # Post-stem ReLU(BN_stem) gives the input to the first block's conv1.
   gamma_stem, beta_stem = bn_params["stem"]
   current_mu, current_var = ClippedGaussian.mean(beta_stem, gamma_stem), ClippedGaussian.variance(beta_stem, gamma_stem)
-  # Spatial size after stem (stride 2 conv + stride 2 maxpool from 224 input) = 56x56.
-  # layer1 keeps the same size (stride 1); layer2/3/4 each halve it via the first block's stride-2 conv.
-  spatial_hw = 56 * 56
 
   for li, layer in enumerate((model.layer1, model.layer2, model.layer3, model.layer4), 1):
-    if li >= 2:
-      spatial_hw = max(1, spatial_hw // 4)
     for bi, block in enumerate(layer):
       prefix = f"layer{li}.{bi}"
 
       # conv1 input = previous block's post-residual activation
-      out[f"{prefix}.conv1"] = LayerInputStats(E_x=current_mu.copy(), Var_x=current_var.copy())
+      out[f"{prefix}.conv1"] = current_mu.copy()
       if block.downsample_conv is not None:
-        out[f"{prefix}.downsample"] = LayerInputStats(E_x=current_mu.copy(), Var_x=current_var.copy())
+        out[f"{prefix}.downsample"] = current_mu.copy()
 
       # conv2 input = ReLU(BN of conv1)
       gamma_bn1, beta_bn1 = bn_params[f"{prefix}.conv1"]
-      out[f"{prefix}.conv2"] = LayerInputStats(E_x=ClippedGaussian.mean(beta_bn1, gamma_bn1), Var_x=ClippedGaussian.variance(beta_bn1, gamma_bn1))
+      out[f"{prefix}.conv2"] = ClippedGaussian.mean(beta_bn1, gamma_bn1)
 
       if isinstance(block, Bottleneck):
         # conv3 input = ReLU(BN of conv2)
         gamma_bn2, beta_bn2 = bn_params[f"{prefix}.conv2"]
-        out[f"{prefix}.conv3"] = LayerInputStats(E_x=ClippedGaussian.mean(beta_bn2, gamma_bn2), Var_x=ClippedGaussian.variance(beta_bn2, gamma_bn2))
+        out[f"{prefix}.conv3"] = ClippedGaussian.mean(beta_bn2, gamma_bn2)
         last_bn_key = f"{prefix}.conv3"
       else:
         last_bn_key = f"{prefix}.conv2"
@@ -325,13 +317,12 @@ def compute_input_stats(model: ResNet) -> dict[str, LayerInputStats]:
         var_skip = current_var
       current_mu, current_var = _post_residual_stats(beta_last, gamma_last, mu_skip, var_skip)
 
-  # FC input = global average pool of layer4 last activation. Mean is preserved;
-  # variance shrinks by 1/(H*W) under spatial i.i.d. assumption.
-  out["fc"] = LayerInputStats(E_x=current_mu, Var_x=current_var / float(spatial_hw))
+  # FC input = global average pool of layer4 last activation. Mean is preserved.
+  out["fc"] = current_mu
   return out
 
 
-def _bias_correct_model(base: ResNet, fp_modules: dict[str, nn.Conv2d | nn.Linear], input_stats: dict[str, LayerInputStats]) -> ResNet:
+def _bias_correct_model(base: ResNet, fp_modules: dict[str, nn.Conv2d | nn.Linear], input_stats: dict[str, np.ndarray]) -> ResNet:
   m = copy.deepcopy(base)
   for name, module in _weight_modules(m):
     W_fp = fp_modules[name].weight.numpy()

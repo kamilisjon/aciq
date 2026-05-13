@@ -48,12 +48,6 @@ class MeanShiftAccumulator:
 # -----------------------------------------------------------------------------
 
 
-@dataclass
-class LayerInputStats:
-  E_x: np.ndarray  # (C_in,)
-  Var_x: np.ndarray  # (C_in,)
-
-
 def _quantization_error_epsilon(w_fp: np.ndarray, w_dequant: np.ndarray) -> np.ndarray:
   eps = (w_dequant - w_fp).astype(MATH_DTYPE)
   if eps.ndim == 4:
@@ -63,6 +57,6 @@ def _quantization_error_epsilon(w_fp: np.ndarray, w_dequant: np.ndarray) -> np.n
   raise ValueError(f"unsupported weight rank {eps.ndim}")
 
 
-def apply_bias_correction(module: Conv2d | Linear, W_fp: np.ndarray, b_orig: np.ndarray, stats: LayerInputStats) -> None:
-  delta_b = _quantization_error_epsilon(W_fp, module.weight.numpy().astype(MATH_DTYPE)) @ stats.E_x.astype(MATH_DTYPE)
+def apply_bias_correction(module: Conv2d | Linear, W_fp: np.ndarray, b_orig: np.ndarray, E_x: np.ndarray) -> None:
+  delta_b = _quantization_error_epsilon(W_fp, module.weight.numpy().astype(MATH_DTYPE)) @ E_x.astype(MATH_DTYPE)
   module.bias = Tensor((b_orig.astype(MATH_DTYPE) - delta_b).astype(PARAMETERS_DTYPE))
