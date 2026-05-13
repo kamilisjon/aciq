@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from tinygrad.helpers import tqdm
 
 from aciq.helpers import RESULTS_DIR, fuse_conv_bn, get_output_dir
-from aciq.plotting_style import MONOSPACE_LEGEND_KW, TailwindColor
+from aciq.plotting_style import TailwindColor
 from aciq.resnet import ResNet, _conv_bn_pairs
 
 
@@ -36,7 +36,7 @@ def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, 
 
   ax.set_xlabel("Output channel")
   ax.set_ylabel("Weight value")
-  ax.legend(loc="upper left", **MONOSPACE_LEGEND_KW)
+  ax.legend(loc="upper left")
   fig.tight_layout()
 
   safe = conv_name.replace("/", "_").replace(":", "_").replace(".", "_")[:60]

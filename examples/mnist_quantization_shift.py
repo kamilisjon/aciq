@@ -14,7 +14,7 @@ from scipy.stats import spearmanr
 from aciq.bias_correction import ChannelMeansAccumulator
 from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
-from aciq.plotting_style import MONOSPACE_LEGEND_KW, SERIES_COLORS, TailwindColor
+from aciq.plotting_style import SERIES_COLORS, TailwindColor
 from aciq.mnist import BlockName, MNISTModel, _load_normalized, train_model
 from aciq.quantization import bound_symmetric_minmax, quantize_symmetric, bound_symmetric_aciq_mae
 
@@ -181,7 +181,6 @@ def plot_per_layer_shift(rows: list[MnistResultRow], save_dir: Path) -> None:
       per_layer_means,
       width=0.35,
       color=color,
-      alpha=0.5,
       label=method.upper(),
       yerr=per_layer_stds,
       capsize=3,
@@ -190,8 +189,7 @@ def plot_per_layer_shift(rows: list[MnistResultRow], save_dir: Path) -> None:
   ax.set_xticklabels(BlockName)
   ax.set_xlabel("Layer")
   ax.set_ylabel("Output mean shift")
-  ax.legend(**MONOSPACE_LEGEND_KW)
-  ax.grid(True, alpha=0.3, axis="y")
+  ax.legend()
   fig.tight_layout()
   fig.savefig(save_dir / "per_layer_mean_shift.png")
   plt.close(fig)

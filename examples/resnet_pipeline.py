@@ -15,7 +15,7 @@ from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, mean_absolute_er
 from aciq.resnet import ResNet, compute_input_stats, _weight_modules, _bias_correct_model
 from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
 from aciq.distributions import fit_distributions, kurtosis, skewness
-from aciq.plotting_style import DIST_COLORS, MONOSPACE_LEGEND_KW, NEUTRAL_COLOR, SERIES_COLORS, STATS_TEXT_KW, TailwindColor
+from aciq.plotting_style import DIST_COLORS, HIST_BINS, NEUTRAL_COLOR, PDF_LINE_WIDTH, REFERENCE_LINE_WIDTH, SERIES_COLORS, STATS_TEXT_KW, TailwindColor
 
 
 METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]
@@ -61,27 +61,27 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
   if save_path is not None:
     save_path.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(9, 5))
-    ax.hist(vec, bins=300, density=True, alpha=0.5, color=TailwindColor.BLUE, label="Empirical")
+    ax.hist(vec, bins=HIST_BINS, density=True, alpha=0.5, color=TailwindColor.BLUE, label="Empirical")
 
-    for dist_type, fitted in fits.items():
+    for dist_type, fitted in sorted(fits.items(), key=lambda kv: kv[1].log_likelihood, reverse=True):
       ax.plot(
         vec_sorted,
         fitted.pdf(),
         color=DIST_COLORS[dist_type],
-        linewidth=0.7,
+        linewidth=PDF_LINE_WIDTH,
         linestyle="--",
-        label=f"{repr(fitted):30s} ll={fitted.log_likelihood:.3g}",
+        label=f"{repr(fitted)} ll={fitted.log_likelihood:.3g}",
       )
 
-    ax.axvline(-alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=1.2, label=f"MinMax α={alpha_minmax:.2f} MAE={mae_minmax:.2e}")
-    ax.axvline(alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=1.2)
+    ax.axvline(-alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=REFERENCE_LINE_WIDTH, label=f"MinMax α={alpha_minmax:.2f} MAE={mae_minmax:.2e}")
+    ax.axvline(alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=REFERENCE_LINE_WIDTH)
 
     if alpha_aciq != alpha_minmax:
       mae_aciq = mean_absolute_error(vec, quantize_symmetric(vec, alpha_aciq, bits))
       ax.axvline(
-        -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7, label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_aciq:.2e}"
+        -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=REFERENCE_LINE_WIDTH, label=f"CLIP {repr(best_dist)} α={alpha_aciq:.2f} MAE={mae_aciq:.2e}"
       )
-      ax.axvline(alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=0.7)
+      ax.axvline(alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=REFERENCE_LINE_WIDTH)
 
     eda_lines = [
       f"n        = {vec.size:,}",
@@ -96,7 +96,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     safe = layer_name.replace("/", "_").replace(":", "_")
     ax.set_xlabel("Weight value")
     ax.set_ylabel("Density")
-    ax.legend(loc="upper left", **MONOSPACE_LEGEND_KW)
+    ax.legend(loc="upper left")
     fig.tight_layout()
     fig.savefig(save_path / f"layer_{layer_idx:03d}_{safe[:60]}.png")
     plt.close(fig)
@@ -124,14 +124,13 @@ def plot_shift(
   fig, ax = plt.subplots(figsize=(max(10, len(layer_names) * 1.2), 5))
   for i, method in enumerate(methods):
     per_layer = [by_method[method][name] for name in layer_names]
-    ax.bar(x_pos + offsets[i], per_layer, width=bar_width, color=SERIES_COLORS[i % len(SERIES_COLORS)], alpha=0.5, label=method)
+    ax.bar(x_pos + offsets[i], per_layer, width=bar_width, color=SERIES_COLORS[i % len(SERIES_COLORS)], label=method)
 
   ax.set_xticks(x_pos)
   ax.set_xticklabels(layer_names, rotation=45, ha="right")
   ax.set_xlabel("Layer")
   ax.set_ylabel("Output mean shift")
-  ax.legend(**MONOSPACE_LEGEND_KW)
-  ax.grid(True, alpha=0.3, axis="y")
+  ax.legend()
   fig.tight_layout()
   fig.savefig(save_dir / "mean_shift.png")
   plt.close(fig)

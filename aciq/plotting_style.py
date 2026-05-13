@@ -57,16 +57,18 @@ plt.rcParams.update({
   "savefig.bbox": "tight",
   "font.family": "serif",
   "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
-  "axes.titlesize": 10,
-  "axes.labelsize": 9,
-  "xtick.labelsize": 8,
-  "ytick.labelsize": 8,
-  "legend.fontsize": 8,
+  "axes.titlesize": 12,
+  "axes.labelsize": 11,
+  "xtick.labelsize": 10,
+  "ytick.labelsize": 10,
+  "legend.fontsize": 10,
+  "axes.grid": True,
+  "axes.grid.axis": "y",
+  "grid.color": "#E5E7EB",
+  "grid.linewidth": 0.5,
   "axes.prop_cycle": plt.cycler(color=SERIES_COLORS),
 })
 
-
-MONOSPACE_LEGEND_KW: dict[str, object] = {"prop": {"family": "monospace"}}
 
 STATS_TEXT_KW: dict[str, object] = {
   "fontsize": 8,
@@ -74,5 +76,8 @@ STATS_TEXT_KW: dict[str, object] = {
   "ha": "right",
   "multialignment": "left",
   "bbox": {"facecolor": "lightgrey"},
-  "family": "monospace",
 }
+
+PDF_LINE_WIDTH = 1.5
+REFERENCE_LINE_WIDTH = 1.0
+HIST_BINS = 500

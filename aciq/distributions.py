@@ -45,7 +45,7 @@ class Distribution(ABC):
 
 class Gaussian(Distribution):
   def __repr__(self) -> str:
-    return f"Gaussian({self.mu:.2f}, {self.sigma:.2f})"
+    return f"Gaussian({self.mu:.4f}, {self.sigma:.4f})"
 
   @property
   def mu(self) -> np.floating[Any]:
@@ -64,7 +64,7 @@ class Gaussian(Distribution):
 
 class Laplace(Distribution):
   def __repr__(self) -> str:
-    return f"Laplace({self.mu:.2f}, {self.b:.2f})"
+    return f"Laplace({self.mu:.4f}, {self.b:.4f})"
 
   @property
   def mu(self) -> np.floating[Any]:
@@ -83,7 +83,7 @@ class Laplace(Distribution):
 
 class StudentT(Distribution):
   def __repr__(self) -> str:
-    return f"Student-t({self.df:.2f}, {self.loc:.2f}, {self.scale:.2f})"
+    return f"Student-t({self.df:.4f}, {self.loc:.4f}, {self.scale:.4f})"
 
   @functools.cached_property
   def _fit(self) -> tuple[float, float, float]:
@@ -111,7 +111,7 @@ class StudentT(Distribution):
 
 class GeneralizedGaussian(Distribution):
   def __repr__(self) -> str:
-    return f"GED({self.beta:.2f}, {self.loc:.2f}, {self.scale:.2f})"
+    return f"GED({self.beta:.4f}, {self.loc:.4f}, {self.scale:.4f})"
 
   @functools.cached_property
   def _fit(self) -> tuple[float, float, float]:
