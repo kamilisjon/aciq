@@ -255,7 +255,7 @@ def main() -> None:
   parser.add_argument("--bits", type=int, default=8)
   parser.add_argument("--dataset-path", type=Path, default=None, help="Path to ImageNet dataset root (required unless --from-dir is set).")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
-  parser.add_argument("--n-per-class", type=int, default=5, help="Sample N ImageNet val images per class for shift analysis.")
+  parser.add_argument("--n-per-class", type=int, default=None, help="Sample N ImageNet val images per class for shift analysis and benchmarking. Default: use the full validation set.")
   parser.add_argument(
     "--from-dir",
     type=Path,
@@ -336,13 +336,13 @@ def main() -> None:
   bench_rows: list[BenchmarkRow] = []
   print("  benchmarking FP32")
   ResNet.clear_jit_caches()
-  top1, top5 = benchmark_accuracy(model.infer, config.dataset_path)
+  top1, top5 = benchmark_accuracy(model.infer, config.dataset_path, n_per_class=config.n_per_class)
   bench_rows.append(BenchmarkRow(method="fp32", correction_mode="none", top1=float(top1), top5=float(top5)))
   print(f"  FP32: top1={top1:.2f}  top5={top5:.2f}")
   for (method, mode), m in variants.items():
     print(f"  benchmarking {method}::{mode}")
     ResNet.clear_jit_caches()
-    top1, top5 = benchmark_accuracy(m.infer, config.dataset_path)
+    top1, top5 = benchmark_accuracy(m.infer, config.dataset_path, n_per_class=config.n_per_class)
     bench_rows.append(BenchmarkRow(method=method, correction_mode=mode, top1=float(top1), top5=float(top5)))
     print(f"  {method}::{mode}: top1={top1:.2f}  top5={top5:.2f}")
   bench_csv = config.correction_results_dir / "benchmark_results.csv"

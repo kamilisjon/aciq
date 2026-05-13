@@ -110,7 +110,7 @@ def load_and_preprocess(image_paths: list[Path], pad_to_batch_size: int | None =
 
 
 def benchmark_accuracy(
-  infer_fn: Callable[[Tensor], Tensor], imagenet_data_path: Path, batch_size: int = 32, n_per_class: int = 1
+  infer_fn: Callable[[Tensor], Tensor], imagenet_data_path: Path, batch_size: int = 32, n_per_class: int | None = None
 ) -> tuple[float, float]:
   images = sample_imagenet_val(imagenet_data_path, n_per_class=n_per_class)
   id2synset = parse_imagenet_val_labels(imagenet_data_path)
