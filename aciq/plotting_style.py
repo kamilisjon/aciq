@@ -6,28 +6,29 @@ from aciq.distributions import Distribution, Gaussian, GeneralizedGaussian, Lapl
 
 
 class TailwindColor(StrEnum):
-  SLATE = "#64748B"
-  GRAY = "#6B7280"
-  ZINC = "#71717A"
-  NEUTRAL = "#737373"
-  STONE = "#78716C"
-  RED = "#EF4444"
-  ORANGE = "#F97316"
-  AMBER = "#F59E0B"
-  YELLOW = "#EAB308"
-  LIME = "#84CC16"
-  GREEN = "#22C55E"
-  EMERALD = "#10B981"
-  TEAL = "#14B8A6"
-  CYAN = "#06B6D4"
-  SKY = "#0EA5E9"
-  BLUE = "#3B82F6"
-  INDIGO = "#6366F1"
-  VIOLET = "#8B5CF6"
-  PURPLE = "#A855F7"
-  FUCHSIA = "#D946EF"
-  PINK = "#EC4899"
-  ROSE = "#F43F5E"
+  """Tailwind-700 shade. https://tailwindcss.com/docs/colors"""
+  SLATE = "#334155"
+  GRAY = "#374151"
+  ZINC = "#3F3F46"
+  NEUTRAL = "#404040"
+  STONE = "#44403C"
+  RED = "#B91C1C"
+  ORANGE = "#C2410C"
+  AMBER = "#B45309"
+  YELLOW = "#A16207"
+  LIME = "#4D7C0F"
+  GREEN = "#15803D"
+  EMERALD = "#047857"
+  TEAL = "#0F766E"
+  CYAN = "#0E7490"
+  SKY = "#0369A1"
+  BLUE = "#1D4ED8"
+  INDIGO = "#4338CA"
+  VIOLET = "#6D28D9"
+  PURPLE = "#7E22CE"
+  FUCHSIA = "#A21CAF"
+  PINK = "#BE185D"
+  ROSE = "#BE123C"
 
 NEUTRAL_COLOR = TailwindColor.SLATE
 
@@ -42,10 +43,10 @@ SERIES_COLORS: list[TailwindColor] = [
   TailwindColor.BLUE,
   TailwindColor.EMERALD,
   TailwindColor.AMBER,
-  TailwindColor.PINK,
   TailwindColor.VIOLET,
   TailwindColor.TEAL,
-  TailwindColor.ROSE,
+  TailwindColor.INDIGO,
+  TailwindColor.SKY,
   TailwindColor.CYAN,
   TailwindColor.LIME,
   TailwindColor.ORANGE,
@@ -54,13 +55,13 @@ SERIES_COLORS: list[TailwindColor] = [
 plt.rcParams.update({
   "savefig.dpi": 700,
   "savefig.bbox": "tight",
+  "font.family": "serif",
+  "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
   "axes.titlesize": 10,
   "axes.labelsize": 9,
   "xtick.labelsize": 8,
   "ytick.labelsize": 8,
   "legend.fontsize": 8,
-  "axes.grid": True,
-  "grid.alpha": 0.3,
   "axes.prop_cycle": plt.cycler(color=SERIES_COLORS),
 })
 
