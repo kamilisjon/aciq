@@ -123,7 +123,7 @@ def plot_shift(
   bar_width = 0.7 / n_methods
   offsets = np.linspace(-0.35 + bar_width / 2, 0.35 - bar_width / 2, n_methods)
 
-  fig, ax = plt.subplots(figsize=(max(10, len(layer_names) * 1.2), 5))
+  fig, ax = plt.subplots(figsize=(max(8, len(layer_names) * 0.5), 5))
   for i, method in enumerate(methods):
     per_layer = [by_method[method][name] for name in layer_names]
     ax.bar(x_pos + offsets[i], per_layer, width=bar_width, color=SERIES_COLORS[i % len(SERIES_COLORS)], label=method)
