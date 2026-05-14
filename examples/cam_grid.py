@@ -15,12 +15,12 @@ from aciq.resnet import ResNet, _bias_correct_model, _weight_modules, compute_in
 
 
 COLUMNS: list[tuple[str, str | None]] = [
-  ("Ground Truth", None),
+  ("Tikra klasė", None),
   ("FP32", "fp32"),
   ("MinMax", "per_channel_minmax"),
-  ("MinMax + Bias Corr", "per_channel_minmax_bias"),
+  ("MinMax + posl. korek.", "per_channel_minmax_bias"),
   ("ACIQ", "per_channel_aciq"),
-  ("ACIQ + Bias Corr", "per_channel_aciq_bias"),
+  ("ACIQ + posl. korek.", "per_channel_aciq_bias"),
 ]
 
 

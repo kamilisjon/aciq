@@ -25,17 +25,17 @@ def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, 
 
   fig, ax = plt.subplots(figsize=(12, 5))
 
-  ax.vlines(channels - 0.15, pre_min, pre_max, colors=TailwindColor.BLUE, linewidth=0.8, alpha=0.7, label="Per-channel [min,max] before BN fusion")
-  ax.vlines(channels + 0.15, post_min, post_max, colors=TailwindColor.ROSE, linewidth=0.8, alpha=0.7, label="Per-channel [min,max] after BN fusion")
+  ax.vlines(channels - 0.15, pre_min, pre_max, colors=TailwindColor.BLUE, linewidth=0.8, alpha=0.7, label="Kanalų [min,max] prieš BN suliejimą")
+  ax.vlines(channels + 0.15, post_min, post_max, colors=TailwindColor.ROSE, linewidth=0.8, alpha=0.7, label="Kanalų [min,max] po BN suliejimo")
 
-  ax.axhline(y=-pre_tensor_alpha, color=TailwindColor.BLUE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={pre_tensor_alpha:.4f} before BN fusion")
+  ax.axhline(y=-pre_tensor_alpha, color=TailwindColor.BLUE, linestyle="--", linewidth=1, label=f"Tensoriaus α={pre_tensor_alpha:.4f} prieš BN suliejimą")
   ax.axhline(y=pre_tensor_alpha, color=TailwindColor.BLUE, linestyle="--", linewidth=1)
-  ax.axhline(y=-post_tensor_alpha, color=TailwindColor.ROSE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={post_tensor_alpha:.4f} after BN fusion")
+  ax.axhline(y=-post_tensor_alpha, color=TailwindColor.ROSE, linestyle="--", linewidth=1, label=f"Tensoriaus α={post_tensor_alpha:.4f} po BN suliejimo")
   ax.axhline(y=post_tensor_alpha, color=TailwindColor.ROSE, linestyle="--", linewidth=1)
   ax.axhline(y=0, color="black", linewidth=0.5)
 
-  ax.set_xlabel("Output channel")
-  ax.set_ylabel("Weight value")
+  ax.set_xlabel("Išėjimo kanalas")
+  ax.set_ylabel("Svorio reikšmė")
   ax.legend(loc="upper left")
   fig.tight_layout()
 

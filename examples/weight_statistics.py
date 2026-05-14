@@ -49,21 +49,21 @@ def plot_moments(rows: list[WeightMomentsRow], out_path: Path) -> None:
 
   fig, axes = plt.subplots(2, 2, figsize=(11, 7))
   for ax, values, ylabel in (
-    (axes[0, 0], mean, "Mean"),
-    (axes[0, 1], variance, "Variance"),
-    (axes[1, 0], skew, "Skewness"),
-    (axes[1, 1], kurt, "Kurtosis"),
+    (axes[0, 0], mean, "Vidurkis"),
+    (axes[0, 1], variance, "Dispersija"),
+    (axes[1, 0], skew, "Asimetrija"),
+    (axes[1, 1], kurt, "Eksceso koeficientas"),
   ):
     ax.bar(idx, values, color=TailwindColor.TEAL)
     ax.set_ylabel(ylabel)
 
   for ax in (axes[0, 0], axes[1, 0]):
     ax.axhline(0.0, color=NEUTRAL_COLOR, linestyle="--", linewidth=LINE_WIDTH)
-  axes[1, 1].axhline(3.0, color=TailwindColor.RED, linewidth=2.0, label="Gaussian")
+  axes[1, 1].axhline(3.0, color=TailwindColor.RED, linewidth=2.0, label="Gauso")
   axes[1, 1].legend(loc="upper left")
 
   for ax in axes[1]:
-    ax.set_xlabel("Layer index (forward order)")
+    ax.set_xlabel("Sluoksnio indeksas (į priekį)")
 
   fig.tight_layout()
   out_path.parent.mkdir(parents=True, exist_ok=True)

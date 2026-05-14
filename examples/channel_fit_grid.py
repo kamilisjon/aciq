@@ -48,12 +48,11 @@ def plot_channel_grid(name: str, module: Conv2d | Linear, rows: int, cols: int, 
     ax.set_xticks([])
     ax.set_yticks([])
     ax.grid(False)
-    ax.set_title(f"ch {slot}", fontsize=8, pad=2)
 
   dist_handles = [Line2D([0], [0], color=col, lw=LINE_WIDTH, label=cls.name) for cls, col in DIST_COLORS.items()]
   style_handles = [
-    Line2D([0], [0], color="black", lw=LINE_WIDTH, linestyle="--", label="layer fit"),
-    Line2D([0], [0], color="black", lw=LINE_WIDTH, linestyle="-", label="channel fit"),
+    Line2D([0], [0], color="black", lw=LINE_WIDTH, linestyle="--", label="Sluoksnio"),
+    Line2D([0], [0], color="black", lw=LINE_WIDTH, linestyle="-", label="Kanalo"),
   ]
   fig.legend(
     handles=dist_handles + style_handles,
@@ -74,7 +73,7 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="Per-channel distribution overlay grid for a single layer.")
   parser.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet34", "resnet50", "resnet101", "resnet152"])
   parser.add_argument("--layer", type=str, default="layer3.0.conv1")
-  parser.add_argument("--rows", type=int, default=4)
+  parser.add_argument("--rows", type=int, default=2)
   parser.add_argument("--cols", type=int, default=4)
   parser.add_argument("--quantile", type=float, default=99.9, help="Percent of data inside the per-channel visualization x-range.")
   args = parser.parse_args()

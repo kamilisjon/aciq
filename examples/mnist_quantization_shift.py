@@ -14,8 +14,8 @@ from scipy.stats import spearmanr
 from aciq.bias_correction import ChannelMeansAccumulator
 from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
-from aciq.plotting_style import SERIES_COLORS, TailwindColor
-from aciq.mnist import BlockName, MNISTModel, _load_normalized, train_model
+from aciq.plotting_style import NEUTRAL_COLOR, SERIES_COLORS, TailwindColor
+from aciq.mnist import BlockName, MNISTModel, _load_normalized, train_model, BlockName2
 from aciq.quantization import bound_symmetric_minmax, quantize_symmetric, bound_symmetric_aciq_mae
 
 
@@ -47,6 +47,16 @@ class MnistLossRow:
   test_loss: float
 
 
+@dataclass
+class QuantStatsRow:
+  seed: int
+  layer_name: str
+  channel: int
+  minmax_alpha: float
+  aciq_alpha: float
+  aciq_best_fit: str
+
+
 def _shifts(rows: list[MnistResultRow], method: str, block: str) -> np.ndarray:
   return np.array([getattr(r, f"{method}_{block}_mean_shift") for r in rows])
 
@@ -59,24 +69,45 @@ class QuantMethod(StrEnum):
   ACIQ = "aciq"
 
 
-def _aciq_alpha(vec: np.ndarray) -> float:
+def _aciq_alpha(vec: np.ndarray) -> tuple[float, str]:
   alpha_mm = bound_symmetric_minmax(vec)
-  sorted_vec = np.sort(vec)
-  fits = fit_distributions(sorted_vec)
-  best_dist = fits[max(fits, key=lambda dt: fits[dt].log_likelihood)]
-  return bound_symmetric_aciq_mae(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=BITS, alpha_max=alpha_mm)
+  fits = fit_distributions(np.sort(vec))
+  best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
+  best = fits[best_type]
+  alpha = float(bound_symmetric_aciq_mae(cdf=lambda x: float(best.cdf_at(np.asarray(x))), b=BITS, alpha_max=alpha_mm))
+  return alpha, best_type.name
 
 
-def quantize_model(model: MNISTModel, method: QuantMethod) -> MNISTModel:
+@dataclass
+class LayerQuantStats:
+  layer_name: str
+  alpha_per_channel: list[float]
+  best_fit_per_channel: list[str]
+
+
+def quantize_model(model: MNISTModel, method: QuantMethod) -> tuple[MNISTModel, list[LayerQuantStats]]:
   qmodel = copy.deepcopy(model)
   qmodel.fuse()
-  alpha_fn = bound_symmetric_minmax if method == QuantMethod.MINMAX else _aciq_alpha
-  for mod in qmodel.weight_modules:
+  stats: list[LayerQuantStats] = []
+  for name, mod in qmodel.named_weight_modules:
     w = mod.weight.numpy()
-    alpha = alpha_fn(w.flatten())
-    mod.weight = Tensor(quantize_symmetric(w.flatten(), alpha, BITS).reshape(w.shape).astype(np.float32))
+    q_buf = np.empty_like(w, dtype=np.float32)
+    alphas: list[float] = []
+    fits: list[str] = []
+    for c in range(w.shape[0]):
+      ch_vec = w[c].flatten()
+      if method == QuantMethod.MINMAX:
+        alpha = float(bound_symmetric_minmax(ch_vec))
+        fit_name = ""
+      else:
+        alpha, fit_name = _aciq_alpha(ch_vec)
+      q_buf[c] = quantize_symmetric(ch_vec, alpha, BITS).reshape(w[c].shape).astype(np.float32)
+      alphas.append(alpha)
+      fits.append(fit_name)
+    mod.weight = Tensor(q_buf)
+    stats.append(LayerQuantStats(layer_name=name, alpha_per_channel=alphas, best_fit_per_channel=fits))
   MNISTModel.clear_jit_caches()
-  return qmodel
+  return qmodel, stats
 
 
 # --- Distribution shift measurement ---
@@ -96,11 +127,12 @@ def collect_layer_outputs(model: MNISTModel, x_test: Tensor, batch_size: int = 1
 # --- Training + measurement ---
 
 
-def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[MnistLossRow]]:
+def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[MnistLossRow], list[QuantStatsRow]]:
   _, _, x_test, y_test = _load_normalized()
 
   result_rows: list[MnistResultRow] = []
   loss_rows: list[MnistLossRow] = []
+  quant_stats_rows: list[QuantStatsRow] = []
   for seed in range(n_models):
     print(f"[{seed + 1}/{n_models}] Training model (seed={seed})...")
     model, fp32_acc, train_losses, test_losses = train_model(seed=seed, steps=steps, gather_losses=seed < LOSS_TRACKED_SEEDS)
@@ -111,13 +143,30 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
 
     accs: dict[QuantMethod, float] = {}
     shifts: dict[QuantMethod, dict[str, float]] = {}
+    layer_stats: dict[QuantMethod, list[LayerQuantStats]] = {}
     for method in QuantMethod:
-      qmodel = quantize_model(model, method)
+      qmodel, stats = quantize_model(model, method)
       accs[method] = float(qmodel.test_acc(x_test, y_test).item())
       q_outputs = collect_layer_outputs(qmodel, x_test)
       shifts[method] = {r.layer: r.mean_shift for r in fp32_outputs.layers_means_shifts(q_outputs, method)}
+      layer_stats[method] = stats
       print(f"{method} quantization done")
-      # del qmodel, q_outputs
+
+    for mm_layer, aciq_layer in zip(layer_stats[QuantMethod.MINMAX], layer_stats[QuantMethod.ACIQ]):
+      assert mm_layer.layer_name == aciq_layer.layer_name
+      for ch, (mm_alpha, aciq_alpha, aciq_fit) in enumerate(
+        zip(mm_layer.alpha_per_channel, aciq_layer.alpha_per_channel, aciq_layer.best_fit_per_channel)
+      ):
+        quant_stats_rows.append(
+          QuantStatsRow(
+            seed=seed,
+            layer_name=mm_layer.layer_name,
+            channel=ch,
+            minmax_alpha=mm_alpha,
+            aciq_alpha=aciq_alpha,
+            aciq_best_fit=aciq_fit,
+          )
+        )
 
     print(f"  FP32={fp32_acc:.4f}  MinMax={accs[QuantMethod.MINMAX]:.4f}  ACIQ={accs[QuantMethod.ACIQ]:.4f}")
     result_rows.append(
@@ -133,7 +182,7 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
       MnistLossRow(seed=seed, step=step, train_loss=tl, test_loss=el) for step, (tl, el) in enumerate(zip(train_losses, test_losses), start=1)
     )
     MNISTModel.clear_jit_caches()
-  return result_rows, loss_rows
+  return result_rows, loss_rows, quant_stats_rows
 
 
 # --- Analysis ---
@@ -141,32 +190,50 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
 
 def plot_scatter(rows: list[MnistResultRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
-  fig, axes = plt.subplots(2, len(BlockName) + 1, figsize=(4 * (len(BlockName) + 1), 8))
-  for row_idx, (method, color) in enumerate([(QuantMethod.MINMAX, TailwindColor.TEAL), (QuantMethod.ACIQ, TailwindColor.ORANGE)]):
+  fig, axes = plt.subplots(1, 2, figsize=(10, 4.5))
+  for col_idx, (method, color) in enumerate([(QuantMethod.MINMAX, TailwindColor.TEAL), (QuantMethod.ACIQ, TailwindColor.ORANGE)]):
     acc_drops = np.array([r.fp32_acc - getattr(r, f"{method}_acc") for r in rows])
-
-    for col_idx, block in enumerate(BlockName):
-      ax = axes[row_idx, col_idx]
-      shifts = _shifts(rows, method, block)
-      ax.scatter(shifts, acc_drops, color=color, alpha=0.6, s=20)
-      rho, p = spearmanr(shifts, acc_drops)
-      ax.set_title(f"{method.upper()} {block}\nrho={rho:.3f} p={p:.3g}")
-      ax.set_xlabel("Mean shift")
-      ax.set_ylabel("Accuracy drop")
-
-    ax = axes[row_idx, len(BlockName)]
     total_shifts = np.sum([_shifts(rows, method, b) for b in BlockName], axis=0)
+    ax = axes[col_idx]
     ax.scatter(total_shifts, acc_drops, color=color, alpha=0.6, s=20)
     rho, p = spearmanr(total_shifts, acc_drops)
-    ax.set_title(f"{method.upper()} total\nrho={rho:.3f} p={p:.3g}")
-    ax.set_xlabel("Total mean shift")
-    ax.set_ylabel("Accuracy drop")
-
-  for ax in axes.flat:
+    ax.set_title(f"{method.upper()} rho={rho:.3f} p={p:.3g}")
+    ax.set_xlabel("Bendras vidurkio poslinkis")
+    if col_idx == 0:
+      ax.set_ylabel("Tikslumo kritimas")
     ax.grid(False)
   fig.suptitle("Mean shift vs accuracy drop (Spearman correlation)", y=1.02)
   fig.tight_layout()
   fig.savefig(save_dir / "scatter_mean_shift_vs_accuracy.png")
+  plt.close(fig)
+
+
+def plot_minmax_vs_aciq_accuracy(rows: list[MnistResultRow], save_dir: Path) -> None:
+  save_dir.mkdir(parents=True, exist_ok=True)
+  fp32 = np.array([r.fp32_acc for r in rows])
+  mm = np.array([r.minmax_acc for r in rows])
+  aciq = np.array([r.aciq_acc for r in rows])
+  fig, ax = plt.subplots(figsize=(6, 6))
+  ax.scatter(mm, aciq, color=TailwindColor.VIOLET, alpha=0.6, s=24)
+  lo = float(min(mm.min(), aciq.min())) - 0.02
+  hi = float(max(mm.max(), aciq.max(), fp32.max())) + 0.02
+  ax.plot([lo, hi], [lo, hi], color=NEUTRAL_COLOR, linestyle="--", linewidth=1.0, label="y = x")
+  ax.axvline(float(fp32.mean()), color=NEUTRAL_COLOR, linestyle=":", linewidth=0.8)
+  ax.axhline(float(fp32.mean()), color=NEUTRAL_COLOR, linestyle=":", linewidth=0.8)
+  ax.set_xlim(lo, hi)
+  ax.set_ylim(lo, hi)
+  ax.set_xlabel("MINMAX tikslumas")
+  ax.set_ylabel("ACIQ tikslumas")
+  wins_aciq = int(np.sum(aciq > mm))
+  ax.set_title(
+    f"MINMAX prieš ACIQ tikslumas\n"
+    f"vidurkis: MINMAX={mm.mean():.3f}  ACIQ={aciq.mean():.3f}  "
+    f"ACIQ > MINMAX: {wins_aciq}/{len(rows)}"
+  )
+  ax.grid(False)
+  ax.legend(loc="lower right")
+  fig.tight_layout()
+  fig.savefig(save_dir / "minmax_vs_aciq_accuracy.png")
   plt.close(fig)
 
 
@@ -188,9 +255,9 @@ def plot_per_layer_shift(rows: list[MnistResultRow], save_dir: Path) -> None:
       capsize=3,
     )
   ax.set_xticks(np.arange(len(BlockName)))
-  ax.set_xticklabels(BlockName)
-  ax.set_xlabel("Layer")
-  ax.set_ylabel("Output mean shift")
+  ax.set_xticklabels(BlockName2)
+  ax.set_xlabel("Sluoksnis")
+  ax.set_ylabel("Išvesties vidurkio poslinkis")
   ax.legend()
   fig.tight_layout()
   fig.savefig(save_dir / "per_layer_mean_shift.png")
@@ -211,12 +278,12 @@ def plot_loss_curves(loss_rows: list[MnistLossRow], save_dir: Path) -> None:
     ax.plot(xs, [r.train_loss for r in seed_rows], color=color, linestyle="--", alpha=0.8)
     ax.plot(xs, [r.test_loss for r in seed_rows], color=color, linestyle="-", alpha=0.8)
 
-  ax.set_xlabel("Step")
-  ax.set_ylabel("Loss")
+  ax.set_xlabel("Žingsnis")
+  ax.set_ylabel("Nuostolis")
   ax.legend(
     handles=[
-      Line2D([0], [0], color="black", linestyle="-", label="Validation loss"),
-      Line2D([0], [0], color="black", linestyle="--", label="Train loss"),
+      Line2D([0], [0], color="black", linestyle="-", label="Validacijos nuostolis"),
+      Line2D([0], [0], color="black", linestyle="--", label="Mokymo nuostolis"),
     ]
   )
   fig.tight_layout()
@@ -247,13 +314,16 @@ if __name__ == "__main__":
     loss_rows = load_csv(losses_path, MnistLossRow) if losses_path.exists() else []
   else:
     print(f"Running training with {args.n_models} models, {args.steps} steps each...")
-    rows, loss_rows = run_training(args.n_models, args.steps)
+    rows, loss_rows, quant_stats_rows = run_training(args.n_models, args.steps)
     save_csv(rows, save_dir / "results.csv")
     if loss_rows:
       save_csv(loss_rows, save_dir / "losses.csv")
+    if quant_stats_rows:
+      save_csv(quant_stats_rows, save_dir / "quant_stats.csv")
 
   plot_scatter(rows, save_dir)
   plot_per_layer_shift(rows, save_dir)
+  plot_minmax_vs_aciq_accuracy(rows, save_dir)
   if loss_rows:
     plot_loss_curves(loss_rows, save_dir)
   print(f"Plots saved to {save_dir}/")

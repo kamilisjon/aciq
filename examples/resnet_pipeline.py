@@ -61,7 +61,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
   if save_path is not None:
     save_path.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(9, 5))
-    ax.hist(vec, bins=HIST_BINS, density=True, alpha=0.5, color=NEUTRAL_COLOR, label="Empirical")
+    ax.hist(vec, bins=HIST_BINS, density=True, alpha=0.5, color=NEUTRAL_COLOR, label="Empirinis")
 
     for dist_type, fitted in sorted(fits.items(), key=lambda kv: kv[1].log_likelihood, reverse=True):
       ax.plot(
@@ -70,7 +70,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
         color=DIST_COLORS[dist_type],
         linewidth=LINE_WIDTH ,
         linestyle="--",
-        label=f"{repr(fitted)} ll={fitted.log_likelihood:.3g}",
+        label=f"{repr(fitted)}",
       )
 
     ax.axvline(-alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=LINE_WIDTH , label=f"MinMax α={alpha_minmax:.4f} MAE={mae_minmax:.2e}")
@@ -85,17 +85,17 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
 
     eda_lines = [
       f"n {vec.size:,}",
-      f"Min {float(np.min(vec)):.5f}",
-      f"Max {float(np.max(vec)):.5f}",
-      f"Mean {float(np.mean(vec)):.5f}",
-      f"Variance {float(np.var(vec)):.6f}",
-      f"Skewness {float(skewness(vec)):.4f}",
-      f"Kurtosis {float(kurtosis(vec)):.4f}",
+      f"Minimumas {float(np.min(vec)):.5f}",
+      f"Maksimumas {float(np.max(vec)):.5f}",
+      f"Vidurkis {float(np.mean(vec)):.5f}",
+      f"Dispersija {float(np.var(vec)):.6f}",
+      f"Asimetrija {float(skewness(vec)):.4f}",
+      f"Ekscesas {float(kurtosis(vec)):.4f}",
     ]
     ax.text(0.98, 0.96, "\n".join(eda_lines), transform=ax.transAxes, **STATS_TEXT_KW)
     safe = layer_name.replace("/", "_").replace(":", "_")
-    ax.set_xlabel("Weight value")
-    ax.set_ylabel("Density")
+    ax.set_xlabel("Svorių reikšmės")
+    ax.set_ylabel("Tankis")
     ax.legend(loc="upper left")
     ax.grid(False)
     fig.tight_layout()
@@ -126,13 +126,13 @@ def plot_shift(
   fig, ax = plt.subplots(figsize=(max(8, len(layer_names) * 0.5), 5))
   for i, method in enumerate(methods):
     per_layer = [by_method[method][name] for name in layer_names]
-    label = "Bias correction" if method.endswith("::bias") else "No correction"
+    label = "Poslinkio korekcija" if method.endswith("::bias") else "Be korekcijos"
     ax.bar(x_pos + offsets[i], per_layer, width=bar_width, color=SERIES_COLORS[i % len(SERIES_COLORS)], label=label)
 
   ax.set_xticks(x_pos)
   ax.set_xticklabels(layer_names, rotation=45, ha="right")
-  ax.set_xlabel("Layer")
-  ax.set_ylabel("Output mean shift")
+  ax.set_xlabel("Sluoksnis")
+  ax.set_ylabel("Išėjimo vidurkio poslinkis")
   ax.legend()
   fig.tight_layout()
   fig.savefig(save_dir / filename)

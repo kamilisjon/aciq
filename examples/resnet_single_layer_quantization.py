@@ -18,7 +18,7 @@ def _resolve_layer_weight(model: ResNet, dotted: str) -> np.ndarray:
 def main() -> None:
   parser = argparse.ArgumentParser(description="Fit all candidate distributions to a single ResNet weight tensor and plot.")
   parser.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet34", "resnet50", "resnet101", "resnet152"])
-  parser.add_argument("--layer", type=str, default="layer4.1.conv2", help="Dotted path to a weight-bearing module (e.g. `layer3.0.conv1`, `fc`).")
+  parser.add_argument("--layer", type=str, default="layer3.0.conv1", help="Dotted path to a weight-bearing module (e.g. `layer3.0.conv1`, `fc`).")
   parser.add_argument("--bits", type=int, default=8, help="Bit-width for the MinMax/ACIQ clip overlay drawn alongside the fits.")
   args = parser.parse_args()
 

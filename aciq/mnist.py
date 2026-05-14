@@ -31,6 +31,11 @@ class BlockName(StrEnum):
   BLOCK3 = "block3"
   BLOCK4 = "block4"
 
+class BlockName2(StrEnum):
+  BLOCK1 = "Sluoksnis 1"
+  BLOCK2 = "Sluoksnis 2"
+  BLOCK3 = "Sluoksnis 3"
+  BLOCK4 = "Sluoksnis 4"
 
 class MNISTModel:
   def __init__(self) -> None:
@@ -89,7 +94,17 @@ class MNISTModel:
 
   @property
   def weight_modules(self) -> list[nn.Conv2d | nn.Linear]:
-    return [self.conv1, self.conv2, self.conv3, self.conv4, self.classifier]
+    return [m for _, m in self.named_weight_modules]
+
+  @property
+  def named_weight_modules(self) -> list[tuple[str, nn.Conv2d | nn.Linear]]:
+    return [
+      ("block1", self.conv1),
+      ("block2", self.conv2),
+      ("block3", self.conv3),
+      ("block4", self.conv4),
+      ("classifier", self.classifier),
+    ]
 
   @classmethod
   def clear_jit_caches(cls) -> None:
