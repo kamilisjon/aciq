@@ -52,11 +52,12 @@ class QuantStatsRow:
   seed: int
   layer_name: str
   channel: int
+  channel_size: int
   minmax_alpha: float
   aciq_alpha: float
   aciq_best_fit: str
-  minmax_weight_mae: float
-  aciq_weight_mae: float
+  minmax_weight_err: float
+  aciq_weight_err: float
 
 
 def _shifts(rows: list[MnistResultRow], method: str, block: str) -> np.ndarray:
@@ -83,9 +84,10 @@ def _aciq_alpha(vec: np.ndarray) -> tuple[float, str]:
 @dataclass
 class LayerQuantStats:
   layer_name: str
+  channel_size: int
   alpha_per_channel: list[float]
   best_fit_per_channel: list[str]
-  mae_per_channel: list[float]
+  total_err_per_channel: list[float]
 
 
 def quantize_model(model: MNISTModel, method: QuantMethod) -> tuple[MNISTModel, list[LayerQuantStats]]:
@@ -94,10 +96,11 @@ def quantize_model(model: MNISTModel, method: QuantMethod) -> tuple[MNISTModel, 
   stats: list[LayerQuantStats] = []
   for name, mod in qmodel.named_weight_modules:
     w = mod.weight.numpy()
+    ch_size = int(np.prod(w.shape[1:]))
     q_buf = np.empty_like(w, dtype=np.float32)
     alphas: list[float] = []
     fits: list[str] = []
-    maes: list[float] = []
+    errs: list[float] = []
     for c in range(w.shape[0]):
       ch_vec = w[c].flatten()
       if method == QuantMethod.MINMAX:
@@ -109,9 +112,15 @@ def quantize_model(model: MNISTModel, method: QuantMethod) -> tuple[MNISTModel, 
       q_buf[c] = q_vec.reshape(w[c].shape).astype(np.float32)
       alphas.append(alpha)
       fits.append(fit_name)
-      maes.append(float(np.mean(np.abs(ch_vec - q_vec))))
+      errs.append(float(np.sum(np.abs(ch_vec - q_vec))))
     mod.weight = Tensor(q_buf)
-    stats.append(LayerQuantStats(layer_name=name, alpha_per_channel=alphas, best_fit_per_channel=fits, mae_per_channel=maes))
+    stats.append(LayerQuantStats(
+      layer_name=name,
+      channel_size=ch_size,
+      alpha_per_channel=alphas,
+      best_fit_per_channel=fits,
+      total_err_per_channel=errs,
+    ))
   MNISTModel.clear_jit_caches()
   return qmodel, stats
 
@@ -160,13 +169,14 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
 
     for mm_layer, aciq_layer in zip(layer_stats[QuantMethod.MINMAX], layer_stats[QuantMethod.ACIQ]):
       assert mm_layer.layer_name == aciq_layer.layer_name
-      for ch, (mm_alpha, aciq_alpha, aciq_fit, mm_mae, aciq_mae) in enumerate(
+      assert mm_layer.channel_size == aciq_layer.channel_size
+      for ch, (mm_alpha, aciq_alpha, aciq_fit, mm_err, aciq_err) in enumerate(
         zip(
           mm_layer.alpha_per_channel,
           aciq_layer.alpha_per_channel,
           aciq_layer.best_fit_per_channel,
-          mm_layer.mae_per_channel,
-          aciq_layer.mae_per_channel,
+          mm_layer.total_err_per_channel,
+          aciq_layer.total_err_per_channel,
         )
       ):
         quant_stats_rows.append(
@@ -174,11 +184,12 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
             seed=seed,
             layer_name=mm_layer.layer_name,
             channel=ch,
+            channel_size=mm_layer.channel_size,
             minmax_alpha=mm_alpha,
             aciq_alpha=aciq_alpha,
             aciq_best_fit=aciq_fit,
-            minmax_weight_mae=mm_mae,
-            aciq_weight_mae=aciq_mae,
+            minmax_weight_err=mm_err,
+            aciq_weight_err=aciq_err,
           )
         )
 
