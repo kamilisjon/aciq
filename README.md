@@ -35,6 +35,7 @@ python -m examples.weight_statistics --model resnet18  # per-layer mean/variance
 python -m examples.resnet_bn_fusion
 python -m examples.weights_per_channel --model resnet18 --layer layer1.0.conv2 --rows 3 --cols 7 --quantile 99  # small kernels
 python -m examples.weights_per_channel --model resnet18 --layer layer4.0.conv2 --rows 3 --cols 7 --quantile 99.9  # big kernels
+DEV=CPU python -m examples.cam_grid --dataset-path /home/kamilis/Downloads/imagenet-object-localization-challenge  --n-images 7 --bits 8 --seed 2
 ```
 
 ### Full experiments

@@ -52,8 +52,17 @@ SERIES_COLORS: list[TailwindColor] = [
   TailwindColor.ORANGE,
 ]
 
+MAX_PIXEL_DIM = 3000  # cap rendered image's longest side, in pixels
+SAVEFIG_DPI = 700     # preferred savefig DPI, capped per-figure via capped_savefig_dpi
+
+
+def capped_savefig_dpi(fig_w_in: float, fig_h_in: float) -> float:
+  """DPI that respects both SAVEFIG_DPI and MAX_PIXEL_DIM for the given figure size in inches."""
+  return min(SAVEFIG_DPI, MAX_PIXEL_DIM / max(fig_w_in, fig_h_in))
+
+
 plt.rcParams.update({
-  "savefig.dpi": 700,
+  "savefig.dpi": SAVEFIG_DPI,
   "savefig.bbox": "tight",
   "font.family": "serif",
   "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],

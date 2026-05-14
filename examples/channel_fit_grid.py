@@ -8,11 +8,8 @@ from tinygrad.nn import Conv2d, Linear
 
 from aciq.distributions import Distribution, fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir
-from aciq.plotting_style import DIST_COLORS, HIST_BINS, LINE_WIDTH, NEUTRAL_COLOR
+from aciq.plotting_style import DIST_COLORS, HIST_BINS, LINE_WIDTH, NEUTRAL_COLOR, capped_savefig_dpi
 from aciq.resnet import ResNet, _weight_modules
-
-
-MAX_PIXEL_DIM = 3000
 
 
 def _best_fit(vec: np.ndarray) -> tuple[type[Distribution], Distribution]:
@@ -68,7 +65,7 @@ def plot_channel_grid(name: str, module: Conv2d | Linear, rows: int, cols: int, 
   )
   fig.tight_layout(pad=0.3, rect=(0.0, 0.06, 1.0, 1.0))
   out_path.parent.mkdir(parents=True, exist_ok=True)
-  dpi = min(plt.rcParams["savefig.dpi"], MAX_PIXEL_DIM / max(fig_w, fig_h))
+  dpi = capped_savefig_dpi(fig_w, fig_h)
   fig.savefig(out_path, dpi=dpi)
   plt.close(fig)
 

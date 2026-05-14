@@ -6,11 +6,8 @@ import matplotlib.pyplot as plt
 from tinygrad.nn import Conv2d, Linear
 
 from aciq.helpers import RESULTS_DIR, get_output_dir
-from aciq.plotting_style import HIST_BINS, TailwindColor
+from aciq.plotting_style import HIST_BINS, TailwindColor, capped_savefig_dpi
 from aciq.resnet import ResNet, _weight_modules
-
-
-MAX_PIXEL_DIM = 3000  # cap rendered image's longest side
 
 
 def plot_layer_grid(modules: list[tuple[str, Conv2d | Linear]], rows: int, cols: int, out_path: Path, quantile: float) -> None:
@@ -35,7 +32,7 @@ def plot_layer_grid(modules: list[tuple[str, Conv2d | Linear]], rows: int, cols:
     ax.grid(False)
   fig.tight_layout(pad=0.2)
   out_path.parent.mkdir(parents=True, exist_ok=True)
-  dpi = min(plt.rcParams["savefig.dpi"], MAX_PIXEL_DIM / max(fig_w, fig_h))
+  dpi = capped_savefig_dpi(fig_w, fig_h)
   fig.savefig(out_path, dpi=dpi)
   plt.close(fig)
 
