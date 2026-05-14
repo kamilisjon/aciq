@@ -50,6 +50,7 @@ if __name__ == "__main__":
 
   model = ResNet(int(args.model.removeprefix("resnet")))
   model.load_from_pretrained()
+  model.fuse()
   modules = _weight_modules(model)
 
   save_dir = get_output_dir(RESULTS_DIR, f"{args.model}_weights_per_layer")

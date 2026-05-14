@@ -19,7 +19,7 @@ class WeightMomentsRow:
   mean: float
   variance: float
   skewness: float
-  excess_kurtosis: float
+  kurtosis: float
 
 
 def compute_moments(model: ResNet) -> list[WeightMomentsRow]:
@@ -34,7 +34,7 @@ def compute_moments(model: ResNet) -> list[WeightMomentsRow]:
         mean=float(np.mean(w)),
         variance=float(np.var(w)),
         skewness=float(skewness(w)),
-        excess_kurtosis=float(kurtosis(w)),
+        kurtosis=float(kurtosis(w)) + 3.0,
       )
     )
   return rows
@@ -45,22 +45,21 @@ def plot_moments(rows: list[WeightMomentsRow], out_path: Path) -> None:
   mean = np.array([r.mean for r in rows])
   variance = np.array([r.variance for r in rows])
   skew = np.array([r.skewness for r in rows])
-  exk = np.array([r.excess_kurtosis for r in rows])
+  kurt = np.array([r.kurtosis for r in rows])
 
   fig, axes = plt.subplots(2, 2, figsize=(11, 7))
   for ax, values, ylabel in (
     (axes[0, 0], mean, "Mean"),
     (axes[0, 1], variance, "Variance"),
     (axes[1, 0], skew, "Skewness"),
-    (axes[1, 1], exk, "Excess kurtosis"),
+    (axes[1, 1], kurt, "Kurtosis"),
   ):
     ax.bar(idx, values, color=TailwindColor.TEAL)
     ax.set_ylabel(ylabel)
 
   for ax in (axes[0, 0], axes[1, 0]):
     ax.axhline(0.0, color=NEUTRAL_COLOR, linestyle="--", linewidth=LINE_WIDTH)
-  axes[1, 1].axhline(0.0, color=NEUTRAL_COLOR, linestyle="--", linewidth=LINE_WIDTH, label="Gaussian")
-  axes[1, 1].axhline(3.0, color=NEUTRAL_COLOR, linestyle=":", linewidth=LINE_WIDTH, label="Laplace")
+  axes[1, 1].axhline(3.0, color=TailwindColor.RED, linewidth=2.0, label="Gaussian")
   axes[1, 1].legend(loc="upper left")
 
   for ax in axes[1]:
@@ -73,12 +72,13 @@ def plot_moments(rows: list[WeightMomentsRow], out_path: Path) -> None:
 
 
 if __name__ == "__main__":
-  parser = argparse.ArgumentParser(description="Per-layer weight moments (mean, variance, skewness, excess kurtosis) for a pre-trained ResNet.")
+  parser = argparse.ArgumentParser(description="Per-layer weight moments (mean, variance, skewness, kurtosis) for a pre-trained ResNet.")
   parser.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet34", "resnet50", "resnet101", "resnet152"])
   args = parser.parse_args()
 
   model = ResNet(int(args.model.removeprefix("resnet")))
   model.load_from_pretrained()
+  model.fuse()
   rows = compute_moments(model)
 
   save_dir = get_output_dir(RESULTS_DIR, f"{args.model}_weight_statistics")
@@ -86,7 +86,7 @@ if __name__ == "__main__":
   plot_moments(rows, save_dir / "moments.png")
   print(f"Wrote {len(rows)} rows to {save_dir}/")
 
-  exk = np.array([r.excess_kurtosis for r in rows])
+  kurt = np.array([r.kurtosis for r in rows])
   skew = np.array([r.skewness for r in rows])
-  print(f"  Skewness range:        [{skew.min():+.3f}, {skew.max():+.3f}]")
-  print(f"  Excess kurtosis range: [{exk.min():+.3f}, {exk.max():+.3f}]")
+  print(f"  Skewness range: [{skew.min():+.3f}, {skew.max():+.3f}]")
+  print(f"  Kurtosis range: [{kurt.min():+.3f}, {kurt.max():+.3f}]")
