@@ -272,11 +272,9 @@ def main() -> None:
     loaded_rows: list[MeanShift] = load_csv(shifts_path, MeanShift)
     print(f"Loaded {len(loaded_rows)} shift rows from {shifts_path}")
     layer_names = list(dict.fromkeys(r.layer for r in loaded_rows))
-    none_rows = [r for r in loaded_rows if r.method.endswith("::none")]
-    bias_rows = [r for r in loaded_rows if r.method.endswith("::bias")]
-    plot_shift(none_rows, layer_names, save_dir / "quantization_shift")
-    plot_shift(bias_rows, layer_names, save_dir / "quantization_shift", filename="mean_shift_bias_corrected.png")
-    print(f"Plots saved to {save_dir / 'quantization_shift'}")
+    per_channel_rows = [r for r in loaded_rows if r.method.startswith("per_channel_")]
+    plot_shift(per_channel_rows, layer_names, save_dir / "quantization_shift")
+    print(f"Plot saved to {save_dir / 'quantization_shift' / 'mean_shift.png'}")
     return
 
   assert args.dataset_path is not None, "--dataset-path is required unless --from-dir is set"
@@ -325,11 +323,9 @@ def main() -> None:
   save_csv(shift_rows, shifts_csv)
   print(f"  CSV saved to {shifts_csv}")
   layer_names = list(fp32_acc.channels_sums.keys())
-  none_rows = [r for r in shift_rows if r.method.endswith("::none")]
-  bias_rows = [r for r in shift_rows if r.method.endswith("::bias")]
-  plot_shift(none_rows, layer_names, config.shift_results_dir)
-  plot_shift(bias_rows, layer_names, config.shift_results_dir, filename="mean_shift_bias_corrected.png")
-  print(f"  Plots saved to {config.shift_results_dir}/")
+  per_channel_rows = [r for r in shift_rows if r.method.startswith("per_channel_")]
+  plot_shift(per_channel_rows, layer_names, config.shift_results_dir)
+  print(f"  Plot saved to {config.shift_results_dir}/mean_shift.png")
 
   print(f"\n=== Stage 4: Benchmarking ({config.model_name}) ===")
   config.correction_results_dir.mkdir(parents=True, exist_ok=True)
