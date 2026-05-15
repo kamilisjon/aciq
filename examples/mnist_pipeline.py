@@ -1,5 +1,6 @@
 import argparse
 import copy
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -58,6 +59,132 @@ class QuantStatsRow:
   aciq_best_fit: str
   minmax_weight_err: float
   aciq_weight_err: float
+
+
+@dataclass
+class DistributionCountsRow:
+  layer_name: str
+  distribution_name: str
+  count: int
+
+
+@dataclass
+class MaeSummaryRow:
+  seed: int
+  layer_name: str
+  num_channels: int
+  total_weights: int
+  minmax_total_err: float
+  aciq_total_err: float
+  minmax_mae: float
+  aciq_mae: float
+
+
+def build_distribution_counts(rows: list[QuantStatsRow]) -> list[DistributionCountsRow]:
+  counts: dict[tuple[str, str], int] = defaultdict(int)
+  for r in rows:
+    counts[(r.layer_name, r.aciq_best_fit)] += 1
+  return [DistributionCountsRow(layer_name=l, distribution_name=d, count=n) for (l, d), n in sorted(counts.items())]
+
+
+def build_mae_summary(rows: list[QuantStatsRow]) -> list[MaeSummaryRow]:
+  agg: dict[tuple[int, str], dict[str, float]] = defaultdict(lambda: {"n_ch": 0.0, "tot_w": 0.0, "mm": 0.0, "aq": 0.0})
+  for r in rows:
+    a = agg[(r.seed, r.layer_name)]
+    a["n_ch"] += 1
+    a["tot_w"] += r.channel_size
+    a["mm"] += r.minmax_weight_err
+    a["aq"] += r.aciq_weight_err
+  out: list[MaeSummaryRow] = []
+  for (seed, layer), a in sorted(agg.items()):
+    tot_w = int(a["tot_w"])
+    out.append(MaeSummaryRow(
+      seed=seed,
+      layer_name=layer,
+      num_channels=int(a["n_ch"]),
+      total_weights=tot_w,
+      minmax_total_err=a["mm"],
+      aciq_total_err=a["aq"],
+      minmax_mae=a["mm"] / tot_w,
+      aciq_mae=a["aq"] / tot_w,
+    ))
+  return out
+
+
+@dataclass
+class MaePerNetworkRow:
+  seed: int
+  total_weights: int
+  minmax_total_err: float
+  aciq_total_err: float
+  minmax_mae: float
+  aciq_mae: float
+
+
+@dataclass
+class MaeAverageRow:
+  n_seeds: int
+  total_weights_per_network: int
+  mean_fp32_acc: float
+  std_fp32_acc: float
+  mean_minmax_acc: float
+  std_minmax_acc: float
+  mean_aciq_acc: float
+  std_aciq_acc: float
+  mean_paired_acc_diff: float
+  std_paired_acc_diff: float
+  mean_minmax_mae: float
+  std_minmax_mae: float
+  mean_aciq_mae: float
+  std_aciq_mae: float
+
+
+def build_mae_per_network(rows: list[QuantStatsRow]) -> list[MaePerNetworkRow]:
+  agg: dict[int, dict[str, float]] = defaultdict(lambda: {"tot_w": 0.0, "mm": 0.0, "aq": 0.0})
+  for r in rows:
+    a = agg[r.seed]
+    a["tot_w"] += r.channel_size
+    a["mm"] += r.minmax_weight_err
+    a["aq"] += r.aciq_weight_err
+  out: list[MaePerNetworkRow] = []
+  for seed, a in sorted(agg.items()):
+    tot_w = int(a["tot_w"])
+    out.append(MaePerNetworkRow(
+      seed=seed,
+      total_weights=tot_w,
+      minmax_total_err=a["mm"],
+      aciq_total_err=a["aq"],
+      minmax_mae=a["mm"] / tot_w,
+      aciq_mae=a["aq"] / tot_w,
+    ))
+  return out
+
+
+def build_mae_average(per_network: list[MaePerNetworkRow], result_rows: list[MnistResultRow]) -> list[MaeAverageRow]:
+  assert per_network, "build_mae_average requires at least one per-network row"
+  fp = np.array([r.fp32_acc for r in result_rows], dtype=np.float64)
+  mm_acc = np.array([r.minmax_acc for r in result_rows], dtype=np.float64)
+  aq_acc = np.array([r.aciq_acc for r in result_rows], dtype=np.float64)
+  d_acc = aq_acc - mm_acc
+  mm_mae = np.array([r.minmax_mae for r in per_network], dtype=np.float64)
+  aq_mae = np.array([r.aciq_mae for r in per_network], dtype=np.float64)
+  std = lambda x: float(x.std(ddof=1)) if len(x) > 1 else 0.0
+  return [MaeAverageRow(
+    n_seeds=len(per_network),
+    total_weights_per_network=per_network[0].total_weights,
+    mean_fp32_acc=float(fp.mean()),
+    std_fp32_acc=std(fp),
+    mean_minmax_acc=float(mm_acc.mean()),
+    std_minmax_acc=std(mm_acc),
+    mean_aciq_acc=float(aq_acc.mean()),
+    std_aciq_acc=std(aq_acc),
+    mean_paired_acc_diff=float(d_acc.mean()),
+    std_paired_acc_diff=std(d_acc),
+    mean_minmax_mae=float(mm_mae.mean()),
+    std_minmax_mae=std(mm_mae),
+    mean_aciq_mae=float(aq_mae.mean()),
+    std_aciq_mae=std(aq_mae),
+  )]
 
 
 def _shifts(rows: list[MnistResultRow], method: str, block: str) -> np.ndarray:
@@ -332,11 +459,15 @@ if __name__ == "__main__":
   args = parser.parse_args()
   save_dir = get_output_dir(RESULTS_DIR, "mnist")
 
+  quant_stats_rows: list[QuantStatsRow] = []
   if args.from_dir:
     rows = load_csv(args.from_dir / "results.csv", MnistResultRow)
     print(f"Loaded {len(rows)} models from {args.from_dir / 'results.csv'}")
     losses_path = args.from_dir / "losses.csv"
     loss_rows = load_csv(losses_path, MnistLossRow) if losses_path.exists() else []
+    quant_stats_path = args.from_dir / "quant_stats.csv"
+    if quant_stats_path.exists():
+      quant_stats_rows = load_csv(quant_stats_path, QuantStatsRow)
   else:
     print(f"Running training with {args.n_models} models, {args.steps} steps each...")
     rows, loss_rows, quant_stats_rows = run_training(args.n_models, args.steps)
@@ -345,6 +476,14 @@ if __name__ == "__main__":
       save_csv(loss_rows, save_dir / "losses.csv")
     if quant_stats_rows:
       save_csv(quant_stats_rows, save_dir / "quant_stats.csv")
+
+  if quant_stats_rows:
+    save_csv(build_distribution_counts(quant_stats_rows), save_dir / "distribution_counts.csv")
+    save_csv(build_mae_summary(quant_stats_rows), save_dir / "mae_summary.csv")
+    per_network = build_mae_per_network(quant_stats_rows)
+    save_csv(per_network, save_dir / "mae_per_network.csv")
+    save_csv(build_mae_average(per_network, rows), save_dir / "mae_average.csv")
+    print(f"Emitted derived summaries to {save_dir}/")
 
   plot_scatter(rows, save_dir)
   plot_per_layer_shift(rows, save_dir)
