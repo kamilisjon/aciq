@@ -21,7 +21,7 @@ from aciq.quantization import bound_symmetric_minmax, quantize_symmetric, bound_
 
 
 BITS = 4
-LOSS_TRACKED_SEEDS = 5
+LOSS_TRACKED_SEEDS = 0
 
 
 @dataclass

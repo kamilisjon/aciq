@@ -118,7 +118,7 @@ class StudentT(Distribution):
 
 
 class GeneralizedGaussian(Distribution):
-  name = "GED"
+  name = "Apibendrintas normalusis"
 
   def __repr__(self) -> str:
     return f"{self.name} ({self.beta:.4f}, {self.loc:.4f}, {self.scale:.4f})"
