@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from tinygrad import Tensor
 
-from aciq.resnet import ResNet
+from aciq.models.resnet import ResNet
 
 
 class TestResNetFuse(unittest.TestCase):

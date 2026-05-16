@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from aciq.distributions import kurtosis, skewness
 from aciq.helpers import RESULTS_DIR, get_output_dir, save_csv
 from aciq.plotting_style import LINE_WIDTH, NEUTRAL_COLOR, TailwindColor
-from aciq.resnet import ResNet, _weight_modules
+from aciq.models.resnet import ResNet, _weight_modules
 
 
 @dataclass

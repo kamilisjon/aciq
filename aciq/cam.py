@@ -7,7 +7,7 @@ from tinygrad import Tensor
 
 from aciq.distributions import fit_distributions
 from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax, quantize_symmetric
-from aciq.resnet import ResNet, _weight_modules
+from aciq.models.resnet import ResNet, _weight_modules
 
 
 _METHODS = {"per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"}

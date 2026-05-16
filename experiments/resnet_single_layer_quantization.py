@@ -4,7 +4,7 @@ from typing import Any
 import numpy as np
 
 from aciq.helpers import RESULTS_DIR, get_output_dir
-from aciq.resnet import ResNet
+from aciq.models.resnet import ResNet
 from examples.resnet_pipeline import analyze_layer
 
 

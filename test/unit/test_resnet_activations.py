@@ -5,7 +5,7 @@ import torch
 import torchvision
 from tinygrad import Tensor
 
-from aciq.resnet import ResNet
+from aciq.models.resnet import ResNet
 
 
 RESNET18_EXPECTED_KEYS = [

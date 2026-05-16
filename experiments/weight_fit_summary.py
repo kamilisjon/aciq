@@ -7,7 +7,7 @@ import numpy as np
 from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir, mean_absolute_error, save_csv
 from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax, quantize_symmetric
-from aciq.resnet import ResNet, _weight_modules
+from aciq.models.resnet import ResNet, _weight_modules
 
 
 @dataclass

@@ -7,7 +7,7 @@ from tinygrad import Tensor, TinyJit, function
 from tinygrad.nn.optim import AdamW
 
 from aciq.helpers import fuse_conv_bn_inplace
-from aciq.resnet import BasicBlock
+from aciq.models.resnet import BasicBlock
 
 
 class BlockName(StrEnum):

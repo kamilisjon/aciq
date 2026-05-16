@@ -9,7 +9,7 @@ from tinygrad.nn import Conv2d, Linear
 from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir
 from aciq.plotting_style import DIST_COLORS, HIST_BINS, LINE_WIDTH, NEUTRAL_COLOR, capped_savefig_dpi
-from aciq.resnet import ResNet, _weight_modules
+from aciq.models.resnet import ResNet, _weight_modules
 
 
 def plot_channel_grid(name: str, module: Conv2d | Linear, rows: int, cols: int, quantile: float, out_path: Path) -> None:

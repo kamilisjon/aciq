@@ -7,7 +7,7 @@ from tinygrad.nn import Conv2d, Linear
 
 from aciq.helpers import RESULTS_DIR, get_output_dir
 from aciq.plotting_style import HIST_BINS, TailwindColor, capped_savefig_dpi
-from aciq.resnet import ResNet, _weight_modules
+from aciq.models.resnet import ResNet, _weight_modules
 
 
 def plot_layer_grid(modules: list[tuple[str, Conv2d | Linear]], rows: int, cols: int, out_path: Path, quantile: float) -> None:

@@ -9,9 +9,9 @@ from PIL import Image
 
 from aciq.cam import build_quantized_variant, cam_for_class, predict_batch_with_features
 from aciq.helpers import RESULTS_DIR, get_output_dir
-from aciq.imagenet import ImagenetClassIndex, load_and_preprocess, parse_imagenet_val_labels, resize_and_center_crop, sample_imagenet_val
+from aciq.datasets.imagenet import ImagenetClassIndex, load_and_preprocess, parse_imagenet_val_labels, resize_and_center_crop, sample_imagenet_val
 from aciq.plotting_style import capped_savefig_dpi
-from aciq.resnet import ResNet, _bias_correct_model, _weight_modules, compute_input_stats
+from aciq.models.resnet import ResNet, _bias_correct_model, _weight_modules, compute_input_stats
 
 
 COLUMNS: list[tuple[str, str | None]] = [

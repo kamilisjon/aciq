@@ -7,7 +7,7 @@ from tinygrad.helpers import tqdm
 
 from aciq.helpers import RESULTS_DIR, fuse_conv_bn, get_output_dir
 from aciq.plotting_style import TailwindColor
-from aciq.resnet import ResNet, _conv_bn_pairs
+from aciq.models.resnet import ResNet, _conv_bn_pairs
 
 
 def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, post_weight: np.ndarray, save_dir: Path) -> None:

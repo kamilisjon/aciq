@@ -3,7 +3,7 @@ import argparse
 import matplotlib.pyplot as plt
 
 from aciq.helpers import RESULTS_DIR, get_output_dir
-from aciq.mnist import train_model
+from aciq.datasets.mnist import train_model
 from aciq.models import MiniConv, ResNet3BW
 from aciq.plotting_style import SERIES_COLORS
 

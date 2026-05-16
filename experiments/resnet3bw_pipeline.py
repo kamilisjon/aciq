@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
-from aciq.mnist import _load_normalized, train_model
+from aciq.datasets.mnist import _load_normalized, train_model
 from aciq.models import ResNet3BW
 from aciq.models.resnet3bw import BlockName, BlockName2
 from aciq.plotting_style import NEUTRAL_COLOR, TailwindColor

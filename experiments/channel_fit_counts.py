@@ -5,7 +5,7 @@ import numpy as np
 
 from aciq.distributions import Distribution, Gaussian, GeneralizedGaussian, Laplace, StudentT, fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir, save_csv
-from aciq.resnet import ResNet, _weight_modules
+from aciq.models.resnet import ResNet, _weight_modules
 
 
 @dataclass
