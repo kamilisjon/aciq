@@ -3,17 +3,17 @@ import unittest
 import numpy as np
 from tinygrad import Tensor
 
-from aciq.mnist import MNISTModel
+from aciq.models import MiniConv
 
 
-class TestMNISTModel(unittest.TestCase):
+class TestMiniConv(unittest.TestCase):
   def test_forward_shape(self):
-    m = MNISTModel()
+    m = MiniConv()
     out = m(Tensor.rand(4, 1, 28, 28))
     self.assertEqual(out.shape, (4, 10))
 
   def test_fuse_keeps_logits_close(self):
-    m = MNISTModel()
+    m = MiniConv()
     np.random.seed(0)
     x = Tensor(np.random.randn(4, 1, 28, 28).astype(np.float32))
     pre = m(x).numpy()

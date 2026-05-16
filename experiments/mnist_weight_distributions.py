@@ -7,7 +7,8 @@ from tinygrad.nn import Conv2d
 
 from aciq.distributions import fit_distributions, kurtosis, skewness
 from aciq.helpers import RESULTS_DIR, get_output_dir
-from aciq.mnist import MNISTModel, train_model
+from aciq.mnist import train_model
+from aciq.models import MiniConv
 from aciq.plotting_style import DIST_COLORS, HIST_BINS, LINE_WIDTH, NEUTRAL_COLOR, STATS_TEXT_KW, capped_savefig_dpi
 from aciq.quantization import bound_symmetric_aciq_mae, bound_symmetric_minmax
 
@@ -56,7 +57,7 @@ if __name__ == "__main__":
   args = parser.parse_args()
 
   print(f"Training seed={args.seed} for {args.steps} steps")
-  model, fp32_acc, _, _ = train_model(seed=args.seed, steps=args.steps, gather_losses=False)
+  model, fp32_acc, _, _ = train_model(MiniConv, seed=args.seed, steps=args.steps)
   print(f"FP32 test acc = {fp32_acc:.4f}")
   model.fuse()
 

@@ -7,7 +7,6 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 from tinygrad import Tensor
 from tinygrad.helpers import tqdm
 from scipy.stats import spearmanr
@@ -15,13 +14,14 @@ from scipy.stats import spearmanr
 from aciq.bias_correction import ChannelMeansAccumulator
 from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
-from aciq.plotting_style import NEUTRAL_COLOR, SERIES_COLORS, TailwindColor
-from aciq.mnist import BlockName, MNISTModel, _load_normalized, train_model, BlockName2
+from aciq.mnist import _load_normalized, train_model
+from aciq.models import MiniConv
+from aciq.models.miniconv import BlockName, BlockName2
+from aciq.plotting_style import NEUTRAL_COLOR, TailwindColor
 from aciq.quantization import bound_symmetric_minmax, quantize_symmetric, bound_symmetric_aciq_mae
 
 
 BITS = 4
-LOSS_TRACKED_SEEDS = 0
 
 
 @dataclass
@@ -38,14 +38,6 @@ class MnistResultRow:
   aciq_block2_mean_shift: float
   aciq_block3_mean_shift: float
   aciq_block4_mean_shift: float
-
-
-@dataclass
-class MnistLossRow:
-  seed: int
-  step: int
-  train_loss: float
-  test_loss: float
 
 
 @dataclass
@@ -215,7 +207,7 @@ class LayerQuantStats:
   total_err_per_channel: list[float]
 
 
-def quantize_model(model: MNISTModel, method: QuantMethod) -> tuple[MNISTModel, list[LayerQuantStats]]:
+def quantize_model(model: MiniConv, method: QuantMethod) -> tuple[MiniConv, list[LayerQuantStats]]:
   qmodel = copy.deepcopy(model)
   qmodel.fuse()
   stats: list[LayerQuantStats] = []
@@ -246,14 +238,14 @@ def quantize_model(model: MNISTModel, method: QuantMethod) -> tuple[MNISTModel, 
       best_fit_per_channel=fits,
       total_err_per_channel=errs,
     ))
-  MNISTModel.clear_jit_caches()
+  MiniConv.clear_jit_caches()
   return qmodel, stats
 
 
 # --- Distribution shift measurement ---
 
 
-def collect_layer_outputs(model: MNISTModel, x_test: Tensor, batch_size: int = 100) -> ChannelMeansAccumulator:
+def collect_layer_outputs(model: MiniConv, x_test: Tensor, batch_size: int = 100) -> ChannelMeansAccumulator:
   acc = ChannelMeansAccumulator()
   n = x_test.shape[0]
   assert n % batch_size == 0, f"test set size {n} must be divisible by batch_size {batch_size}"
@@ -267,15 +259,14 @@ def collect_layer_outputs(model: MNISTModel, x_test: Tensor, batch_size: int = 1
 # --- Training + measurement ---
 
 
-def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[MnistLossRow], list[QuantStatsRow]]:
+def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[QuantStatsRow]]:
   _, _, x_test, y_test = _load_normalized()
 
   result_rows: list[MnistResultRow] = []
-  loss_rows: list[MnistLossRow] = []
   quant_stats_rows: list[QuantStatsRow] = []
   for seed in range(n_models):
     print(f"[{seed + 1}/{n_models}] Training model (seed={seed})...")
-    model, fp32_acc, train_losses, test_losses = train_model(seed=seed, steps=steps, gather_losses=seed < LOSS_TRACKED_SEEDS)
+    model, fp32_acc, _, _ = train_model(MiniConv, seed=seed, steps=steps)
     print("Model trained")
 
     fp32_outputs = collect_layer_outputs(model, x_test)
@@ -328,11 +319,8 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
         **{f"{m}_{b}_mean_shift": shifts[m][b] for m in QuantMethod for b in BlockName},
       )
     )
-    loss_rows.extend(
-      MnistLossRow(seed=seed, step=step, train_loss=tl, test_loss=el) for step, (tl, el) in enumerate(zip(train_losses, test_losses), start=1)
-    )
-    MNISTModel.clear_jit_caches()
-  return result_rows, loss_rows, quant_stats_rows
+    MiniConv.clear_jit_caches()
+  return result_rows, quant_stats_rows
 
 
 # --- Analysis ---
@@ -414,33 +402,6 @@ def plot_per_layer_shift(rows: list[MnistResultRow], save_dir: Path) -> None:
   plt.close(fig)
 
 
-def plot_loss_curves(loss_rows: list[MnistLossRow], save_dir: Path) -> None:
-  save_dir.mkdir(parents=True, exist_ok=True)
-  by_seed: dict[int, list[MnistLossRow]] = {}
-  for r in loss_rows:
-    by_seed.setdefault(r.seed, []).append(r)
-
-  fig, ax = plt.subplots(figsize=(8, 5))
-  for i, seed in enumerate(sorted(by_seed)):
-    seed_rows = sorted(by_seed[seed], key=lambda r: r.step)
-    xs = [r.step for r in seed_rows]
-    color = SERIES_COLORS[i % len(SERIES_COLORS)]
-    ax.plot(xs, [r.train_loss for r in seed_rows], color=color, linestyle="--", alpha=0.8)
-    ax.plot(xs, [r.test_loss for r in seed_rows], color=color, linestyle="-", alpha=0.8)
-
-  ax.set_xlabel("Žingsnis")
-  ax.set_ylabel("Nuostolis")
-  ax.legend(
-    handles=[
-      Line2D([0], [0], color="black", linestyle="-", label="Validacijos nuostolis"),
-      Line2D([0], [0], color="black", linestyle="--", label="Mokymo nuostolis"),
-    ]
-  )
-  fig.tight_layout()
-  fig.savefig(save_dir / "loss_curves.png")
-  plt.close(fig)
-
-
 # --- Main ---
 
 
@@ -452,7 +413,7 @@ if __name__ == "__main__":
     "--from-dir",
     type=Path,
     default=None,
-    help="Load `results.csv` and `losses.csv` from this experiment directory and re-render plots only (no training).",
+    help="Load `results.csv` from this experiment directory and re-render plots only (no training).",
   )
   args = parser.parse_args()
   save_dir = get_output_dir(RESULTS_DIR, "mnist")
@@ -461,17 +422,13 @@ if __name__ == "__main__":
   if args.from_dir:
     rows = load_csv(args.from_dir / "results.csv", MnistResultRow)
     print(f"Loaded {len(rows)} models from {args.from_dir / 'results.csv'}")
-    losses_path = args.from_dir / "losses.csv"
-    loss_rows = load_csv(losses_path, MnistLossRow) if losses_path.exists() else []
     quant_stats_path = args.from_dir / "quant_stats.csv"
     if quant_stats_path.exists():
       quant_stats_rows = load_csv(quant_stats_path, QuantStatsRow)
   else:
     print(f"Running training with {args.n_models} models, {args.steps} steps each...")
-    rows, loss_rows, quant_stats_rows = run_training(args.n_models, args.steps)
+    rows, quant_stats_rows = run_training(args.n_models, args.steps)
     save_csv(rows, save_dir / "results.csv")
-    if loss_rows:
-      save_csv(loss_rows, save_dir / "losses.csv")
     if quant_stats_rows:
       save_csv(quant_stats_rows, save_dir / "quant_stats.csv")
 
@@ -486,6 +443,4 @@ if __name__ == "__main__":
   plot_scatter(rows, save_dir)
   plot_per_layer_shift(rows, save_dir)
   plot_minmax_vs_aciq_accuracy(rows, save_dir)
-  if loss_rows:
-    plot_loss_curves(loss_rows, save_dir)
   print(f"Plots saved to {save_dir}/")
