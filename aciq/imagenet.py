@@ -80,6 +80,7 @@ _IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
+#TODO split up into 2-3 method and reuse initial preprocessing for /home/kamilis/ppprojects/aciq/aciq/cam.py
 def _preprocess_one(img: Image.Image) -> np.ndarray:
   w, h = img.size
   if w <= h:
