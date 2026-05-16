@@ -276,6 +276,7 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
     shifts: dict[QuantMethod, dict[str, float]] = {}
     layer_stats: dict[QuantMethod, list[LayerQuantStats]] = {}
     for method in QuantMethod:
+      MiniConv.clear_jit_caches()
       qmodel, stats = quantize_model(model, method)
       accs[method] = float(qmodel.test_acc(x_test, y_test).item())
       q_outputs = collect_layer_outputs(qmodel, x_test)
@@ -319,7 +320,6 @@ def run_training(n_models: int, steps: int) -> tuple[list[MnistResultRow], list[
         **{f"{m}_{b}_mean_shift": shifts[m][b] for m in QuantMethod for b in BlockName},
       )
     )
-    MiniConv.clear_jit_caches()
   return result_rows, quant_stats_rows
 
 

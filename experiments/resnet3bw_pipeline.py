@@ -60,6 +60,7 @@ def run_training(n_models: int, steps: int) -> tuple[list[ResNet3ResultRow], lis
     shifts: dict[QuantMethod, dict[str, float]] = {}
     layer_stats = {}
     for method in QuantMethod:
+      ResNet3BW.clear_jit_caches()
       qmodel, stats = quantize_model(model, method)
       accs[method] = float(qmodel.test_acc(x_test, y_test).item())
       q_outputs = collect_layer_outputs(qmodel, x_test)
@@ -103,7 +104,6 @@ def run_training(n_models: int, steps: int) -> tuple[list[ResNet3ResultRow], lis
         **{f"{m}_{b}_mean_shift": shifts[m][b] for m in QuantMethod for b in BlockName},
       )
     )
-    ResNet3BW.clear_jit_caches()
   return result_rows, quant_stats_rows
 
 
