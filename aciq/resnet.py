@@ -8,7 +8,7 @@ from tinygrad.helpers import fetch, get_child
 from tinygrad.nn.state import torch_load
 
 
-from aciq.bias_correction import apply_bias_correction
+from aciq.quantization.bias_correction import apply_bias_correction
 from aciq.distributions import ClippedGaussian
 from aciq.helpers import fuse_conv_bn_inplace
 

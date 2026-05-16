@@ -11,14 +11,14 @@ from tinygrad import Tensor
 from tinygrad.helpers import tqdm
 from scipy.stats import spearmanr
 
-from aciq.bias_correction import ChannelMeansAccumulator
+from aciq.quantization.bias_correction import ChannelMeansAccumulator
 from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.mnist import _load_normalized, train_model
 from aciq.models import MiniConv
 from aciq.models.miniconv import BlockName, BlockName2
 from aciq.plotting_style import NEUTRAL_COLOR, TailwindColor
-from aciq.quantization import bound_symmetric_minmax, quantize_symmetric, bound_symmetric_aciq_mae
+from aciq.quantization.clipping import bound_symmetric_minmax, quantize_symmetric, bound_symmetric_aciq_mae
 
 
 BITS = 4

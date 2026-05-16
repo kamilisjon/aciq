@@ -10,10 +10,10 @@ from tinygrad.helpers import tqdm
 from tinygrad.nn import Conv2d, Linear
 
 from aciq.imagenet import benchmark_accuracy, load_and_preprocess, sample_imagenet_val
-from aciq.bias_correction import ChannelMeansAccumulator, MeanShift
+from aciq.quantization.bias_correction import ChannelMeansAccumulator, MeanShift
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, mean_absolute_error, save_csv
 from aciq.resnet import ResNet, compute_input_stats, _weight_modules, _bias_correct_model
-from aciq.quantization import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
+from aciq.quantization.clipping import quantize_symmetric, bound_symmetric_minmax, bound_symmetric_aciq_mae
 from aciq.distributions import fit_distributions, kurtosis, skewness
 from aciq.plotting_style import DIST_COLORS, HIST_BINS, LINE_WIDTH, NEUTRAL_COLOR, SERIES_COLORS, STATS_TEXT_KW
 

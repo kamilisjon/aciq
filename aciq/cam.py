@@ -6,7 +6,7 @@ import numpy as np
 from tinygrad import Tensor
 
 from aciq.distributions import fit_distributions
-from aciq.quantization import bound_symmetric_aciq_mae, bound_symmetric_minmax, quantize_symmetric
+from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax, quantize_symmetric
 from aciq.resnet import ResNet, _weight_modules
 
 

@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from aciq.quantization import bound_symmetric_minmax, quantize_symmetric
+from aciq.quantization.clipping import bound_symmetric_minmax, quantize_symmetric
 
 
 class TestMinmaxRange(unittest.TestCase):

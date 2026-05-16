@@ -10,7 +10,7 @@ from aciq.helpers import RESULTS_DIR, get_output_dir
 from aciq.mnist import train_model
 from aciq.models import MiniConv
 from aciq.plotting_style import DIST_COLORS, HIST_BINS, LINE_WIDTH, NEUTRAL_COLOR, STATS_TEXT_KW, capped_savefig_dpi
-from aciq.quantization import bound_symmetric_aciq_mae, bound_symmetric_minmax
+from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax
 
 
 def plot_layer(ax: Axes, weights: np.ndarray, layer_name: str, bits: int) -> None:

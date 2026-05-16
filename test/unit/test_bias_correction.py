@@ -4,11 +4,11 @@ import numpy as np
 from tinygrad import Tensor
 from tinygrad.nn import Conv2d, Linear
 
-from aciq.bias_correction import apply_bias_correction
+from aciq.quantization.bias_correction import apply_bias_correction
 from aciq.distributions import ClippedGaussian
 from aciq.resnet import compute_input_stats, _post_residual_stats
 from aciq.resnet import ResNet
-from aciq.quantization import quantize_symmetric
+from aciq.quantization.clipping import quantize_symmetric
 
 
 def _quantize_weight(w: np.ndarray, bits: int = 4) -> np.ndarray:
