@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tinygrad import Tensor
 from tinygrad.helpers import tqdm
-from scipy.stats import spearmanr
+from scipy.stats import rankdata, spearmanr, wilcoxon
 
 from aciq.datasets.mnist import _load_normalized, train_model
 from aciq.distributions import fit_distributions
@@ -97,6 +97,16 @@ class MaeAverageRow:
 
 
 @dataclass
+class WilcoxonRow:
+  metric: str
+  n_pairs: int
+  median_diff: float
+  statistic: float
+  p_value: float
+  rank_biserial: float
+
+
+@dataclass
 class LayerQuantStats:
   layer_name: str
   channel_size: int
@@ -175,6 +185,31 @@ def build_mae_per_network(rows: list[QuantStatsRow]) -> list[MaePerNetworkRow]:
       aciq_mae=a["aq"] / tot_w,
     ))
   return out
+
+
+def _wilcoxon(diff: np.ndarray, metric: str) -> WilcoxonRow:
+  nonzero = diff[diff != 0]
+  if len(nonzero) == 0:
+    return WilcoxonRow(metric=metric, n_pairs=0, median_diff=0.0, statistic=0.0, p_value=1.0, rank_biserial=0.0)
+  abs_ranks = rankdata(np.abs(nonzero))
+  T_plus = float(np.sum(abs_ranks[nonzero > 0]))
+  T_minus = float(np.sum(abs_ranks[nonzero < 0]))
+  res = wilcoxon(diff, alternative="two-sided", zero_method="wilcox")
+  return WilcoxonRow(
+    metric=metric,
+    n_pairs=len(nonzero),
+    median_diff=float(np.median(diff)),
+    statistic=float(res.statistic),
+    p_value=float(res.pvalue),
+    rank_biserial=(T_plus - T_minus) / (T_plus + T_minus),
+  )
+
+
+def build_wilcoxon(accuracy_rows: list[AccuracyRow], per_network: list[MaePerNetworkRow]) -> list[WilcoxonRow]:
+  assert len(accuracy_rows) == len(per_network), "accuracy and per-network rows must align by seed"
+  acc_diff = np.array([r.aciq_acc - r.minmax_acc for r in accuracy_rows], dtype=np.float64)
+  mae_diff = np.array([r.aciq_mae - r.minmax_mae for r in per_network], dtype=np.float64)
+  return [_wilcoxon(acc_diff, "accuracy"), _wilcoxon(mae_diff, "mae")]
 
 
 def build_mae_average(per_network: list[MaePerNetworkRow], accuracy_rows: list[AccuracyRow]) -> list[MaeAverageRow]:
@@ -347,6 +382,29 @@ def plot_scatter(accuracy_rows: list[AccuracyRow], shifts_rows: list, BlockName:
   plt.close(fig)
 
 
+def plot_paired_diff_histograms(accuracy_rows: list[AccuracyRow], per_network: list[MaePerNetworkRow], save_dir: Path) -> None:
+  save_dir.mkdir(parents=True, exist_ok=True)
+  acc_diff = np.array([r.aciq_acc - r.minmax_acc for r in accuracy_rows], dtype=np.float64)
+  mae_diff = np.array([r.aciq_mae - r.minmax_mae for r in per_network], dtype=np.float64)
+  fig, axes = plt.subplots(1, 2, figsize=(10, 4.5))
+  for ax, diff, title, xlabel in [
+    (axes[0], acc_diff, "ACIQ − MinMax accuracy", "Tikslumo skirtumas"),
+    (axes[1], mae_diff, "ACIQ − MinMax MAE", "MAE skirtumas"),
+  ]:
+    ax.hist(diff, bins=30, color=TailwindColor.VIOLET, alpha=0.75)
+    ax.axvline(0.0, color=NEUTRAL_COLOR, linestyle="--", linewidth=1.0, label="0")
+    median = float(np.median(diff))
+    ax.axvline(median, color=TailwindColor.AMBER, linestyle="-", linewidth=1.2, label=f"mediana={median:.3e}")
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Tinklų skaičius")
+    ax.legend(loc="upper right", fontsize=9)
+    ax.grid(False)
+  fig.tight_layout()
+  fig.savefig(save_dir / "paired_diff_histograms.png")
+  plt.close(fig)
+
+
 def plot_minmax_vs_aciq_accuracy(accuracy_rows: list[AccuracyRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   fp32 = np.array([r.fp32_acc for r in accuracy_rows])
@@ -438,6 +496,8 @@ if __name__ == "__main__":
     per_network = build_mae_per_network(quant_stats_rows)
     save_csv(per_network, save_dir / "mae_per_network.csv")
     save_csv(build_mae_average(per_network, accuracy_rows), save_dir / "mae_average.csv")
+    save_csv(build_wilcoxon(accuracy_rows, per_network), save_dir / "wilcoxon.csv")
+    plot_paired_diff_histograms(accuracy_rows, per_network, save_dir)
     print(f"Emitted derived summaries to {save_dir}/")
 
   plot_scatter(accuracy_rows, shifts_rows, BlockName, save_dir)
