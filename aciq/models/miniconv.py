@@ -34,7 +34,7 @@ class MiniConv:
     self.bn3 = nn.BatchNorm2d(64)
     self.conv4 = nn.Conv2d(64, 128, 3, padding=1, stride=2, bias=False)
     self.bn4 = nn.BatchNorm2d(128)
-    self.classifier = nn.Linear(128, 10)
+    self.fc = nn.Linear(128, 10)
     self.fused = False
 
   def _block(self, x: Tensor, conv: nn.Conv2d, bn: nn.BatchNorm) -> Tensor:
@@ -49,7 +49,7 @@ class MiniConv:
     self.block2 = self._block(self.block1, self.conv2, self.bn2)
     self.block3 = self._block(self.block2, self.conv3, self.bn3)
     self.block4 = self._block(self.block3, self.conv4, self.bn4)
-    return self.classifier(self.block4.mean((2, 3)))
+    return self.fc(self.block4.mean((2, 3)))
 
   @TinyJit
   @Tensor.train()
@@ -90,7 +90,7 @@ class MiniConv:
       ("block2", self.conv2),
       ("block3", self.conv3),
       ("block4", self.conv4),
-      ("classifier", self.classifier),
+      ("classifier", self.fc),
     ]
 
   @classmethod

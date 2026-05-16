@@ -27,7 +27,7 @@ class ResNet3BW:
     self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
     self.bn1 = nn.BatchNorm2d(64)
     self.block1 = BasicBlock(64, 64, stride=1)
-    self.classifier = nn.Linear(64, 10)
+    self.fc = nn.Linear(64, 10)
     self.fused = False
 
   @function
@@ -38,7 +38,7 @@ class ResNet3BW:
     self.stem_activation = out.relu()
     out = self.stem_activation.pad([1, 1, 1, 1]).max_pool2d((3, 3), 2)
     out = self.block1(out)
-    return self.classifier(out.mean((2, 3)))
+    return self.fc(out.mean((2, 3)))
 
   @TinyJit
   @Tensor.train()
@@ -80,7 +80,7 @@ class ResNet3BW:
       ("stem", self.conv1),
       ("block1.conv1", self.block1.conv1),
       ("block1.conv2", self.block1.conv2),
-      ("classifier", self.classifier),
+      ("classifier", self.fc),
     ]
 
   @classmethod
