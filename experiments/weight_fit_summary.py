@@ -1,6 +1,5 @@
 import argparse
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 
@@ -27,9 +26,7 @@ def summarize(model: ResNet, bits: int) -> list[FitSummaryRow]:
     vec = module.weight.numpy().flatten().astype(np.float64)
     best_dist = fit_distributions(np.sort(vec))[0]
     alpha_minmax = float(bound_symmetric_minmax(vec))
-    alpha_aciq = float(
-      bound_symmetric_aciq_mae(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_minmax)
-    )
+    alpha_aciq = float(bound_symmetric_aciq_mae(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_minmax))
     mae_minmax = mean_absolute_error(vec, quantize_symmetric(vec, alpha_minmax, bits))
     mae_aciq = mean_absolute_error(vec, quantize_symmetric(vec, alpha_aciq, bits))
     rows.append(
@@ -43,7 +40,9 @@ def summarize(model: ResNet, bits: int) -> list[FitSummaryRow]:
         mae_aciq=float(mae_aciq),
       )
     )
-    print(f"  [{layer_idx:>3}] {name:40s}  best={type(best_dist).name:10s}  amm={alpha_minmax:.4f}  aaciq={alpha_aciq:.4f}  mm={mae_minmax:.3e}  aciq={mae_aciq:.3e}")
+    print(
+      f"  [{layer_idx:>3}] {name:40s}  best={type(best_dist).name:10s}  amm={alpha_minmax:.4f}  aaciq={alpha_aciq:.4f}  mm={mae_minmax:.3e}  aciq={mae_aciq:.3e}"
+    )
   return rows
 
 

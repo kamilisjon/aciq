@@ -28,9 +28,13 @@ def plot_channel_ranges(layer_idx: int, conv_name: str, pre_weight: np.ndarray, 
   ax.vlines(channels - 0.15, pre_min, pre_max, colors=TailwindColor.BLUE, linewidth=0.8, alpha=0.7, label="Kanalų [min,max] prieš BN suliejimą")
   ax.vlines(channels + 0.15, post_min, post_max, colors=TailwindColor.ROSE, linewidth=0.8, alpha=0.7, label="Kanalų [min,max] po BN suliejimo")
 
-  ax.axhline(y=-pre_tensor_alpha, color=TailwindColor.BLUE, linestyle="--", linewidth=1, label=f"Tensoriaus α={pre_tensor_alpha:.4f} prieš BN suliejimą")
+  ax.axhline(
+    y=-pre_tensor_alpha, color=TailwindColor.BLUE, linestyle="--", linewidth=1, label=f"Tensoriaus α={pre_tensor_alpha:.4f} prieš BN suliejimą"
+  )
   ax.axhline(y=pre_tensor_alpha, color=TailwindColor.BLUE, linestyle="--", linewidth=1)
-  ax.axhline(y=-post_tensor_alpha, color=TailwindColor.ROSE, linestyle="--", linewidth=1, label=f"Tensoriaus α={post_tensor_alpha:.4f} po BN suliejimo")
+  ax.axhline(
+    y=-post_tensor_alpha, color=TailwindColor.ROSE, linestyle="--", linewidth=1, label=f"Tensoriaus α={post_tensor_alpha:.4f} po BN suliejimo"
+  )
   ax.axhline(y=post_tensor_alpha, color=TailwindColor.ROSE, linestyle="--", linewidth=1)
   ax.axhline(y=0, color="black", linewidth=0.5)
 

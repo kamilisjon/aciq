@@ -90,16 +90,18 @@ def build_mae_summary(rows: list[QuantStatsRow]) -> list[MaeSummaryRow]:
   out: list[MaeSummaryRow] = []
   for (seed, layer), a in sorted(agg.items()):
     tot_w = int(a["tot_w"])
-    out.append(MaeSummaryRow(
-      seed=seed,
-      layer_name=layer,
-      num_channels=int(a["n_ch"]),
-      total_weights=tot_w,
-      minmax_total_err=a["mm"],
-      aciq_total_err=a["aq"],
-      minmax_mae=a["mm"] / tot_w,
-      aciq_mae=a["aq"] / tot_w,
-    ))
+    out.append(
+      MaeSummaryRow(
+        seed=seed,
+        layer_name=layer,
+        num_channels=int(a["n_ch"]),
+        total_weights=tot_w,
+        minmax_total_err=a["mm"],
+        aciq_total_err=a["aq"],
+        minmax_mae=a["mm"] / tot_w,
+        aciq_mae=a["aq"] / tot_w,
+      )
+    )
   return out
 
 
@@ -141,14 +143,16 @@ def build_mae_per_network(rows: list[QuantStatsRow]) -> list[MaePerNetworkRow]:
   out: list[MaePerNetworkRow] = []
   for seed, a in sorted(agg.items()):
     tot_w = int(a["tot_w"])
-    out.append(MaePerNetworkRow(
-      seed=seed,
-      total_weights=tot_w,
-      minmax_total_err=a["mm"],
-      aciq_total_err=a["aq"],
-      minmax_mae=a["mm"] / tot_w,
-      aciq_mae=a["aq"] / tot_w,
-    ))
+    out.append(
+      MaePerNetworkRow(
+        seed=seed,
+        total_weights=tot_w,
+        minmax_total_err=a["mm"],
+        aciq_total_err=a["aq"],
+        minmax_mae=a["mm"] / tot_w,
+        aciq_mae=a["aq"] / tot_w,
+      )
+    )
   return out
 
 
@@ -161,22 +165,24 @@ def build_mae_average(per_network: list[MaePerNetworkRow], result_rows: list[Mni
   mm_mae = np.array([r.minmax_mae for r in per_network], dtype=np.float64)
   aq_mae = np.array([r.aciq_mae for r in per_network], dtype=np.float64)
   std = lambda x: float(x.std(ddof=1)) if len(x) > 1 else 0.0
-  return [MaeAverageRow(
-    n_seeds=len(per_network),
-    total_weights_per_network=per_network[0].total_weights,
-    mean_fp32_acc=float(fp.mean()),
-    std_fp32_acc=std(fp),
-    mean_minmax_acc=float(mm_acc.mean()),
-    std_minmax_acc=std(mm_acc),
-    mean_aciq_acc=float(aq_acc.mean()),
-    std_aciq_acc=std(aq_acc),
-    mean_paired_acc_diff=float(d_acc.mean()),
-    std_paired_acc_diff=std(d_acc),
-    mean_minmax_mae=float(mm_mae.mean()),
-    std_minmax_mae=std(mm_mae),
-    mean_aciq_mae=float(aq_mae.mean()),
-    std_aciq_mae=std(aq_mae),
-  )]
+  return [
+    MaeAverageRow(
+      n_seeds=len(per_network),
+      total_weights_per_network=per_network[0].total_weights,
+      mean_fp32_acc=float(fp.mean()),
+      std_fp32_acc=std(fp),
+      mean_minmax_acc=float(mm_acc.mean()),
+      std_minmax_acc=std(mm_acc),
+      mean_aciq_acc=float(aq_acc.mean()),
+      std_aciq_acc=std(aq_acc),
+      mean_paired_acc_diff=float(d_acc.mean()),
+      std_paired_acc_diff=std(d_acc),
+      mean_minmax_mae=float(mm_mae.mean()),
+      std_minmax_mae=std(mm_mae),
+      mean_aciq_mae=float(aq_mae.mean()),
+      std_aciq_mae=std(aq_mae),
+    )
+  ]
 
 
 def _shifts(rows: list[MnistResultRow], method: str, block: str) -> np.ndarray:
@@ -231,13 +237,15 @@ def quantize_model(model: MiniConv, method: QuantMethod) -> tuple[MiniConv, list
       fits.append(fit_name)
       errs.append(float(np.sum(np.abs(ch_vec - q_vec))))
     mod.weight = Tensor(q_buf)
-    stats.append(LayerQuantStats(
-      layer_name=name,
-      channel_size=ch_size,
-      alpha_per_channel=alphas,
-      best_fit_per_channel=fits,
-      total_err_per_channel=errs,
-    ))
+    stats.append(
+      LayerQuantStats(
+        layer_name=name,
+        channel_size=ch_size,
+        alpha_per_channel=alphas,
+        best_fit_per_channel=fits,
+        total_err_per_channel=errs,
+      )
+    )
   MiniConv.clear_jit_caches()
   return qmodel, stats
 
@@ -363,11 +371,7 @@ def plot_minmax_vs_aciq_accuracy(rows: list[MnistResultRow], save_dir: Path) -> 
   ax.set_xlabel("MINMAX tikslumas")
   ax.set_ylabel("ACIQ tikslumas")
   wins_aciq = int(np.sum(aciq > mm))
-  ax.set_title(
-    f"MINMAX prieš ACIQ tikslumas\n"
-    f"vidurkis: MINMAX={mm.mean():.3f}  ACIQ={aciq.mean():.3f}  "
-    f"ACIQ > MINMAX: {wins_aciq}/{len(rows)}"
-  )
+  ax.set_title(f"MINMAX prieš ACIQ tikslumas\nvidurkis: MINMAX={mm.mean():.3f}  ACIQ={aciq.mean():.3f}  ACIQ > MINMAX: {wins_aciq}/{len(rows)}")
   ax.grid(False)
   ax.legend(loc="lower right")
   fig.tight_layout()

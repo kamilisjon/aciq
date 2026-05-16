@@ -22,8 +22,9 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="Train one or more model seeds and plot per-step train/test losses.")
   parser.add_argument("--modeltype", choices=list(MODEL_MAP), required=True)
   parser.add_argument("--steps", type=int, default=100, help="Training steps per run")
-  parser.add_argument("--runs", type=_parse_run, nargs="+", required=True, metavar="SEED:NAME",
-                      help="One or more SEED:NAME pairs (e.g. 0:fast 1:slow)")
+  parser.add_argument(
+    "--runs", type=_parse_run, nargs="+", required=True, metavar="SEED:NAME", help="One or more SEED:NAME pairs (e.g. 0:fast 1:slow)"
+  )
   args = parser.parse_args()
 
   model_cls = MODEL_MAP[args.modeltype]

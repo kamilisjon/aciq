@@ -1,4 +1,5 @@
 import argparse
+import copy
 import random
 import shutil
 from pathlib import Path
@@ -6,12 +7,15 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
+from tinygrad import Tensor
 
-from aciq.cam import build_quantized_variant, cam_for_class, predict_batch_with_features
+from aciq.cam import compute_cam
+from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir
-from aciq.datasets.imagenet import ImagenetClassIndex, load_and_preprocess, parse_imagenet_val_labels, resize_and_center_crop, sample_imagenet_val
+from aciq.datasets.imagenet import ImagenetClassIndex, parse_imagenet_val_labels, resize_and_center_crop, sample_imagenet_val
 from aciq.plotting_style import capped_savefig_dpi
 from aciq.models.resnet import ResNet, _bias_correct_model, _weight_modules, compute_input_stats
+from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax, quantize_symmetric
 
 
 COLUMNS: list[tuple[str, str | None]] = [
@@ -24,14 +28,43 @@ COLUMNS: list[tuple[str, str | None]] = [
 ]
 
 
-def _upsample_bilinear(cam: np.ndarray, size: int = 224) -> np.ndarray:
-  """Resample a small CAM to a square `size`×`size` via PIL bilinear, preserving float values."""
-  img = Image.fromarray(cam.astype(np.float32), mode="F")
-  return np.asarray(img.resize((size, size), Image.Resampling.BILINEAR), dtype=np.float32)
+_METHODS = {"per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"}
 
 
-def _load_rgb_for_overlay(path: Path) -> np.ndarray:
-  return np.asarray(resize_and_center_crop(Image.open(path).convert("RGB")))
+def _alpha_aciq(vec: np.ndarray, bits: int) -> float:
+  best_dist = fit_distributions(vec)[0]
+  alpha_max = bound_symmetric_minmax(vec)
+  return float(bound_symmetric_aciq_mae(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_max))
+
+
+def _quantize_per_tensor(weight: np.ndarray, bits: int, clip: str) -> np.ndarray:
+  vec = weight.flatten().astype(np.float64)
+  alpha = bound_symmetric_minmax(vec) if clip == "minmax" else _alpha_aciq(vec, bits)
+  return quantize_symmetric(vec, alpha, bits).reshape(weight.shape)
+
+
+def _quantize_per_channel(weight: np.ndarray, bits: int, clip: str) -> np.ndarray:
+  out = np.empty_like(weight, dtype=np.float64)
+  for c in range(weight.shape[0]):
+    ch = weight[c].flatten().astype(np.float64)
+    alpha = bound_symmetric_minmax(ch) if clip == "minmax" else _alpha_aciq(ch, bits)
+    out[c] = quantize_symmetric(ch, alpha, bits).reshape(weight[c].shape)
+  return out
+
+
+def build_quantized_variant(base: ResNet, method: str, bits: int) -> ResNet:
+  assert method in _METHODS, f"unknown method {method!r}; expected one of {sorted(_METHODS)}"
+  q_model = copy.deepcopy(base)
+  fp_mods = dict(_weight_modules(base))
+  q_mods = dict(_weight_modules(q_model))
+  for weight_name, q_module in q_mods.items():
+    fp_weight = fp_mods[weight_name].weight.numpy().astype(np.float32)
+    if method.startswith("per_tensor_"):
+      q_weight = _quantize_per_tensor(fp_weight, bits, method.removeprefix("per_tensor_"))
+    else:
+      q_weight = _quantize_per_channel(fp_weight, bits, method.removeprefix("per_channel_"))
+    q_module.weight = Tensor(q_weight.astype(np.float32))
+  return q_model
 
 
 if __name__ == "__main__":
@@ -64,8 +97,8 @@ if __name__ == "__main__":
   print(f"Copied source images to {source_dir}/")
 
   print("Preprocessing")
-  x = load_and_preprocess(chosen_paths)
-  rgb_images = [_load_rgb_for_overlay(p) for p in chosen_paths]
+  pils = [Image.open(p).convert("RGB") for p in chosen_paths]
+  rgb_images = [np.asarray(resize_and_center_crop(pil)) for pil in pils]
 
   print("Building quantized variants")
   variants_models: dict[str, ResNet] = {"fp32": model}
@@ -85,16 +118,14 @@ if __name__ == "__main__":
   gt_names = [class_idx_db.classes[i].name.replace("_", " ") for i in gt_idx]
 
   print("Running inference per variant")
-  results: dict[str, tuple[list[np.ndarray], np.ndarray, np.ndarray]] = {}
+  results: dict[str, list[tuple[np.ndarray, int, float]]] = {}
   for label, key in COLUMNS:
     if key is None:
       continue
     print(f"  {label}")
     m = variants_models[key]
-    fc_weight = m.fc.weight.numpy()
-    feat, class_indices, probs = predict_batch_with_features(m, x)
-    cams = [cam_for_class(feat[i], fc_weight, int(class_indices[i])) for i in range(len(chosen_paths))]
-    results[key] = (cams, class_indices, probs)
+    ResNet.clear_jit_caches()
+    results[key] = [compute_cam(m, pil) for pil in pils]
 
   print("Rendering grid")
   cols = len(COLUMNS)
@@ -105,18 +136,15 @@ if __name__ == "__main__":
   for r in range(rows):
     for c, (label, key) in enumerate(COLUMNS):
       ax = axes[r, c]
-      ax.imshow(rgb_images[r])
       if key is None:
+        ax.imshow(rgb_images[r])
         ax.set_title(gt_names[r], fontsize=9, pad=2)
       else:
-        cams, class_indices, probs = results[key]
-        cam = _upsample_bilinear(cams[r], size=224)
-        cam_norm = (cam - cam.min()) / max(cam.max() - cam.min(), 1e-9)
-        ax.imshow(cam_norm, cmap="jet", alpha=0.45, extent=(0, 224, 224, 0), interpolation="nearest")
-        pred_idx = int(class_indices[r])
+        overlaid, pred_idx, prob = results[key][r]
+        ax.imshow(overlaid)
         pred_name = class_idx_db.classes[pred_idx].name.replace("_", " ")
         title_color = "tab:red" if pred_idx != gt_idx[r] else "tab:green"
-        ax.set_title(f"{pred_name}\n{float(probs[r]):.2f}", fontsize=9, pad=2, color=title_color)
+        ax.set_title(f"{pred_name}\n{prob:.2f}", fontsize=9, pad=2, color=title_color)
       ax.set_xticks([])
       ax.set_yticks([])
       ax.grid(False)

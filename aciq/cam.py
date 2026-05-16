@@ -1,24 +1,25 @@
 from __future__ import annotations
 
-import copy
-
 import numpy as np
+from PIL import Image
+from matplotlib import cm
 from tinygrad import Tensor
 
-from aciq.distributions import fit_distributions
-from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax, quantize_symmetric
-from aciq.models.resnet import ResNet, _weight_modules
+from aciq.datasets.imagenet import normalize_to_chw, resize_and_center_crop
+from aciq.models.resnet import ResNet
 
 
-_METHODS = {"per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"}
+# Source: https://ieeexplore.ieee.org/document/10348813
 
 
-def cam_for_class(feat: np.ndarray, fc_weight: np.ndarray, class_idx: int) -> np.ndarray:
+_OVERLAY_ALPHA = 0.45
+
+
+def _cam_for_class(feat: np.ndarray, fc_weight: np.ndarray, class_idx: int) -> np.ndarray:
   return np.einsum("chw,c->hw", feat, fc_weight[class_idx])
 
 
-def predict_batch_with_features(model: ResNet, x: Tensor) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-  ResNet.clear_jit_caches()
+def _predict_with_features(model: ResNet, x: Tensor) -> tuple[np.ndarray, int, float]:
   activations = model.get_activations(x)
   feat = activations["layer4.1.activation_2"].numpy()
   gap = feat.mean(axis=(2, 3))
@@ -28,42 +29,24 @@ def predict_batch_with_features(model: ResNet, x: Tensor) -> tuple[np.ndarray, n
   shifted = logits - logits.max(axis=1, keepdims=True)
   exps = np.exp(shifted)
   probs = exps / exps.sum(axis=1, keepdims=True)
-  class_idx = np.argmax(probs, axis=1)
-  pred_probs = probs[np.arange(len(class_idx)), class_idx]
-  return feat, class_idx, pred_probs
+  class_idx = int(np.argmax(probs[0]))
+  return feat[0], class_idx, float(probs[0, class_idx])
 
 
-def _alpha_aciq(vec: np.ndarray, bits: int) -> float:
-  best_dist = fit_distributions(vec)[0]
-  alpha_max = bound_symmetric_minmax(vec)
-  return float(bound_symmetric_aciq_mae(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_max))
+def _upsample_bilinear(cam: np.ndarray, size: int) -> np.ndarray:
+  img = Image.fromarray(cam.astype(np.float32), mode="F")
+  return np.asarray(img.resize((size, size), Image.Resampling.BILINEAR), dtype=np.float32)
 
 
-def _quantize_per_tensor(weight: np.ndarray, bits: int, clip: str) -> np.ndarray:
-  vec = weight.flatten().astype(np.float64)
-  alpha = bound_symmetric_minmax(vec) if clip == "minmax" else _alpha_aciq(vec, bits)
-  return quantize_symmetric(vec, alpha, bits).reshape(weight.shape)
-
-
-def _quantize_per_channel(weight: np.ndarray, bits: int, clip: str) -> np.ndarray:
-  out = np.empty_like(weight, dtype=np.float64)
-  for c in range(weight.shape[0]):
-    ch = weight[c].flatten().astype(np.float64)
-    alpha = bound_symmetric_minmax(ch) if clip == "minmax" else _alpha_aciq(ch, bits)
-    out[c] = quantize_symmetric(ch, alpha, bits).reshape(weight[c].shape)
-  return out
-
-
-def build_quantized_variant(base: ResNet, method: str, bits: int) -> ResNet:
-  assert method in _METHODS, f"unknown method {method!r}; expected one of {sorted(_METHODS)}"
-  q_model = copy.deepcopy(base)
-  fp_mods = dict(_weight_modules(base))
-  q_mods = dict(_weight_modules(q_model))
-  for weight_name, q_module in q_mods.items():
-    fp_weight = fp_mods[weight_name].weight.numpy().astype(np.float32)
-    if method.startswith("per_tensor_"):
-      q_weight = _quantize_per_tensor(fp_weight, bits, method.removeprefix("per_tensor_"))
-    else:
-      q_weight = _quantize_per_channel(fp_weight, bits, method.removeprefix("per_channel_"))
-    q_module.weight = Tensor(q_weight.astype(np.float32))
-  return q_model
+def compute_cam(model: ResNet, img: Image.Image) -> tuple[np.ndarray, int, float]:
+  cropped = resize_and_center_crop(img.convert("RGB"))
+  rgb = np.asarray(cropped)
+  x = Tensor(normalize_to_chw(cropped)[None, ...])
+  feat, class_idx, prob = _predict_with_features(model, x)
+  fc_weight = model.fc.weight.numpy()
+  cam = _cam_for_class(feat, fc_weight, class_idx)
+  cam_up = _upsample_bilinear(cam, size=rgb.shape[0])
+  cam_norm = (cam_up - cam_up.min()) / max(cam_up.max() - cam_up.min(), 1e-9)
+  heatmap = (cm.jet(cam_norm)[..., :3] * 255).astype(np.float32)
+  composite = (1 - _OVERLAY_ALPHA) * rgb.astype(np.float32) + _OVERLAY_ALPHA * heatmap
+  return composite.astype(np.uint8), class_idx, prob

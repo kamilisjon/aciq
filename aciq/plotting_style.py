@@ -7,6 +7,7 @@ from aciq.distributions import Distribution, Gaussian, GeneralizedGaussian, Lapl
 
 class TailwindColor(StrEnum):
   """Tailwind color pallete. shade: 600. https://tailwindcss.com/docs/colors"""
+
   SLATE = "#475569"
   GRAY = "#4B5563"
   ZINC = "#52525B"
@@ -29,6 +30,7 @@ class TailwindColor(StrEnum):
   FUCHSIA = "#C026D3"
   PINK = "#DB2777"
   ROSE = "#E11D48"
+
 
 NEUTRAL_COLOR = TailwindColor.SLATE
 
@@ -53,7 +55,7 @@ SERIES_COLORS: list[TailwindColor] = [
 ]
 
 MAX_PIXEL_DIM = 5000  # cap rendered image's longest side, in pixels
-SAVEFIG_DPI = 700     # preferred savefig DPI, capped per-figure via capped_savefig_dpi
+SAVEFIG_DPI = 700  # preferred savefig DPI, capped per-figure via capped_savefig_dpi
 
 
 def capped_savefig_dpi(fig_w_in: float, fig_h_in: float) -> float:
@@ -88,5 +90,5 @@ STATS_TEXT_KW: dict[str, object] = {
   "bbox": {"facecolor": "lightgrey"},
 }
 
-LINE_WIDTH  = 1.1
+LINE_WIDTH = 1.1
 HIST_BINS = 300

@@ -92,14 +92,14 @@ def resize_and_center_crop(img: Image.Image) -> Image.Image:
   return img.crop((left, top, left + _CROP_SIZE, top + _CROP_SIZE))
 
 
-def _normalize_to_chw(img: Image.Image) -> np.ndarray:
+def normalize_to_chw(img: Image.Image) -> np.ndarray:
   arr = np.asarray(img, dtype=np.float32) / 255.0
   arr = arr.transpose(2, 0, 1)
   return (arr - _IMAGENET_MEAN[:, None, None]) / _IMAGENET_STD[:, None, None]
 
 
 def _preprocess_one(img: Image.Image) -> np.ndarray:
-  return _normalize_to_chw(resize_and_center_crop(img))
+  return normalize_to_chw(resize_and_center_crop(img))
 
 
 def load_and_preprocess(image_paths: list[Path], pad_to_batch_size: int | None = None) -> Tensor:

@@ -67,20 +67,24 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
         vec_sorted,
         fitted.pdf(),
         color=DIST_COLORS[type(fitted)],
-        linewidth=LINE_WIDTH ,
+        linewidth=LINE_WIDTH,
         linestyle="--",
         label=f"{repr(fitted)}",
       )
 
-    ax.axvline(-alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=LINE_WIDTH , label=f"MinMax α={alpha_minmax:.4f} MAE={mae_minmax:.2e}")
-    ax.axvline(alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=LINE_WIDTH )
+    ax.axvline(-alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=LINE_WIDTH, label=f"MinMax α={alpha_minmax:.4f} MAE={mae_minmax:.2e}")
+    ax.axvline(alpha_minmax, color=NEUTRAL_COLOR, linestyle=":", linewidth=LINE_WIDTH)
 
     if alpha_aciq != alpha_minmax:
       mae_aciq = mean_absolute_error(vec, quantize_symmetric(vec, alpha_aciq, bits))
       ax.axvline(
-        -alpha_aciq, color=DIST_COLORS[type(best_dist)], linestyle="-", linewidth=LINE_WIDTH , label=f"ACIQ {best_dist.name} α={alpha_aciq:.4f} MAE={mae_aciq:.2e}"
+        -alpha_aciq,
+        color=DIST_COLORS[type(best_dist)],
+        linestyle="-",
+        linewidth=LINE_WIDTH,
+        label=f"ACIQ {best_dist.name} α={alpha_aciq:.4f} MAE={mae_aciq:.2e}",
       )
-      ax.axvline(alpha_aciq, color=DIST_COLORS[type(best_dist)], linestyle="-", linewidth=LINE_WIDTH )
+      ax.axvline(alpha_aciq, color=DIST_COLORS[type(best_dist)], linestyle="-", linewidth=LINE_WIDTH)
 
     eda_lines = [
       f"n {vec.size:,}",
@@ -255,7 +259,12 @@ def main() -> None:
   parser.add_argument("--bits", type=int, default=8)
   parser.add_argument("--dataset-path", type=Path, default=None, help="Path to ImageNet dataset root (required unless --from-dir is set).")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
-  parser.add_argument("--n-per-class", type=int, default=None, help="Sample N ImageNet val images per class for shift analysis and benchmarking. Default: use the full validation set.")
+  parser.add_argument(
+    "--n-per-class",
+    type=int,
+    default=None,
+    help="Sample N ImageNet val images per class for shift analysis and benchmarking. Default: use the full validation set.",
+  )
   parser.add_argument(
     "--from-dir",
     type=Path,
