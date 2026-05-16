@@ -9,7 +9,7 @@ from PIL import Image
 
 from aciq.cam import build_quantized_variant, cam_for_class, predict_batch_with_features
 from aciq.helpers import RESULTS_DIR, get_output_dir
-from aciq.imagenet import ImagenetClassIndex, load_and_preprocess, parse_imagenet_val_labels, sample_imagenet_val
+from aciq.imagenet import ImagenetClassIndex, load_and_preprocess, parse_imagenet_val_labels, resize_and_center_crop, sample_imagenet_val
 from aciq.plotting_style import capped_savefig_dpi
 from aciq.resnet import ResNet, _bias_correct_model, _weight_modules, compute_input_stats
 
@@ -31,16 +31,7 @@ def _upsample_bilinear(cam: np.ndarray, size: int = 224) -> np.ndarray:
 
 
 def _load_rgb_for_overlay(path: Path) -> np.ndarray:
-  img = Image.open(path).convert("RGB")
-  w, h = img.size
-  if w <= h:
-    new_w, new_h = 256, int(256 * h / w)
-  else:
-    new_h, new_w = 256, int(256 * w / h)
-  img = img.resize((new_w, new_h), Image.Resampling.BILINEAR)
-  left, top = (new_w - 224) // 2, (new_h - 224) // 2
-  img = img.crop((left, top, left + 224, top + 224))
-  return np.asarray(img)
+  return np.asarray(resize_and_center_crop(Image.open(path).convert("RGB")))
 
 
 if __name__ == "__main__":

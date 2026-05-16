@@ -80,8 +80,7 @@ _IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
-#TODO split up into 2-3 method and reuse initial preprocessing for /home/kamilis/ppprojects/aciq/aciq/cam.py
-def _preprocess_one(img: Image.Image) -> np.ndarray:
+def resize_and_center_crop(img: Image.Image) -> Image.Image:
   w, h = img.size
   if w <= h:
     new_w, new_h = _RESIZE_SIZE, int(_RESIZE_SIZE * h / w)
@@ -90,10 +89,17 @@ def _preprocess_one(img: Image.Image) -> np.ndarray:
   img = img.resize((new_w, new_h), Image.Resampling.BILINEAR)
   left = (new_w - _CROP_SIZE) // 2
   top = (new_h - _CROP_SIZE) // 2
-  img = img.crop((left, top, left + _CROP_SIZE, top + _CROP_SIZE))
+  return img.crop((left, top, left + _CROP_SIZE, top + _CROP_SIZE))
+
+
+def _normalize_to_chw(img: Image.Image) -> np.ndarray:
   arr = np.asarray(img, dtype=np.float32) / 255.0
   arr = arr.transpose(2, 0, 1)
   return (arr - _IMAGENET_MEAN[:, None, None]) / _IMAGENET_STD[:, None, None]
+
+
+def _preprocess_one(img: Image.Image) -> np.ndarray:
+  return _normalize_to_chw(resize_and_center_crop(img))
 
 
 def load_and_preprocess(image_paths: list[Path], pad_to_batch_size: int | None = None) -> Tensor:
