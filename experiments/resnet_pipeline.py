@@ -54,8 +54,7 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
   mae_minmax = mean_absolute_error(vec, quantize_symmetric(vec, alpha_minmax, bits))
 
   # Optimal alpha*
-  best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
-  best_dist = fits[best_type]
+  best_dist = fits[0]
   alpha_aciq = bound_symmetric_aciq_mae(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_minmax)
 
   if save_path is not None:
@@ -63,11 +62,11 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.hist(vec, bins=HIST_BINS, density=True, alpha=0.5, color=NEUTRAL_COLOR, label="Empirinis")
 
-    for dist_type, fitted in sorted(fits.items(), key=lambda kv: kv[1].log_likelihood, reverse=True):
+    for fitted in fits:
       ax.plot(
         vec_sorted,
         fitted.pdf(),
-        color=DIST_COLORS[dist_type],
+        color=DIST_COLORS[type(fitted)],
         linewidth=LINE_WIDTH ,
         linestyle="--",
         label=f"{repr(fitted)}",
@@ -79,9 +78,9 @@ def analyze_layer(vec: np.ndarray, layer_name: str, layer_idx: int, bits: int, s
     if alpha_aciq != alpha_minmax:
       mae_aciq = mean_absolute_error(vec, quantize_symmetric(vec, alpha_aciq, bits))
       ax.axvline(
-        -alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=LINE_WIDTH , label=f"ACIQ {best_dist.name} α={alpha_aciq:.4f} MAE={mae_aciq:.2e}"
+        -alpha_aciq, color=DIST_COLORS[type(best_dist)], linestyle="-", linewidth=LINE_WIDTH , label=f"ACIQ {best_dist.name} α={alpha_aciq:.4f} MAE={mae_aciq:.2e}"
       )
-      ax.axvline(alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=LINE_WIDTH )
+      ax.axvline(alpha_aciq, color=DIST_COLORS[type(best_dist)], linestyle="-", linewidth=LINE_WIDTH )
 
     eda_lines = [
       f"n {vec.size:,}",

@@ -149,8 +149,8 @@ class GeneralizedGaussian(Distribution):
 Distributions: set[type[Distribution]] = {Gaussian, Laplace, StudentT, GeneralizedGaussian}
 
 
-def fit_distributions(data: np.ndarray) -> dict[type[Distribution], Distribution]:
-  return {distribution: distribution(data) for distribution in Distributions}
+def fit_distributions(data: np.ndarray) -> list[Distribution]:
+  return sorted((d(data) for d in Distributions), key=lambda dist: dist.log_likelihood, reverse=True)
 
 
 class ClippedGaussian:

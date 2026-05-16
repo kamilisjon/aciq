@@ -20,21 +20,16 @@ class ChannelFitCountsRow:
   count_ged: int
 
 
-def _best_fit_type(vec: np.ndarray) -> type[Distribution]:
-  fits = fit_distributions(vec)
-  return max(fits, key=lambda dt: fits[dt].log_likelihood)
-
-
 def summarize(model: ResNet) -> list[ChannelFitCountsRow]:
   rows: list[ChannelFitCountsRow] = []
   for layer_idx, (name, module) in enumerate(_weight_modules(model), 1):
     weight = module.weight.numpy()
     num_channels = int(weight.shape[0])
-    global_best = _best_fit_type(weight.flatten().astype(np.float64))
+    global_best = type(fit_distributions(weight.flatten().astype(np.float64))[0])
     counts: dict[type[Distribution], int] = {Gaussian: 0, Laplace: 0, StudentT: 0, GeneralizedGaussian: 0}
     for c in range(num_channels):
       chan = weight[c].flatten().astype(np.float64)
-      counts[_best_fit_type(chan)] += 1
+      counts[type(fit_distributions(chan)[0])] += 1
     rows.append(
       ChannelFitCountsRow(
         layer_idx=layer_idx,

@@ -201,11 +201,9 @@ class QuantMethod(StrEnum):
 
 def _aciq_alpha(vec: np.ndarray) -> tuple[float, str]:
   alpha_mm = bound_symmetric_minmax(vec)
-  fits = fit_distributions(np.sort(vec))
-  best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
-  best = fits[best_type]
+  best = fit_distributions(np.sort(vec))[0]
   alpha = float(bound_symmetric_aciq_mae(cdf=lambda x: float(best.cdf_at(np.asarray(x))), b=BITS, alpha_max=alpha_mm))
-  return alpha, best_type.name
+  return alpha, type(best).name
 
 
 @dataclass

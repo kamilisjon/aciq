@@ -25,9 +25,7 @@ def summarize(model: ResNet, bits: int) -> list[FitSummaryRow]:
   rows: list[FitSummaryRow] = []
   for layer_idx, (name, module) in enumerate(_weight_modules(model), 1):
     vec = module.weight.numpy().flatten().astype(np.float64)
-    fits = fit_distributions(np.sort(vec))
-    best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
-    best_dist = fits[best_type]
+    best_dist = fit_distributions(np.sort(vec))[0]
     alpha_minmax = float(bound_symmetric_minmax(vec))
     alpha_aciq = float(
       bound_symmetric_aciq_mae(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_minmax)
@@ -38,14 +36,14 @@ def summarize(model: ResNet, bits: int) -> list[FitSummaryRow]:
       FitSummaryRow(
         layer_idx=layer_idx,
         layer_name=name,
-        best_fit=best_type.name,
+        best_fit=type(best_dist).name,
         alpha_minmax=alpha_minmax,
         alpha_aciq=alpha_aciq,
         mae_minmax=float(mae_minmax),
         mae_aciq=float(mae_aciq),
       )
     )
-    print(f"  [{layer_idx:>3}] {name:40s}  best={best_type.name:10s}  amm={alpha_minmax:.4f}  aaciq={alpha_aciq:.4f}  mm={mae_minmax:.3e}  aciq={mae_aciq:.3e}")
+    print(f"  [{layer_idx:>3}] {name:40s}  best={type(best_dist).name:10s}  amm={alpha_minmax:.4f}  aaciq={alpha_aciq:.4f}  mm={mae_minmax:.3e}  aciq={mae_aciq:.3e}")
   return rows
 
 

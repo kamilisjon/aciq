@@ -34,8 +34,7 @@ def predict_batch_with_features(model: ResNet, x: Tensor) -> tuple[np.ndarray, n
 
 
 def _alpha_aciq(vec: np.ndarray, bits: int) -> float:
-  fits = fit_distributions(vec)
-  best_dist = max(fits.values(), key=lambda d: d.log_likelihood)
+  best_dist = fit_distributions(vec)[0]
   alpha_max = bound_symmetric_minmax(vec)
   return float(bound_symmetric_aciq_mae(cdf=lambda x: float(best_dist.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_max))
 

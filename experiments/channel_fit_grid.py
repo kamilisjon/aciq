@@ -6,16 +6,10 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from tinygrad.nn import Conv2d, Linear
 
-from aciq.distributions import Distribution, fit_distributions
+from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir
 from aciq.plotting_style import DIST_COLORS, HIST_BINS, LINE_WIDTH, NEUTRAL_COLOR, capped_savefig_dpi
 from aciq.resnet import ResNet, _weight_modules
-
-
-def _best_fit(vec: np.ndarray) -> tuple[type[Distribution], Distribution]:
-  fits = fit_distributions(vec)
-  best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
-  return best_type, fits[best_type]
 
 
 def plot_channel_grid(name: str, module: Conv2d | Linear, rows: int, cols: int, quantile: float, out_path: Path) -> None:
@@ -23,7 +17,7 @@ def plot_channel_grid(name: str, module: Conv2d | Linear, rows: int, cols: int, 
   num_channels = int(weight.shape[0])
   selected = min(rows * cols, num_channels)
 
-  global_best_type, global_best_dist = _best_fit(weight.flatten().astype(np.float64))
+  global_best_dist = fit_distributions(weight.flatten().astype(np.float64))[0]
 
   fig_w, fig_h = cols * 1.8, rows * 1.8 + 0.7
   fig, axes = plt.subplots(rows, cols, figsize=(fig_w, fig_h))
@@ -36,14 +30,14 @@ def plot_channel_grid(name: str, module: Conv2d | Linear, rows: int, cols: int, 
     ax = axes.flat[slot]
     ax.set_visible(True)
     chan = weight[slot].flatten().astype(np.float64)
-    chan_best_type, chan_best_dist = _best_fit(chan)
+    chan_best_dist = fit_distributions(chan)[0]
     lo, hi = np.quantile(chan, [tail, 1.0 - tail])
     pad = 0.05 * (hi - lo)
     x_lo, x_hi = lo - pad, hi + pad
     ax.hist(chan, bins=HIST_BINS, density=True, color=NEUTRAL_COLOR, alpha=0.5)
     grid = np.linspace(x_lo, x_hi, 400)
-    ax.plot(grid, global_best_dist.pdf_at(grid), color=DIST_COLORS[global_best_type], linewidth=LINE_WIDTH, linestyle="--")
-    ax.plot(grid, chan_best_dist.pdf_at(grid), color=DIST_COLORS[chan_best_type], linewidth=LINE_WIDTH, linestyle="-")
+    ax.plot(grid, global_best_dist.pdf_at(grid), color=DIST_COLORS[type(global_best_dist)], linewidth=LINE_WIDTH, linestyle="--")
+    ax.plot(grid, chan_best_dist.pdf_at(grid), color=DIST_COLORS[type(chan_best_dist)], linewidth=LINE_WIDTH, linestyle="-")
     ax.set_xlim(x_lo, x_hi)
     ax.set_xticks([])
     ax.set_yticks([])

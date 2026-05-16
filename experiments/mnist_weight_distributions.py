@@ -18,19 +18,18 @@ def plot_layer(ax: Axes, weights: np.ndarray, layer_name: str, bits: int) -> Non
   fits = fit_distributions(vec_sorted)
 
   ax.hist(vec, bins=HIST_BINS, density=True, alpha=0.5, color=NEUTRAL_COLOR, label="Empirinė")
-  for dist_type, fitted in sorted(fits.items(), key=lambda kv: kv[1].log_likelihood, reverse=True):
-    ax.plot(vec_sorted, fitted.pdf(), color=DIST_COLORS[dist_type], linewidth=LINE_WIDTH, linestyle="--", label=f"{repr(fitted)}")
+  for fitted in fits:
+    ax.plot(vec_sorted, fitted.pdf(), color=DIST_COLORS[type(fitted)], linewidth=LINE_WIDTH, linestyle="--", label=f"{repr(fitted)}")
 
   alpha_mm = float(bound_symmetric_minmax(vec))
-  best_type = max(fits, key=lambda dt: fits[dt].log_likelihood)
-  best = fits[best_type]
+  best = fits[0]
   alpha_aciq = float(bound_symmetric_aciq_mae(cdf=lambda x: float(best.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_mm))
 
   ax.axvline(-alpha_mm, color=NEUTRAL_COLOR, linestyle=":", linewidth=LINE_WIDTH, label=f"MinMax α={alpha_mm:.4f}")
   ax.axvline(alpha_mm, color=NEUTRAL_COLOR, linestyle=":", linewidth=LINE_WIDTH)
   if alpha_aciq != alpha_mm:
-    ax.axvline(-alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=LINE_WIDTH, label=f"ACIQ {best.name} α={alpha_aciq:.4f}")
-    ax.axvline(alpha_aciq, color=DIST_COLORS[best_type], linestyle="-", linewidth=LINE_WIDTH)
+    ax.axvline(-alpha_aciq, color=DIST_COLORS[type(best)], linestyle="-", linewidth=LINE_WIDTH, label=f"ACIQ {best.name} α={alpha_aciq:.4f}")
+    ax.axvline(alpha_aciq, color=DIST_COLORS[type(best)], linestyle="-", linewidth=LINE_WIDTH)
 
   eda_lines = [
     f"n {vec.size:,}",
