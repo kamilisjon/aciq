@@ -15,13 +15,14 @@ from aciq.datasets.cifar10 import _load_normalized, train_model
 from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
 from aciq.models import ResNet4
-from aciq.models.resnet4 import BlockName, BlockName2
+from aciq.models.resnet4 import BlockName, BlockName2, bias_correct_model, compute_input_stats
 from aciq.plotting_style import NEUTRAL_COLOR, TailwindColor
 from aciq.quantization.bias_correction import ChannelMeansAccumulator
 from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax, quantize_symmetric
 
 
 BITS = 4
+VARIANT_LABELS: tuple[str, ...] = ("minmax", "minmax_bias", "aciq", "aciq_bias")
 
 
 class QuantMethod(StrEnum):
@@ -79,10 +80,18 @@ class MaeAverageRow:
   std_fp32_acc: float
   mean_minmax_acc: float
   std_minmax_acc: float
+  mean_minmax_bias_acc: float
+  std_minmax_bias_acc: float
   mean_aciq_acc: float
   std_aciq_acc: float
+  mean_aciq_bias_acc: float
+  std_aciq_bias_acc: float
   mean_paired_acc_diff: float
   std_paired_acc_diff: float
+  mean_minmax_bias_gain: float
+  std_minmax_bias_gain: float
+  mean_aciq_bias_gain: float
+  std_aciq_bias_gain: float
   mean_minmax_mae: float
   std_minmax_mae: float
   mean_aciq_mae: float
@@ -113,13 +122,15 @@ class AccuracyRow:
   seed: int
   fp32_acc: float
   minmax_acc: float
+  minmax_bias_acc: float
   aciq_acc: float
+  aciq_bias_acc: float
 
 
 def _make_shifts_row_cls(model_name: str, BlockName: type[StrEnum]) -> type:
   fields = [
     ("seed", int),
-    *[(f"{m}_{b}_mean_shift", float) for m in QuantMethod for b in BlockName],
+    *[(f"{v}_{b}_mean_shift", float) for v in VARIANT_LABELS for b in BlockName],
   ]
   return make_dataclass(f"{model_name}ShiftsRow", fields)
 
@@ -202,15 +213,26 @@ def build_wilcoxon(accuracy_rows: list[AccuracyRow], per_network: list[MaePerNet
   assert len(accuracy_rows) == len(per_network), "accuracy and per-network rows must align by seed"
   acc_diff = np.array([r.aciq_acc - r.minmax_acc for r in accuracy_rows], dtype=np.float64)
   mae_diff = np.array([r.aciq_mae - r.minmax_mae for r in per_network], dtype=np.float64)
-  return [_wilcoxon(acc_diff, "accuracy"), _wilcoxon(mae_diff, "mae")]
+  minmax_bias_gain = np.array([r.minmax_bias_acc - r.minmax_acc for r in accuracy_rows], dtype=np.float64)
+  aciq_bias_gain = np.array([r.aciq_bias_acc - r.aciq_acc for r in accuracy_rows], dtype=np.float64)
+  return [
+    _wilcoxon(acc_diff, "accuracy"),
+    _wilcoxon(mae_diff, "mae"),
+    _wilcoxon(minmax_bias_gain, "minmax_acc_bias_vs_none"),
+    _wilcoxon(aciq_bias_gain, "aciq_acc_bias_vs_none"),
+  ]
 
 
 def build_mae_average(per_network: list[MaePerNetworkRow], accuracy_rows: list[AccuracyRow]) -> list[MaeAverageRow]:
   assert per_network, "build_mae_average requires at least one per-network row"
   fp = np.array([r.fp32_acc for r in accuracy_rows], dtype=np.float64)
   mm_acc = np.array([r.minmax_acc for r in accuracy_rows], dtype=np.float64)
+  mm_bias_acc = np.array([r.minmax_bias_acc for r in accuracy_rows], dtype=np.float64)
   aq_acc = np.array([r.aciq_acc for r in accuracy_rows], dtype=np.float64)
+  aq_bias_acc = np.array([r.aciq_bias_acc for r in accuracy_rows], dtype=np.float64)
   d_acc = aq_acc - mm_acc
+  mm_bias_gain = mm_bias_acc - mm_acc
+  aq_bias_gain = aq_bias_acc - aq_acc
   mm_mae = np.array([r.minmax_mae for r in per_network], dtype=np.float64)
   aq_mae = np.array([r.aciq_mae for r in per_network], dtype=np.float64)
   std = lambda x: float(x.std(ddof=1)) if len(x) > 1 else 0.0
@@ -221,10 +243,18 @@ def build_mae_average(per_network: list[MaePerNetworkRow], accuracy_rows: list[A
     std_fp32_acc=std(fp),
     mean_minmax_acc=float(mm_acc.mean()),
     std_minmax_acc=std(mm_acc),
+    mean_minmax_bias_acc=float(mm_bias_acc.mean()),
+    std_minmax_bias_acc=std(mm_bias_acc),
     mean_aciq_acc=float(aq_acc.mean()),
     std_aciq_acc=std(aq_acc),
+    mean_aciq_bias_acc=float(aq_bias_acc.mean()),
+    std_aciq_bias_acc=std(aq_bias_acc),
     mean_paired_acc_diff=float(d_acc.mean()),
     std_paired_acc_diff=std(d_acc),
+    mean_minmax_bias_gain=float(mm_bias_gain.mean()),
+    std_minmax_bias_gain=std(mm_bias_gain),
+    mean_aciq_bias_gain=float(aq_bias_gain.mean()),
+    std_aciq_bias_gain=std(aq_bias_gain),
     mean_minmax_mae=float(mm_mae.mean()),
     std_minmax_mae=std(mm_mae),
     mean_aciq_mae=float(aq_mae.mean()),
@@ -291,25 +321,35 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
   accuracy_rows: list[AccuracyRow] = []
   shifts_rows: list = []
   quant_stats_rows: list[QuantStatsRow] = []
-  for seed in range(n_models):
-    print(f"[{seed + 1}/{n_models}] Training ResNet4 (seed={seed})...")
+  pbar = tqdm(range(n_models), desc="seeds")
+  for seed in pbar:
     model, fp32_acc, _, _ = train_model(ResNet4, seed=seed, steps=steps)
-    print("Model trained")
 
     fp32_outputs = collect_layer_outputs(model, x_test)
-    print("Collected activations")
 
-    accs: dict[QuantMethod, float] = {}
-    shifts: dict[QuantMethod, dict[str, float]] = {}
+    fp_modules = dict(model.named_weight_modules)
+    input_stats = compute_input_stats(model)
+
+    variants: dict[str, ResNet4] = {}
     layer_stats: dict[QuantMethod, list[LayerQuantStats]] = {}
     for method in QuantMethod:
       ResNet4.clear_jit_caches()
       qmodel, stats = quantize_model(model, method)
-      accs[method] = float(qmodel.test_acc(x_test, y_test).item())
-      q_outputs = collect_layer_outputs(qmodel, x_test)
-      shifts[method] = {r.layer: r.mean_shift for r in fp32_outputs.layers_means_shifts(q_outputs, method)}
+      variants[str(method)] = qmodel
       layer_stats[method] = stats
-      print(f"{method} quantization done")
+
+    # Bias-corrected variants reuse the FP32-derived input stats.
+    variants["minmax_bias"] = bias_correct_model(variants["minmax"], fp_modules, input_stats)
+    variants["aciq_bias"] = bias_correct_model(variants["aciq"], fp_modules, input_stats)
+
+    accs: dict[str, float] = {}
+    shifts: dict[str, dict[str, float]] = {}
+    for label in VARIANT_LABELS:
+      ResNet4.clear_jit_caches()
+      qmodel = variants[label]
+      accs[label] = float(qmodel.test_acc(x_test, y_test).item())
+      q_outputs = collect_layer_outputs(qmodel, x_test)
+      shifts[label] = {r.layer: r.mean_shift for r in fp32_outputs.layers_means_shifts(q_outputs, label)}
 
     for mm_layer, aciq_layer in zip(layer_stats[QuantMethod.MINMAX], layer_stats[QuantMethod.ACIQ]):
       assert mm_layer.layer_name == aciq_layer.layer_name
@@ -337,19 +377,21 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
           )
         )
 
-    print(f"  FP32={fp32_acc:.4f}  MinMax={accs[QuantMethod.MINMAX]:.4f}  ACIQ={accs[QuantMethod.ACIQ]:.4f}")
+    pbar.set_postfix(fp32=f"{fp32_acc:.3f}", mm=f"{accs['minmax']:.3f}", mm_b=f"{accs['minmax_bias']:.3f}", aq=f"{accs['aciq']:.3f}", aq_b=f"{accs['aciq_bias']:.3f}")
     accuracy_rows.append(
       AccuracyRow(
         seed=seed,
         fp32_acc=fp32_acc,
-        minmax_acc=accs[QuantMethod.MINMAX],
-        aciq_acc=accs[QuantMethod.ACIQ],
+        minmax_acc=accs["minmax"],
+        minmax_bias_acc=accs["minmax_bias"],
+        aciq_acc=accs["aciq"],
+        aciq_bias_acc=accs["aciq_bias"],
       )
     )
     shifts_rows.append(
       shifts_row_cls(
         seed=seed,
-        **{f"{m}_{b}_mean_shift": shifts[m][b] for m in QuantMethod for b in BlockName},
+        **{f"{v}_{b}_mean_shift": shifts[v][b] for v in VARIANT_LABELS for b in BlockName},
       )
     )
   return accuracy_rows, shifts_rows, quant_stats_rows
