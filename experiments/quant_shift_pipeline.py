@@ -213,12 +213,14 @@ def _wilcoxon(diff: np.ndarray, metric: str) -> WilcoxonRow:
 def build_wilcoxon(accuracy_rows: list[AccuracyRow], per_network: list[MaePerNetworkRow]) -> list[WilcoxonRow]:
   assert len(accuracy_rows) == len(per_network), "accuracy and per-network rows must align by seed"
   acc_diff = np.array([r.aciq_acc - r.minmax_acc for r in accuracy_rows], dtype=np.float64)
+  acc_bias_diff = np.array([r.aciq_bias_acc - r.minmax_bias_acc for r in accuracy_rows], dtype=np.float64)
   mae_diff = np.array([r.aciq_mae - r.minmax_mae for r in per_network], dtype=np.float64)
   minmax_bias_gain = np.array([r.minmax_bias_acc - r.minmax_acc for r in accuracy_rows], dtype=np.float64)
   aciq_bias_gain = np.array([r.aciq_bias_acc - r.aciq_acc for r in accuracy_rows], dtype=np.float64)
   return [
-    _wilcoxon(acc_diff, "accuracy"),
-    _wilcoxon(mae_diff, "mae"),
+    _wilcoxon(acc_diff, "accuracy_aciq_vs_minmax"),
+    _wilcoxon(acc_bias_diff, "accuracy_aciq_vs_minmax_after_bias"),
+    _wilcoxon(mae_diff, "mae_aciq_vs_minmax"),
     _wilcoxon(minmax_bias_gain, "minmax_acc_bias_vs_none"),
     _wilcoxon(aciq_bias_gain, "aciq_acc_bias_vs_none"),
   ]
@@ -446,12 +448,21 @@ def plot_scatter(accuracy_rows: list[AccuracyRow], shifts_rows: list, BlockName:
 def plot_paired_diff_histograms(accuracy_rows: list[AccuracyRow], per_network: list[MaePerNetworkRow], save_dir: Path) -> None:
   save_dir.mkdir(parents=True, exist_ok=True)
   acc_diff = np.array([r.aciq_acc - r.minmax_acc for r in accuracy_rows], dtype=np.float64)
+  acc_bias_diff = np.array([r.aciq_bias_acc - r.minmax_bias_acc for r in accuracy_rows], dtype=np.float64)
   mae_diff = np.array([r.aciq_mae - r.minmax_mae for r in per_network], dtype=np.float64)
-  fig, axes = plt.subplots(1, 2, figsize=(10, 4.5))
-  for ax, diff, title, xlabel in [
-    (axes[0], acc_diff, "ACIQ − MinMax accuracy", "Tikslumo skirtumas"),
-    (axes[1], mae_diff, "ACIQ − MinMax MAE", "MAE skirtumas"),
-  ]:
+  minmax_bias_gain = np.array([r.minmax_bias_acc - r.minmax_acc for r in accuracy_rows], dtype=np.float64)
+  aciq_bias_gain = np.array([r.aciq_bias_acc - r.aciq_acc for r in accuracy_rows], dtype=np.float64)
+
+  panels: list[tuple[np.ndarray, str, str]] = [
+    (acc_diff, "ACIQ − MinMax (be korekcijos)", "Tikslumo skirtumas"),
+    (acc_bias_diff, "ACIQ − MinMax (po bias korek.)", "Tikslumo skirtumas"),
+    (mae_diff, "ACIQ − MinMax MAE", "MAE skirtumas"),
+    (minmax_bias_gain, "MinMax: bias prieaugis", "Tikslumo skirtumas"),
+    (aciq_bias_gain, "ACIQ: bias prieaugis", "Tikslumo skirtumas"),
+  ]
+
+  fig, axes = plt.subplots(2, 3, figsize=(15, 8))
+  for ax, (diff, title, xlabel) in zip(axes.flat, panels):
     ax.hist(diff, bins=30, color=TailwindColor.VIOLET, alpha=0.75)
     ax.axvline(0.0, color=NEUTRAL_COLOR, linestyle="--", linewidth=1.0, label="0")
     median = float(np.median(diff))
@@ -461,6 +472,8 @@ def plot_paired_diff_histograms(accuracy_rows: list[AccuracyRow], per_network: l
     ax.set_ylabel("Tinklų skaičius")
     ax.legend(loc="upper right", fontsize=9)
     ax.grid(False)
+  for ax in axes.flat[len(panels):]:
+    ax.set_visible(False)
   fig.tight_layout()
   fig.savefig(save_dir / "paired_diff_histograms.png")
   plt.close(fig)
