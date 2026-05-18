@@ -321,8 +321,7 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
   accuracy_rows: list[AccuracyRow] = []
   shifts_rows: list = []
   quant_stats_rows: list[QuantStatsRow] = []
-  pbar = tqdm(range(n_models), desc="seeds")
-  for seed in pbar:
+  for seed in tqdm(range(n_models), desc="seeds"):
     model, fp32_acc, _, _ = train_model(ResNet4, seed=seed, steps=steps)
 
     fp32_outputs = collect_layer_outputs(model, x_test)
@@ -377,7 +376,6 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
           )
         )
 
-    pbar.set_postfix(fp32=f"{fp32_acc:.3f}", mm=f"{accs['minmax']:.3f}", mm_b=f"{accs['minmax_bias']:.3f}", aq=f"{accs['aciq']:.3f}", aq_b=f"{accs['aciq_bias']:.3f}")
     accuracy_rows.append(
       AccuracyRow(
         seed=seed,
