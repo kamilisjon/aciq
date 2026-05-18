@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+from typing import Protocol, TypeVar
+
 import numpy as np
 from tinygrad import GlobalCounters, Tensor
 from tinygrad.helpers import tqdm
 from tinygrad.nn.datasets import cifar
 from tinygrad.nn.optim import AdamW
 from tinygrad.nn.state import get_parameters
+
+
+class _Trainable(Protocol):
+  def train_step(self, X: Tensor, Y: Tensor, opt: AdamW, batch_size: int) -> Tensor: ...
+  def test_loss(self, X: Tensor, Y: Tensor) -> Tensor: ...
+  def test_acc(self, X: Tensor, Y: Tensor) -> Tensor: ...
+
+
+_M = TypeVar("_M", bound=_Trainable)
 
 
 _CIFAR_MEAN = np.array([0.4914, 0.4822, 0.4465], dtype=np.float32)
@@ -22,12 +33,12 @@ def _load_normalized() -> tuple[Tensor, Tensor, Tensor, Tensor]:
 
 
 def train_model(
-  model_cls: type,
+  model_cls: type[_M],
   seed: int = 0,
   steps: int = 500,
   batch_size: int = 4096,
   gather_losses: bool = False,
-) -> tuple[object, float, list[float], list[float]]:
+) -> tuple[_M, float, list[float], list[float]]:
   Tensor.manual_seed(seed)
   np.random.seed(seed)
 
