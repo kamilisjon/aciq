@@ -336,8 +336,14 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
     lap("train")
     fp32_outputs = collect_layer_outputs(model, x_test)
     lap("fp32_act")
-    fp_modules = dict(model.named_weight_modules)
-    input_stats = compute_input_stats(model)
+    # Capture FP32 weights in the **fused** frame so they line up with the quantized variants
+    # (which are fused-then-quantized inside quantize_model). Bias correction requires
+    # W_fp and W_q to be in the same frame; otherwise the BN-fold offset leaks into the
+    # `eps = W_q - W_fp` term and the correction over-shoots.
+    fp_fused = copy.deepcopy(model)
+    fp_fused.fuse()
+    fp_modules = dict(fp_fused.named_weight_modules)
+    input_stats = compute_input_stats(model)  # BN params (gamma, beta) are unchanged by fusion
     lap("input_stats")
 
     variants: dict[str, ResNet4] = {}
