@@ -44,9 +44,12 @@ if __name__ == "__main__":
   save_dir.mkdir(parents=True, exist_ok=True)
 
   fig, ax = plt.subplots(figsize=(8, 5))
+  accuracy_rows: list[AccuracyRow] = []
   for i, (seed, name) in enumerate(args.runs):
     print(f"[{i + 1}/{len(args.runs)}] Training {args.modeltype} on {args.dataset} (seed={seed}, name={name})...")
-    _, _, train_losses, test_losses = train_fn(model_cls, seed=seed, steps=args.steps, gather_losses=True)
+    _, test_acc, train_losses, test_losses = train_fn(model_cls, seed=seed, steps=args.steps, gather_losses=True)
+    print(f"  final test accuracy: {test_acc:.4f}")
+    accuracy_rows.append(AccuracyRow(seed=seed, name=name, test_accuracy=float(test_acc)))
     color = SERIES_COLORS[i % len(SERIES_COLORS)]
     xs = list(range(1, len(train_losses) + 1))
     ax.plot(xs, train_losses, color=color, linestyle="--", alpha=0.8, label=f"{name} (mokymo)")
@@ -60,4 +63,6 @@ if __name__ == "__main__":
   out_path = save_dir / "loss_curves.png"
   fig.savefig(out_path)
   plt.close(fig)
+  save_csv(accuracy_rows, save_dir / "accuracy.csv")
   print(f"Plot saved to {out_path}")
+  print(f"Accuracy saved to {save_dir / 'accuracy.csv'}")
