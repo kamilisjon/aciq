@@ -22,7 +22,7 @@ from aciq.quantization.bias_correction import ChannelMeansAccumulator
 from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax, quantize_symmetric
 
 
-BITS = 4
+BITS = 8
 VARIANT_LABELS: tuple[str, ...] = ("minmax", "minmax_bias", "aciq", "aciq_bias")
 
 
