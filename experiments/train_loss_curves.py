@@ -1,12 +1,20 @@
 import argparse
+from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 
-from aciq.helpers import RESULTS_DIR, get_output_dir
+from aciq.helpers import RESULTS_DIR, get_output_dir, save_csv
 from aciq.datasets.mnist import train_model as train_mnist
 from aciq.datasets.cifar10 import train_model as train_cifar10
 from aciq.models import MiniConv, ResNet3BW
 from aciq.plotting_style import SERIES_COLORS
+
+
+@dataclass
+class AccuracyRow:
+  seed: int
+  name: str
+  test_accuracy: float
 
 
 MODEL_MAP = {"miniconv": MiniConv, "resnet3bw": ResNet3BW}
