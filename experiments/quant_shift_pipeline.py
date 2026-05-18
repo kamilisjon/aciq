@@ -1,5 +1,6 @@
 import argparse
 import copy
+import time
 from collections import defaultdict
 from dataclasses import dataclass, make_dataclass
 from enum import StrEnum
@@ -321,7 +322,9 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
   accuracy_rows: list[AccuracyRow] = []
   shifts_rows: list = []
   quant_stats_rows: list[QuantStatsRow] = []
-  for seed in tqdm(range(n_models), desc="seeds"):
+  t_start = time.perf_counter()
+  for seed in range(n_models):
+    print(f"[{seed + 1}/{n_models}] seed={seed}")
     model, fp32_acc, _, _ = train_model(ResNet4, seed=seed, steps=steps)
 
     fp32_outputs = collect_layer_outputs(model, x_test)
@@ -392,6 +395,13 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
         **{f"{v}_{b}_mean_shift": shifts[v][b] for v in VARIANT_LABELS for b in BlockName},
       )
     )
+    print(
+      f"  fp32={fp32_acc:.4f}  mm={accs['minmax']:.4f}  mm+bias={accs['minmax_bias']:.4f}  "
+      f"aq={accs['aciq']:.4f}  aq+bias={accs['aciq_bias']:.4f}"
+    )
+  elapsed = time.perf_counter() - t_start
+  per_seed = elapsed / n_models if n_models else 0.0
+  print(f"\nrun_training complete: {n_models} seeds in {elapsed:.1f}s ({per_seed:.1f}s/seed)")
   return accuracy_rows, shifts_rows, quant_stats_rows
 
 
