@@ -25,8 +25,8 @@ class BlockName2(StrEnum):
 
 
 class MiniConv:
-  def __init__(self) -> None:
-    self.conv1 = nn.Conv2d(1, 32, 3, padding=1, bias=False)
+  def __init__(self, in_channels: int = 3) -> None:
+    self.conv1 = nn.Conv2d(in_channels, 32, 3, padding=1, bias=False)
     self.bn1 = nn.BatchNorm2d(32)
     self.conv2 = nn.Conv2d(32, 64, 3, padding=1, stride=2, bias=False)
     self.bn2 = nn.BatchNorm2d(64)

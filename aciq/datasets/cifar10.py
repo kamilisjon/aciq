@@ -1,37 +1,38 @@
-# Reference: https://github.com/tinygrad/tinygrad/blob/master/examples/beautiful_mnist.py
 from __future__ import annotations
 
 import numpy as np
 from tinygrad import GlobalCounters, Tensor
 from tinygrad.helpers import tqdm
-from tinygrad.nn.datasets import mnist
+from tinygrad.nn.datasets import cifar
 from tinygrad.nn.optim import AdamW
 from tinygrad.nn.state import get_parameters
 
 
-_MNIST_MEAN = 0.1307
-_MNIST_STD = 0.3081
+_CIFAR_MEAN = np.array([0.4914, 0.4822, 0.4465], dtype=np.float32)
+_CIFAR_STD = np.array([0.2470, 0.2435, 0.2616], dtype=np.float32)
 
 
 def _load_normalized() -> tuple[Tensor, Tensor, Tensor, Tensor]:
-  x_train, y_train, x_test, y_test = mnist()
-  x_train = (x_train.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD
-  x_test = (x_test.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD
+  x_train, y_train, x_test, y_test = cifar()
+  mean = Tensor(_CIFAR_MEAN).reshape(1, 3, 1, 1)
+  std = Tensor(_CIFAR_STD).reshape(1, 3, 1, 1)
+  x_train = (x_train.float() / 255.0 - mean) / std
+  x_test = (x_test.float() / 255.0 - mean) / std
   return x_train, y_train, x_test, y_test
 
 
 def train_model(
   model_cls: type,
   seed: int = 0,
-  steps: int = 100,
-  batch_size: int = 4096,
+  steps: int = 500,
+  batch_size: int = 512,
   gather_losses: bool = False,
 ) -> tuple[object, float, list[float], list[float]]:
   Tensor.manual_seed(seed)
   np.random.seed(seed)
 
   x_train, y_train, x_test, y_test = _load_normalized()
-  model = model_cls(in_channels=1)
+  model = model_cls()
   opt = AdamW(get_parameters(model), lr=1e-3)
   train_losses: list[float] = []
   test_losses: list[float] = []

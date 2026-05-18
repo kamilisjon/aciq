@@ -23,8 +23,8 @@ class BlockName2(StrEnum):
 
 
 class ResNet3BW:
-  def __init__(self) -> None:
-    self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+  def __init__(self, in_channels: int = 3) -> None:
+    self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
     self.bn1 = nn.BatchNorm2d(64)
     self.block1 = BasicBlock(64, 64, stride=1)
     self.fc = nn.Linear(64, 10)
