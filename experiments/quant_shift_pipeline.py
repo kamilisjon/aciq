@@ -324,13 +324,21 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
   quant_stats_rows: list[QuantStatsRow] = []
   t_start = time.perf_counter()
   for seed in range(n_models):
-    print(f"[{seed + 1}/{n_models}] seed={seed}")
+    timings: dict[str, float] = {}
+    t = time.perf_counter()
+    def lap(name: str) -> None:
+      nonlocal t
+      now = time.perf_counter()
+      timings[name] = now - t
+      t = now
+
     model, fp32_acc, _, _ = train_model(ResNet4, seed=seed, steps=steps)
-
+    lap("train")
     fp32_outputs = collect_layer_outputs(model, x_test)
-
+    lap("fp32_act")
     fp_modules = dict(model.named_weight_modules)
     input_stats = compute_input_stats(model)
+    lap("input_stats")
 
     variants: dict[str, ResNet4] = {}
     layer_stats: dict[QuantMethod, list[LayerQuantStats]] = {}
@@ -339,10 +347,11 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
       qmodel, stats = quantize_model(model, method)
       variants[str(method)] = qmodel
       layer_stats[method] = stats
+    lap("quantize")
 
-    # Bias-corrected variants reuse the FP32-derived input stats.
     variants["minmax_bias"] = bias_correct_model(variants["minmax"], fp_modules, input_stats)
     variants["aciq_bias"] = bias_correct_model(variants["aciq"], fp_modules, input_stats)
+    lap("bias_correct")
 
     accs: dict[str, float] = {}
     shifts: dict[str, dict[str, float]] = {}
@@ -352,6 +361,7 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
       accs[label] = float(qmodel.test_acc(x_test, y_test).item())
       q_outputs = collect_layer_outputs(qmodel, x_test)
       shifts[label] = {r.layer: r.mean_shift for r in fp32_outputs.layers_means_shifts(q_outputs, label)}
+    lap("measure")
 
     for mm_layer, aciq_layer in zip(layer_stats[QuantMethod.MINMAX], layer_stats[QuantMethod.ACIQ]):
       assert mm_layer.layer_name == aciq_layer.layer_name
@@ -395,9 +405,11 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
         **{f"{v}_{b}_mean_shift": shifts[v][b] for v in VARIANT_LABELS for b in BlockName},
       )
     )
+    seed_total = sum(timings.values())
+    timing_str = " ".join(f"{k}={v:.1f}s" for k, v in timings.items())
     print(
-      f"  fp32={fp32_acc:.4f}  mm={accs['minmax']:.4f}  mm+bias={accs['minmax_bias']:.4f}  "
-      f"aq={accs['aciq']:.4f}  aq+bias={accs['aciq_bias']:.4f}"
+      f"[{seed + 1}/{n_models}] seed={seed}  total={seed_total:.1f}s  ({timing_str})  "
+      f"fp32={fp32_acc:.3f} mm={accs['minmax']:.3f} mm+b={accs['minmax_bias']:.3f} aq={accs['aciq']:.3f} aq+b={accs['aciq_bias']:.3f}"
     )
   elapsed = time.perf_counter() - t_start
   per_seed = elapsed / n_models if n_models else 0.0
