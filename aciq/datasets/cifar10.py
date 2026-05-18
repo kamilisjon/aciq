@@ -25,7 +25,7 @@ def train_model(
   model_cls: type,
   seed: int = 0,
   steps: int = 500,
-  batch_size: int = 1024,
+  batch_size: int = 2048,
   gather_losses: bool = False,
 ) -> tuple[object, float, list[float], list[float]]:
   Tensor.manual_seed(seed)
