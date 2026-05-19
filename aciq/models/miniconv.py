@@ -22,10 +22,10 @@ class BlockName(StrEnum):
 
 
 class BlockName2(StrEnum):
-  BLOCK1 = "Sluoksnis 1"
-  BLOCK2 = "Sluoksnis 2"
-  BLOCK3 = "Sluoksnis 3"
-  BLOCK4 = "Sluoksnis 4"
+  BLOCK1 = "Block 1"
+  BLOCK2 = "Block 2"
+  BLOCK3 = "Block 3"
+  BLOCK4 = "Block 4"
 
 
 class MiniConv:

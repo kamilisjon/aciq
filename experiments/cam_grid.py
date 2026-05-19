@@ -19,12 +19,12 @@ from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric
 
 
 COLUMNS: list[tuple[str, str | None]] = [
-  ("Tikra klasė", None),
+  ("Ground Truth", None),
   ("FP32", "fp32"),
   ("MinMax", "per_channel_minmax"),
-  ("MinMax + posl. korek.", "per_channel_minmax_bias"),
+  ("MinMax + Bias Corr", "per_channel_minmax_bias"),
   ("ACIQ", "per_channel_aciq"),
-  ("ACIQ + posl. korek.", "per_channel_aciq_bias"),
+  ("ACIQ + Bias Corr", "per_channel_aciq_bias"),
 ]
 
 

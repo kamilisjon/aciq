@@ -435,9 +435,9 @@ def plot_scatter(accuracy_rows: list[AccuracyRow], shifts_rows: list, BlockName:
     ax.scatter(total_shifts, acc_drops, color=color, alpha=0.6, s=20)
     rho, p = spearmanr(total_shifts, acc_drops)
     ax.set_title(f"{method.upper()} rho={rho:.3f} p={p:.3g}")
-    ax.set_xlabel("Bendras vidurkio poslinkis")
+    ax.set_xlabel("Total mean shift")
     if col_idx == 0:
-      ax.set_ylabel("Tikslumo kritimas")
+      ax.set_ylabel("Accuracy drop")
     ax.grid(False)
   fig.suptitle("Mean shift vs accuracy drop (Spearman correlation)", y=1.02)
   fig.tight_layout()
@@ -454,11 +454,11 @@ def plot_paired_diff_histograms(accuracy_rows: list[AccuracyRow], per_network: l
   aciq_bias_gain = np.array([r.aciq_bias_acc - r.aciq_acc for r in accuracy_rows], dtype=np.float64)
 
   panels: list[tuple[np.ndarray, str, str]] = [
-    (acc_diff, "ACIQ − MinMax (be korekcijos)", "Tikslumo skirtumas"),
-    (acc_bias_diff, "ACIQ − MinMax (po bias korek.)", "Tikslumo skirtumas"),
-    (mae_diff, "ACIQ − MinMax MAE", "MAE skirtumas"),
-    (minmax_bias_gain, "MinMax: bias prieaugis", "Tikslumo skirtumas"),
-    (aciq_bias_gain, "ACIQ: bias prieaugis", "Tikslumo skirtumas"),
+    (acc_diff, "ACIQ − MinMax (no correction)", "Accuracy difference"),
+    (acc_bias_diff, "ACIQ − MinMax (after bias correction)", "Accuracy difference"),
+    (mae_diff, "ACIQ − MinMax MAE", "MAE difference"),
+    (minmax_bias_gain, "MinMax: bias-correction gain", "Accuracy difference"),
+    (aciq_bias_gain, "ACIQ: bias-correction gain", "Accuracy difference"),
   ]
 
   fig, axes = plt.subplots(2, 3, figsize=(15, 8))
@@ -469,7 +469,7 @@ def plot_paired_diff_histograms(accuracy_rows: list[AccuracyRow], per_network: l
     ax.axvline(median, color=TailwindColor.AMBER, linestyle="-", linewidth=1.2, label=f"mediana={median:.3e}")
     ax.set_title(title)
     ax.set_xlabel(xlabel)
-    ax.set_ylabel("Tinklų skaičius")
+    ax.set_ylabel("Number of networks")
     ax.legend(loc="upper right", fontsize=9)
     ax.grid(False)
   for ax in axes.flat[len(panels):]:
@@ -523,8 +523,8 @@ def plot_per_layer_shift(shifts_rows: list, BlockName: type[StrEnum], BlockName2
     )
   ax.set_xticks(np.arange(len(BlockName)))
   ax.set_xticklabels(list(BlockName2))
-  ax.set_xlabel("Sluoksnis")
-  ax.set_ylabel("Išvesties vidurkio poslinkis")
+  ax.set_xlabel("Layer")
+  ax.set_ylabel("Output mean shift")
   ax.legend()
   fig.tight_layout()
   fig.savefig(save_dir / "per_layer_mean_shift.png")

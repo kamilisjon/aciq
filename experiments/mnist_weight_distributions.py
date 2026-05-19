@@ -17,7 +17,7 @@ def plot_layer(ax: Axes, weights: np.ndarray, layer_name: str, bits: int) -> Non
   vec_sorted = np.sort(vec)
   fits = fit_distributions(vec_sorted)
 
-  ax.hist(vec, bins=HIST_BINS, density=True, alpha=0.5, color=NEUTRAL_COLOR, label="Empirinė")
+  ax.hist(vec, bins=HIST_BINS, density=True, alpha=0.5, color=NEUTRAL_COLOR, label="Empirical")
   for fitted in fits:
     ax.plot(vec_sorted, fitted.pdf(), color=DIST_COLORS[type(fitted)], linewidth=LINE_WIDTH, linestyle="--", label=f"{repr(fitted)}")
 
@@ -42,8 +42,8 @@ def plot_layer(ax: Axes, weights: np.ndarray, layer_name: str, bits: int) -> Non
   ]
   ax.text(0.98, 0.96, "\n".join(eda_lines), transform=ax.transAxes, **STATS_TEXT_KW)
   ax.set_title(layer_name)
-  ax.set_xlabel("Svorio reikšmė")
-  ax.set_ylabel("Tankis")
+  ax.set_xlabel("Weight value")
+  ax.set_ylabel("Density")
   ax.legend(loc="upper left", fontsize=7)
   ax.grid(False)
 

@@ -66,8 +66,8 @@ def capped_savefig_dpi(fig_w_in: float, fig_h_in: float) -> float:
 plt.rcParams.update({
   "savefig.dpi": SAVEFIG_DPI,
   "savefig.bbox": "tight",
-  "font.family": "sans-serif",
-  "font.sans-serif": ["Arial", "Liberation Sans", "DejaVu Sans"],
+  "font.family": "serif",
+  "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
   "axes.titlesize": 12,
   "axes.labelsize": 11,
   "xtick.labelsize": 10,

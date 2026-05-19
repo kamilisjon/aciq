@@ -45,8 +45,8 @@ def plot_channel_grid(name: str, module: Conv2d | Linear, rows: int, cols: int, 
 
   dist_handles = [Line2D([0], [0], color=col, lw=LINE_WIDTH, label=cls.name) for cls, col in DIST_COLORS.items()]
   style_handles = [
-    Line2D([0], [0], color="black", lw=LINE_WIDTH, linestyle="--", label="Sluoksnio"),
-    Line2D([0], [0], color="black", lw=LINE_WIDTH, linestyle="-", label="Kanalo"),
+    Line2D([0], [0], color="black", lw=LINE_WIDTH, linestyle="--", label="Layer fit"),
+    Line2D([0], [0], color="black", lw=LINE_WIDTH, linestyle="-", label="Channel fit"),
   ]
   fig.legend(
     handles=dist_handles + style_handles,

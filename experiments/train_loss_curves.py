@@ -43,12 +43,12 @@ if __name__ == "__main__":
     accuracy_rows.append(AccuracyRow(seed=seed, name=name, test_accuracy=float(test_acc)))
     color = SERIES_COLORS[i % len(SERIES_COLORS)]
     xs = list(range(1, len(train_losses) + 1))
-    ax.plot(xs, train_losses, color=color, linestyle="--", alpha=0.8, label=f"{name} (mokymo)")
-    ax.plot(xs, test_losses, color=color, linestyle="-", alpha=0.8, label=f"{name} (validacijos)")
+    ax.plot(xs, train_losses, color=color, linestyle="--", alpha=0.8, label=f"{name} (train)")
+    ax.plot(xs, test_losses, color=color, linestyle="-", alpha=0.8, label=f"{name} (validation)")
     MiniConv.clear_jit_caches()
 
-  ax.set_xlabel("Žingsnis")
-  ax.set_ylabel("Nuostolis")
+  ax.set_xlabel("Step")
+  ax.set_ylabel("Loss")
   ax.legend()
   fig.tight_layout()
   out_path = save_dir / "loss_curves.png"
