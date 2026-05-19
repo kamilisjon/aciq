@@ -3,19 +3,19 @@ import unittest
 import numpy as np
 from tinygrad import Tensor
 
-from aciq.models import ResNet4
+from aciq.models import MiniConv
 
 
-class TestResNet4(unittest.TestCase):
+class TestMiniConv(unittest.TestCase):
   def test_forward_shape(self):
-    m = ResNet4()
-    out = m(Tensor.rand(4, 3, 32, 32))
+    m = MiniConv()
+    out = m(Tensor.rand(4, 1, 28, 28))
     self.assertEqual(out.shape, (4, 10))
 
   def test_fuse_keeps_logits_close(self):
-    m = ResNet4()
+    m = MiniConv()
     np.random.seed(0)
-    x = Tensor(np.random.randn(4, 3, 32, 32).astype(np.float32))
+    x = Tensor(np.random.randn(4, 1, 28, 28).astype(np.float32))
     pre = m(x).numpy()
     m.fuse()
     post = m(x).numpy()

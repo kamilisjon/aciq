@@ -1,44 +1,34 @@
+# Reference: https://github.com/tinygrad/tinygrad/blob/master/examples/beautiful_mnist.py
 from __future__ import annotations
-
-from typing import Protocol, TypeVar
 
 import numpy as np
 from tinygrad import GlobalCounters, Tensor
 from tinygrad.helpers import tqdm
-from tinygrad.nn.datasets import cifar
+from tinygrad.nn.datasets import mnist
 from tinygrad.nn.optim import AdamW
 from tinygrad.nn.state import get_parameters
 
-
-class _Trainable(Protocol):
-  def train_step(self, X: Tensor, Y: Tensor, opt: AdamW, batch_size: int) -> Tensor: ...
-  def test_loss(self, X: Tensor, Y: Tensor) -> Tensor: ...
-  def test_acc(self, X: Tensor, Y: Tensor) -> Tensor: ...
+from aciq.models.miniconv import MiniConv
 
 
-_M = TypeVar("_M", bound=_Trainable)
-
-
-_CIFAR_MEAN = np.array([0.4914, 0.4822, 0.4465], dtype=np.float32)
-_CIFAR_STD = np.array([0.2470, 0.2435, 0.2616], dtype=np.float32)
+_MNIST_MEAN = 0.1307
+_MNIST_STD = 0.3081
 
 
 def _load_normalized() -> tuple[Tensor, Tensor, Tensor, Tensor]:
-  x_train, y_train, x_test, y_test = cifar()
-  mean = Tensor(_CIFAR_MEAN).reshape(1, 3, 1, 1)
-  std = Tensor(_CIFAR_STD).reshape(1, 3, 1, 1)
-  x_train = (x_train.float() / 255.0 - mean) / std
-  x_test = (x_test.float() / 255.0 - mean) / std
+  x_train, y_train, x_test, y_test = mnist()
+  x_train = (x_train.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD
+  x_test = (x_test.float() / 255.0 - _MNIST_MEAN) / _MNIST_STD
   return x_train, y_train, x_test, y_test
 
 
 def train_model(
-  model_cls: type[_M],
+  model_cls: type[MiniConv],
   seed: int = 0,
-  steps: int = 500,
+  steps: int = 100,
   batch_size: int = 4096,
   gather_losses: bool = False,
-) -> tuple[_M, float, list[float], list[float]]:
+) -> tuple[MiniConv, float, list[float], list[float]]:
   Tensor.manual_seed(seed)
   np.random.seed(seed)
 

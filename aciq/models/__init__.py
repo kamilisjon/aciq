@@ -1,1 +1,1 @@
-from aciq.models.resnet4 import ResNet4 as ResNet4
+from aciq.models.miniconv import MiniConv as MiniConv

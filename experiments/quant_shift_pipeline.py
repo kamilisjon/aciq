@@ -12,11 +12,11 @@ from tinygrad import Tensor
 from tinygrad.helpers import tqdm
 from scipy.stats import rankdata, spearmanr, wilcoxon
 
-from aciq.datasets.cifar10 import _load_normalized, train_model
+from aciq.datasets.mnist import _load_normalized, train_model
 from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, save_csv
-from aciq.models import ResNet4
-from aciq.models.resnet4 import BlockName, BlockName2, bias_correct_model, compute_input_stats
+from aciq.models import MiniConv
+from aciq.models.miniconv import BlockName, BlockName2, bias_correct_model, compute_input_stats
 from aciq.plotting_style import NEUTRAL_COLOR, TailwindColor
 from aciq.quantization.bias_correction import ChannelMeansAccumulator
 from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax, quantize_symmetric
@@ -272,7 +272,7 @@ def _aciq_alpha(vec: np.ndarray) -> tuple[float, str]:
   return alpha, type(best).name
 
 
-def quantize_model(model: ResNet4, method: QuantMethod) -> tuple[ResNet4, list[LayerQuantStats]]:
+def quantize_model(model: MiniConv, method: QuantMethod) -> tuple[MiniConv, list[LayerQuantStats]]:
   qmodel = copy.deepcopy(model)
   qmodel.fuse()
   stats: list[LayerQuantStats] = []
@@ -334,7 +334,7 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
       timings[name] = now - t
       t = now
 
-    model, fp32_acc, _, _ = train_model(ResNet4, seed=seed, steps=steps)
+    model, fp32_acc, _, _ = train_model(MiniConv, seed=seed, steps=steps)
     lap("train")
     fp32_outputs = collect_layer_outputs(model, x_test)
     lap("fp32_act")
@@ -348,10 +348,10 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
     input_stats = compute_input_stats(model)  # BN params (gamma, beta) are unchanged by fusion
     lap("input_stats")
 
-    variants: dict[str, ResNet4] = {}
+    variants: dict[str, MiniConv] = {}
     layer_stats: dict[QuantMethod, list[LayerQuantStats]] = {}
     for method in QuantMethod:
-      ResNet4.clear_jit_caches()
+      MiniConv.clear_jit_caches()
       qmodel, stats = quantize_model(model, method)
       variants[str(method)] = qmodel
       layer_stats[method] = stats
@@ -364,7 +364,7 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
     accs: dict[str, float] = {}
     shifts: dict[str, dict[str, float]] = {}
     for label in VARIANT_LABELS:
-      ResNet4.clear_jit_caches()
+      MiniConv.clear_jit_caches()
       qmodel = variants[label]
       accs[label] = float(qmodel.test_acc(x_test, y_test).item())
       q_outputs = collect_layer_outputs(qmodel, x_test)
@@ -532,7 +532,7 @@ def plot_per_layer_shift(shifts_rows: list, BlockName: type[StrEnum], BlockName2
 
 
 if __name__ == "__main__":
-  parser = argparse.ArgumentParser(description="Quantization distribution-shift analysis on CIFAR-10 with ResNet4")
+  parser = argparse.ArgumentParser(description="Quantization distribution-shift analysis on MNIST with MiniConv")
   parser.add_argument("--n-models", type=int, default=100, help="Number of models to train")
   parser.add_argument("--steps", type=int, default=500, help="Training steps per model")
   parser.add_argument(
@@ -543,8 +543,8 @@ if __name__ == "__main__":
   )
   args = parser.parse_args()
 
-  ShiftsRow = _make_shifts_row_cls(ResNet4.__name__, BlockName)
-  save_dir = get_output_dir(RESULTS_DIR, "cifar10_resnet4_quant_shift")
+  ShiftsRow = _make_shifts_row_cls(MiniConv.__name__, BlockName)
+  save_dir = get_output_dir(RESULTS_DIR, "mnist_miniconv_quant_shift")
 
   quant_stats_rows: list[QuantStatsRow] = []
   if args.from_dir:

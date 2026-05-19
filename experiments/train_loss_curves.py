@@ -4,8 +4,8 @@ from dataclasses import dataclass
 import matplotlib.pyplot as plt
 
 from aciq.helpers import RESULTS_DIR, get_output_dir, save_csv
-from aciq.datasets.cifar10 import train_model
-from aciq.models import ResNet4
+from aciq.datasets.mnist import train_model
+from aciq.models import MiniConv
 from aciq.plotting_style import SERIES_COLORS
 
 
@@ -24,28 +24,28 @@ def _parse_run(spec: str) -> tuple[int, str]:
 
 
 if __name__ == "__main__":
-  parser = argparse.ArgumentParser(description="Train ResNet4 on CIFAR-10 for one or more seeds and plot per-step train/test losses.")
-  parser.add_argument("--steps", type=int, default=500, help="Training steps per run")
+  parser = argparse.ArgumentParser(description="Train MiniConv on MNIST for one or more seeds and plot per-step train/test losses.")
+  parser.add_argument("--steps", type=int, default=100, help="Training steps per run")
   parser.add_argument(
     "--runs", type=_parse_run, nargs="+", required=True, metavar="SEED:NAME", help="One or more SEED:NAME pairs (e.g. 0:fast 1:slow)"
   )
   args = parser.parse_args()
 
-  save_dir = get_output_dir(RESULTS_DIR, "cifar10_resnet4_loss_curves")
+  save_dir = get_output_dir(RESULTS_DIR, "mnist_miniconv_loss_curves")
   save_dir.mkdir(parents=True, exist_ok=True)
 
   fig, ax = plt.subplots(figsize=(8, 5))
   accuracy_rows: list[AccuracyRow] = []
   for i, (seed, name) in enumerate(args.runs):
-    print(f"[{i + 1}/{len(args.runs)}] Training ResNet4 on CIFAR-10 (seed={seed}, name={name})...")
-    _, test_acc, train_losses, test_losses = train_model(ResNet4, seed=seed, steps=args.steps, gather_losses=True)
+    print(f"[{i + 1}/{len(args.runs)}] Training MiniConv on MNIST (seed={seed}, name={name})...")
+    _, test_acc, train_losses, test_losses = train_model(MiniConv, seed=seed, steps=args.steps, gather_losses=True)
     print(f"  final test accuracy: {test_acc:.4f}")
     accuracy_rows.append(AccuracyRow(seed=seed, name=name, test_accuracy=float(test_acc)))
     color = SERIES_COLORS[i % len(SERIES_COLORS)]
     xs = list(range(1, len(train_losses) + 1))
     ax.plot(xs, train_losses, color=color, linestyle="--", alpha=0.8, label=f"{name} (mokymo)")
     ax.plot(xs, test_losses, color=color, linestyle="-", alpha=0.8, label=f"{name} (validacijos)")
-    ResNet4.clear_jit_caches()
+    MiniConv.clear_jit_caches()
 
   ax.set_xlabel("Žingsnis")
   ax.set_ylabel("Nuostolis")

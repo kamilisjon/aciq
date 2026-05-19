@@ -6,8 +6,8 @@ from matplotlib.axes import Axes
 
 from aciq.distributions import fit_distributions, kurtosis, skewness
 from aciq.helpers import RESULTS_DIR, get_output_dir
-from aciq.datasets.cifar10 import train_model
-from aciq.models import ResNet4
+from aciq.datasets.mnist import train_model
+from aciq.models import MiniConv
 from aciq.plotting_style import DIST_COLORS, HIST_BINS, LINE_WIDTH, NEUTRAL_COLOR, STATS_TEXT_KW, capped_savefig_dpi
 from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax
 
@@ -49,14 +49,14 @@ def plot_layer(ax: Axes, weights: np.ndarray, layer_name: str, bits: int) -> Non
 
 
 if __name__ == "__main__":
-  parser = argparse.ArgumentParser(description="Qualitative CIFAR-10 ResNet4 weight distributions after one training run.")
+  parser = argparse.ArgumentParser(description="Qualitative MNIST MiniConv weight distributions after one training run.")
   parser.add_argument("--seed", type=int, default=0)
-  parser.add_argument("--steps", type=int, default=500)
+  parser.add_argument("--steps", type=int, default=300)
   parser.add_argument("--bits", type=int, default=4)
   args = parser.parse_args()
 
   print(f"Training seed={args.seed} for {args.steps} steps")
-  model, fp32_acc, _, _ = train_model(ResNet4, seed=args.seed, steps=args.steps)
+  model, fp32_acc, _, _ = train_model(MiniConv, seed=args.seed, steps=args.steps)
   print(f"FP32 test acc = {fp32_acc:.4f}")
   model.fuse()
 
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     plot_layer(ax, mod.weight.numpy(), name, args.bits)
   fig.tight_layout()
 
-  save_dir = get_output_dir(RESULTS_DIR, "cifar_weight_distributions")
+  save_dir = get_output_dir(RESULTS_DIR, "mnist_weight_distributions")
   save_dir.mkdir(parents=True, exist_ok=True)
   out_path = save_dir / "distributions.png"
   fig.savefig(out_path, dpi=capped_savefig_dpi(fig_w, fig_h))
