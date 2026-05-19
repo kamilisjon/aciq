@@ -20,6 +20,7 @@ from aciq.plotting_style import DIST_COLORS, HIST_BINS, LINE_WIDTH, NEUTRAL_COLO
 
 METHOD_NAMES = ["per_tensor_minmax", "per_tensor_aciq", "per_channel_minmax", "per_channel_aciq"]
 PER_CHANNEL_METHODS = {"per_channel_minmax", "per_channel_aciq"}
+BIT_WIDTHS: tuple[int, ...] = (4, 8)
 
 
 @dataclass
@@ -256,7 +257,6 @@ def _collect_activations(model: ResNet, image_paths: list[Path], batch_size: int
 def main() -> None:
   parser = argparse.ArgumentParser(description="Full ACIQ quantization analysis pipeline")
   parser.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet34", "resnet50", "resnet101", "resnet152"])
-  parser.add_argument("--bits", type=int, default=8)
   parser.add_argument("--dataset-path", type=Path, default=None, help="Path to ImageNet dataset root (required unless --from-dir is set).")
   parser.add_argument("--plot-per-channel", action="store_true", help="Generate per-channel weight distribution plots (slow)")
   parser.add_argument(
@@ -269,7 +269,7 @@ def main() -> None:
     "--from-dir",
     type=Path,
     default=None,
-    help="Load `quantization_shift/shifts.csv` from this experiment directory and re-render the shift plot only (no model loading, no inference).",
+    help="Load `{bits}bits/quantization_shift/shifts.csv` from each per-bit subdir of this parent directory and re-render the shift plots only (no model loading, no inference).",
   )
   args = parser.parse_args()
 
@@ -277,88 +277,100 @@ def main() -> None:
   print(f"Output directory: {save_dir}")
 
   if args.from_dir:
-    shifts_path = args.from_dir / "quantization_shift" / "shifts.csv"
-    loaded_rows: list[MeanShift] = load_csv(shifts_path, MeanShift)
-    print(f"Loaded {len(loaded_rows)} shift rows from {shifts_path}")
-    layer_names = list(dict.fromkeys(r.layer for r in loaded_rows))
-    minmax_rows = [r for r in loaded_rows if r.method.startswith("per_channel_minmax")]
-    aciq_rows = [r for r in loaded_rows if r.method.startswith("per_channel_aciq")]
-    plot_shift(minmax_rows, layer_names, save_dir / "quantization_shift", filename="mean_shift_minmax.png")
-    plot_shift(aciq_rows, layer_names, save_dir / "quantization_shift", filename="mean_shift_aciq.png")
-    print(f"Plots saved to {save_dir / 'quantization_shift'}")
+    for bits in BIT_WIDTHS:
+      sub = args.from_dir / f"{bits}bits"
+      shifts_path = sub / "quantization_shift" / "shifts.csv"
+      if not shifts_path.exists():
+        print(f"skipping {bits}bits — {shifts_path} not found")
+        continue
+      loaded_rows: list[MeanShift] = load_csv(shifts_path, MeanShift)
+      print(f"Loaded {len(loaded_rows)} shift rows from {shifts_path}")
+      layer_names = list(dict.fromkeys(r.layer for r in loaded_rows))
+      minmax_rows = [r for r in loaded_rows if r.method.startswith("per_channel_minmax")]
+      aciq_rows = [r for r in loaded_rows if r.method.startswith("per_channel_aciq")]
+      plot_shift(minmax_rows, layer_names, sub / "quantization_shift", filename="mean_shift_minmax.png")
+      plot_shift(aciq_rows, layer_names, sub / "quantization_shift", filename="mean_shift_aciq.png")
+      print(f"Plots saved to {sub / 'quantization_shift'}")
     return
 
   assert args.dataset_path is not None, "--dataset-path is required unless --from-dir is set"
+  model_depth = int(args.model.removeprefix("resnet"))
 
-  config = PipelineConfig(
-    model_depth=int(args.model.removeprefix("resnet")),
-    bits=args.bits,
-    dataset_path=args.dataset_path,
-    plot_per_channel=args.plot_per_channel,
-    output_dir=save_dir,
-    n_per_class=args.n_per_class,
-  )
-
-  model = ResNet(config.model_depth)
+  print(f"Loading {args.model}")
+  model = ResNet(model_depth)
   model.load_from_pretrained()
   model.fuse()
-  fq_models = {m: copy.deepcopy(model) for m in METHOD_NAMES}
 
-  print(f"\n=== Stage 1: Weight Distribution Analysis ({config.model_name}) ===")
-  stage_weight_analysis(config, model, fq_models)
-
-  print(f"\n=== Stage 2: Bias and Variance Correction ({config.model_name}) ===")
-  input_stats = compute_input_stats(model)
-  fp_modules = dict(_weight_modules(model))
-  variants: dict[tuple[str, str], ResNet] = {}
-  for method in METHOD_NAMES:
-    variants[(method, "none")] = fq_models[method]
-    if method in PER_CHANNEL_METHODS:
-      variants[(method, "bias")] = _bias_correct_model(fq_models[method], fp_modules, input_stats)
-      print(f"  applied 'bias' correction to {method}")
-
-  print(f"\n=== Stage 3: Quantization Shift Analysis ({config.model_name}) ===")
-  image_paths = sample_imagenet_val(config.dataset_path, config.n_per_class)
-  print(f"  Using {len(image_paths)} images")
-  print("  Collecting FP32 stats...")
+  # Shared FP32 work (bit-width independent).
+  image_paths = sample_imagenet_val(args.dataset_path, args.n_per_class)
+  print(f"Using {len(image_paths)} images")
+  print("Collecting FP32 activations...")
   ResNet.clear_jit_caches()
   fp32_acc = _collect_activations(model, image_paths)
-  shift_rows: list[MeanShift] = []
-  for (method, mode), m in variants.items():
-    label = f"{method}::{mode}"
-    print(f"  Collecting {label} stats...")
-    ResNet.clear_jit_caches()
-    q_acc = _collect_activations(m, image_paths)
-    shift_rows.extend(fp32_acc.layers_means_shifts(q_acc, label))
-  shifts_csv = config.shift_results_dir / "shifts.csv"
-  save_csv(shift_rows, shifts_csv)
-  print(f"  CSV saved to {shifts_csv}")
-  layer_names = list(fp32_acc.channels_sums.keys())
-  minmax_rows = [r for r in shift_rows if r.method.startswith("per_channel_minmax")]
-  aciq_rows = [r for r in shift_rows if r.method.startswith("per_channel_aciq")]
-  plot_shift(minmax_rows, layer_names, config.shift_results_dir, filename="mean_shift_minmax.png")
-  plot_shift(aciq_rows, layer_names, config.shift_results_dir, filename="mean_shift_aciq.png")
-  print(f"  Plots saved to {config.shift_results_dir}/")
 
-  print(f"\n=== Stage 4: Benchmarking ({config.model_name}) ===")
-  config.correction_results_dir.mkdir(parents=True, exist_ok=True)
-  bench_rows: list[BenchmarkRow] = []
-  print("  benchmarking FP32")
+  print("Benchmarking FP32")
   ResNet.clear_jit_caches()
-  top1, top5 = benchmark_accuracy(model.infer, config.dataset_path, n_per_class=config.n_per_class)
-  bench_rows.append(BenchmarkRow(method="fp32", correction_mode="none", top1=float(top1), top5=float(top5)))
-  print(f"  FP32: top1={top1:.2f}  top5={top5:.2f}")
-  for (method, mode), m in variants.items():
-    print(f"  benchmarking {method}::{mode}")
-    ResNet.clear_jit_caches()
-    top1, top5 = benchmark_accuracy(m.infer, config.dataset_path, n_per_class=config.n_per_class)
-    bench_rows.append(BenchmarkRow(method=method, correction_mode=mode, top1=float(top1), top5=float(top5)))
-    print(f"  {method}::{mode}: top1={top1:.2f}  top5={top5:.2f}")
-  bench_csv = config.correction_results_dir / "benchmark_results.csv"
-  save_csv(bench_rows, bench_csv)
-  print(f"  CSV saved to {bench_csv}")
+  fp32_top1, fp32_top5 = benchmark_accuracy(model.infer, args.dataset_path, n_per_class=args.n_per_class)
+  print(f"FP32: top1={fp32_top1:.2f}  top5={fp32_top5:.2f}")
 
-  print(f"\nDone. All results in {config.output_dir}")
+  input_stats = compute_input_stats(model)
+  fp_modules = dict(_weight_modules(model))
+
+  for bits in BIT_WIDTHS:
+    print(f"\n========== Bit width: {bits} ==========")
+    config = PipelineConfig(
+      model_depth=model_depth,
+      bits=bits,
+      dataset_path=args.dataset_path,
+      plot_per_channel=args.plot_per_channel,
+      output_dir=save_dir / f"{bits}bits",
+      n_per_class=args.n_per_class,
+    )
+    fq_models = {m: copy.deepcopy(model) for m in METHOD_NAMES}
+
+    print(f"=== Stage 1: Weight Distribution Analysis (bits={bits}) ===")
+    stage_weight_analysis(config, model, fq_models)
+
+    print(f"=== Stage 2: Bias and Variance Correction (bits={bits}) ===")
+    variants: dict[tuple[str, str], ResNet] = {}
+    for method in METHOD_NAMES:
+      variants[(method, "none")] = fq_models[method]
+      if method in PER_CHANNEL_METHODS:
+        variants[(method, "bias")] = _bias_correct_model(fq_models[method], fp_modules, input_stats)
+        print(f"  applied 'bias' correction to {method}")
+
+    print(f"=== Stage 3: Quantization Shift Analysis (bits={bits}) ===")
+    shift_rows: list[MeanShift] = []
+    for (method, mode), m in variants.items():
+      label = f"{method}::{mode}"
+      print(f"  Collecting {label} stats...")
+      ResNet.clear_jit_caches()
+      q_acc = _collect_activations(m, image_paths)
+      shift_rows.extend(fp32_acc.layers_means_shifts(q_acc, label))
+    shifts_csv = config.shift_results_dir / "shifts.csv"
+    save_csv(shift_rows, shifts_csv)
+    print(f"  CSV saved to {shifts_csv}")
+    layer_names = list(fp32_acc.channels_sums.keys())
+    minmax_rows = [r for r in shift_rows if r.method.startswith("per_channel_minmax")]
+    aciq_rows = [r for r in shift_rows if r.method.startswith("per_channel_aciq")]
+    plot_shift(minmax_rows, layer_names, config.shift_results_dir, filename="mean_shift_minmax.png")
+    plot_shift(aciq_rows, layer_names, config.shift_results_dir, filename="mean_shift_aciq.png")
+    print(f"  Plots saved to {config.shift_results_dir}/")
+
+    print(f"=== Stage 4: Benchmarking (bits={bits}) ===")
+    config.correction_results_dir.mkdir(parents=True, exist_ok=True)
+    bench_rows: list[BenchmarkRow] = [BenchmarkRow(method="fp32", correction_mode="none", top1=float(fp32_top1), top5=float(fp32_top5))]
+    for (method, mode), m in variants.items():
+      print(f"  benchmarking {method}::{mode}")
+      ResNet.clear_jit_caches()
+      top1, top5 = benchmark_accuracy(m.infer, args.dataset_path, n_per_class=args.n_per_class)
+      bench_rows.append(BenchmarkRow(method=method, correction_mode=mode, top1=float(top1), top5=float(top5)))
+      print(f"  {method}::{mode}: top1={top1:.2f}  top5={top5:.2f}")
+    bench_csv = config.correction_results_dir / "benchmark_results.csv"
+    save_csv(bench_rows, bench_csv)
+    print(f"  CSV saved to {bench_csv}")
+
+  print(f"\nDone. All results in {save_dir}")
 
 
 if __name__ == "__main__":

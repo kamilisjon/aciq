@@ -22,7 +22,7 @@ from aciq.quantization.bias_correction import ChannelMeansAccumulator
 from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax, quantize_symmetric
 
 
-DEFAULT_BITS: tuple[int, ...] = (4, 8)
+BIT_WIDTHS: tuple[int, ...] = (4, 8)
 VARIANT_LABELS: tuple[str, ...] = ("minmax", "minmax_bias", "aciq", "aciq_bias")
 
 
@@ -571,13 +571,6 @@ if __name__ == "__main__":
   parser.add_argument("--n-models", type=int, default=100, help="Number of models to train")
   parser.add_argument("--steps", type=int, default=500, help="Training steps per model")
   parser.add_argument(
-    "--bits",
-    type=int,
-    nargs="+",
-    default=list(DEFAULT_BITS),
-    help="Bit widths to quantize at. One subdir per bit width is emitted.",
-  )
-  parser.add_argument(
     "--from-dir",
     type=Path,
     default=None,
@@ -588,7 +581,7 @@ if __name__ == "__main__":
   ShiftsRow = _make_shifts_row_cls(MiniConv.__name__, BlockName)
 
   if args.from_dir:
-    for bits in args.bits:
+    for bits in BIT_WIDTHS:
       sub = args.from_dir / f"{bits}bits"
       if not sub.exists():
         print(f"skipping {bits}bits — {sub} does not exist")
@@ -603,8 +596,8 @@ if __name__ == "__main__":
       emit_derived(sub, accuracy_rows, shifts_rows, quant_stats_rows)
   else:
     parent_dir = get_output_dir(RESULTS_DIR, "mnist_miniconv_quant_shift")
-    print(f"Running training with {args.n_models} models, {args.steps} steps each, bits={args.bits}...")
-    per_bits = run_training(ShiftsRow, args.n_models, args.steps, args.bits)
+    print(f"Running training with {args.n_models} models, {args.steps} steps each, bits={list(BIT_WIDTHS)}...")
+    per_bits = run_training(ShiftsRow, args.n_models, args.steps, list(BIT_WIDTHS))
     for bits, (accuracy_rows, shifts_rows, quant_stats_rows) in per_bits.items():
       sub = parent_dir / f"{bits}bits"
       sub.mkdir(parents=True, exist_ok=True)
