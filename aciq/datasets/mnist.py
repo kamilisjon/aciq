@@ -26,7 +26,7 @@ def train_model(
   model_cls: type[MiniConv],
   seed: int = 0,
   steps: int = 100,
-  batch_size: int = 4096,
+  batch_size: int = 512,
   gather_losses: bool = False,
 ) -> tuple[MiniConv, float, list[float], list[float]]:
   Tensor.manual_seed(seed)

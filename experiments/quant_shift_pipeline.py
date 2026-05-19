@@ -22,7 +22,7 @@ from aciq.quantization.bias_correction import ChannelMeansAccumulator
 from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax, quantize_symmetric
 
 
-BITS = 4
+DEFAULT_BITS: tuple[int, ...] = (4, 8)
 VARIANT_LABELS: tuple[str, ...] = ("minmax", "minmax_bias", "aciq", "aciq_bias")
 
 
@@ -265,14 +265,14 @@ def build_mae_average(per_network: list[MaePerNetworkRow], accuracy_rows: list[A
   )]
 
 
-def _aciq_alpha(vec: np.ndarray) -> tuple[float, str]:
+def _aciq_alpha(vec: np.ndarray, bits: int) -> tuple[float, str]:
   alpha_mm = bound_symmetric_minmax(vec)
   best = fit_distributions(np.sort(vec))[0]
-  alpha = float(bound_symmetric_aciq_mae(cdf=lambda x: float(best.cdf_at(np.asarray(x))), b=BITS, alpha_max=alpha_mm))
+  alpha = float(bound_symmetric_aciq_mae(cdf=lambda x: float(best.cdf_at(np.asarray(x))), b=bits, alpha_max=alpha_mm))
   return alpha, type(best).name
 
 
-def quantize_model(model: MiniConv, method: QuantMethod) -> tuple[MiniConv, list[LayerQuantStats]]:
+def quantize_model(model: MiniConv, method: QuantMethod, bits: int) -> tuple[MiniConv, list[LayerQuantStats]]:
   qmodel = copy.deepcopy(model)
   qmodel.fuse()
   stats: list[LayerQuantStats] = []
@@ -289,8 +289,8 @@ def quantize_model(model: MiniConv, method: QuantMethod) -> tuple[MiniConv, list
         alpha = float(bound_symmetric_minmax(ch_vec))
         fit_name = ""
       else:
-        alpha, fit_name = _aciq_alpha(ch_vec)
-      q_vec = quantize_symmetric(ch_vec, alpha, BITS)
+        alpha, fit_name = _aciq_alpha(ch_vec, bits)
+      q_vec = quantize_symmetric(ch_vec, alpha, bits)
       q_buf[c] = q_vec.reshape(w[c].shape).astype(np.float32)
       alphas.append(alpha)
       fits.append(fit_name)
@@ -318,12 +318,17 @@ def collect_layer_outputs(model, x_test: Tensor, batch_size: int = 100) -> Chann
   return acc
 
 
-def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[AccuracyRow], list, list[QuantStatsRow]]:
+def run_training(
+  shifts_row_cls: type,
+  n_models: int,
+  steps: int,
+  bit_widths: list[int],
+) -> dict[int, tuple[list[AccuracyRow], list, list[QuantStatsRow]]]:
   _, _, x_test, y_test = _load_normalized()
 
-  accuracy_rows: list[AccuracyRow] = []
-  shifts_rows: list = []
-  quant_stats_rows: list[QuantStatsRow] = []
+  per_bits: dict[int, tuple[list[AccuracyRow], list, list[QuantStatsRow]]] = {
+    bits: ([], [], []) for bits in bit_widths
+  }
   t_start = time.perf_counter()
   for seed in range(n_models):
     timings: dict[str, float] = {}
@@ -348,81 +353,90 @@ def run_training(shifts_row_cls: type, n_models: int, steps: int) -> tuple[list[
     input_stats = compute_input_stats(model)  # BN params (gamma, beta) are unchanged by fusion
     lap("input_stats")
 
-    variants: dict[str, MiniConv] = {}
-    layer_stats: dict[QuantMethod, list[LayerQuantStats]] = {}
-    for method in QuantMethod:
-      MiniConv.clear_jit_caches()
-      qmodel, stats = quantize_model(model, method)
-      variants[str(method)] = qmodel
-      layer_stats[method] = stats
-    lap("quantize")
+    per_bits_accs: dict[int, dict[str, float]] = {}
+    for bits in bit_widths:
+      variants: dict[str, MiniConv] = {}
+      layer_stats: dict[QuantMethod, list[LayerQuantStats]] = {}
+      for method in QuantMethod:
+        MiniConv.clear_jit_caches()
+        qmodel, stats = quantize_model(model, method, bits)
+        variants[str(method)] = qmodel
+        layer_stats[method] = stats
+      lap(f"q{bits}")
 
-    variants["minmax_bias"] = bias_correct_model(variants["minmax"], fp_modules, input_stats)
-    variants["aciq_bias"] = bias_correct_model(variants["aciq"], fp_modules, input_stats)
-    lap("bias_correct")
+      variants["minmax_bias"] = bias_correct_model(variants["minmax"], fp_modules, input_stats)
+      variants["aciq_bias"] = bias_correct_model(variants["aciq"], fp_modules, input_stats)
+      lap(f"b{bits}")
 
-    accs: dict[str, float] = {}
-    shifts: dict[str, dict[str, float]] = {}
-    for label in VARIANT_LABELS:
-      MiniConv.clear_jit_caches()
-      qmodel = variants[label]
-      accs[label] = float(qmodel.test_acc(x_test, y_test).item())
-      q_outputs = collect_layer_outputs(qmodel, x_test)
-      shifts[label] = {r.layer: r.mean_shift for r in fp32_outputs.layers_means_shifts(q_outputs, label)}
-    lap("measure")
+      accs: dict[str, float] = {}
+      shifts: dict[str, dict[str, float]] = {}
+      for label in VARIANT_LABELS:
+        MiniConv.clear_jit_caches()
+        qmodel = variants[label]
+        accs[label] = float(qmodel.test_acc(x_test, y_test).item())
+        q_outputs = collect_layer_outputs(qmodel, x_test)
+        shifts[label] = {r.layer: r.mean_shift for r in fp32_outputs.layers_means_shifts(q_outputs, label)}
+      lap(f"m{bits}")
+      per_bits_accs[bits] = accs
 
-    for mm_layer, aciq_layer in zip(layer_stats[QuantMethod.MINMAX], layer_stats[QuantMethod.ACIQ]):
-      assert mm_layer.layer_name == aciq_layer.layer_name
-      assert mm_layer.channel_size == aciq_layer.channel_size
-      for ch, (mm_alpha, aciq_alpha, aciq_fit, mm_err, aciq_err) in enumerate(
-        zip(
-          mm_layer.alpha_per_channel,
-          aciq_layer.alpha_per_channel,
-          aciq_layer.best_fit_per_channel,
-          mm_layer.total_err_per_channel,
-          aciq_layer.total_err_per_channel,
-        )
-      ):
-        quant_stats_rows.append(
-          QuantStatsRow(
-            seed=seed,
-            layer_name=mm_layer.layer_name,
-            channel=ch,
-            channel_size=mm_layer.channel_size,
-            minmax_alpha=mm_alpha,
-            aciq_alpha=aciq_alpha,
-            aciq_best_fit=aciq_fit,
-            minmax_weight_err=mm_err,
-            aciq_weight_err=aciq_err,
+      accuracy_rows, shifts_rows, quant_stats_rows = per_bits[bits]
+      for mm_layer, aciq_layer in zip(layer_stats[QuantMethod.MINMAX], layer_stats[QuantMethod.ACIQ]):
+        assert mm_layer.layer_name == aciq_layer.layer_name
+        assert mm_layer.channel_size == aciq_layer.channel_size
+        for ch, (mm_alpha, aciq_alpha, aciq_fit, mm_err, aciq_err) in enumerate(
+          zip(
+            mm_layer.alpha_per_channel,
+            aciq_layer.alpha_per_channel,
+            aciq_layer.best_fit_per_channel,
+            mm_layer.total_err_per_channel,
+            aciq_layer.total_err_per_channel,
           )
-        )
+        ):
+          quant_stats_rows.append(
+            QuantStatsRow(
+              seed=seed,
+              layer_name=mm_layer.layer_name,
+              channel=ch,
+              channel_size=mm_layer.channel_size,
+              minmax_alpha=mm_alpha,
+              aciq_alpha=aciq_alpha,
+              aciq_best_fit=aciq_fit,
+              minmax_weight_err=mm_err,
+              aciq_weight_err=aciq_err,
+            )
+          )
 
-    accuracy_rows.append(
-      AccuracyRow(
-        seed=seed,
-        fp32_acc=fp32_acc,
-        minmax_acc=accs["minmax"],
-        minmax_bias_acc=accs["minmax_bias"],
-        aciq_acc=accs["aciq"],
-        aciq_bias_acc=accs["aciq_bias"],
+      accuracy_rows.append(
+        AccuracyRow(
+          seed=seed,
+          fp32_acc=fp32_acc,
+          minmax_acc=accs["minmax"],
+          minmax_bias_acc=accs["minmax_bias"],
+          aciq_acc=accs["aciq"],
+          aciq_bias_acc=accs["aciq_bias"],
+        )
       )
-    )
-    shifts_rows.append(
-      shifts_row_cls(
-        seed=seed,
-        **{f"{v}_{b}_mean_shift": shifts[v][b] for v in VARIANT_LABELS for b in BlockName},
+      shifts_rows.append(
+        shifts_row_cls(
+          seed=seed,
+          **{f"{v}_{b}_mean_shift": shifts[v][b] for v in VARIANT_LABELS for b in BlockName},
+        )
       )
-    )
+
     seed_total = sum(timings.values())
     timing_str = " ".join(f"{k}={v:.1f}s" for k, v in timings.items())
+    accs_str = "  ".join(
+      f"[{bits}b] mm={a['minmax']:.3f} mm+b={a['minmax_bias']:.3f} aq={a['aciq']:.3f} aq+b={a['aciq_bias']:.3f}"
+      for bits, a in per_bits_accs.items()
+    )
     print(
       f"[{seed + 1}/{n_models}] seed={seed}  total={seed_total:.1f}s  ({timing_str})  "
-      f"fp32={fp32_acc:.3f} mm={accs['minmax']:.3f} mm+b={accs['minmax_bias']:.3f} aq={accs['aciq']:.3f} aq+b={accs['aciq_bias']:.3f}"
+      f"fp32={fp32_acc:.3f}  {accs_str}"
     )
   elapsed = time.perf_counter() - t_start
   per_seed = elapsed / n_models if n_models else 0.0
   print(f"\nrun_training complete: {n_models} seeds in {elapsed:.1f}s ({per_seed:.1f}s/seed)")
-  return accuracy_rows, shifts_rows, quant_stats_rows
+  return per_bits
 
 
 def plot_scatter(accuracy_rows: list[AccuracyRow], shifts_rows: list, BlockName: type[StrEnum], save_dir: Path) -> None:
@@ -531,48 +545,71 @@ def plot_per_layer_shift(shifts_rows: list, BlockName: type[StrEnum], BlockName2
   plt.close(fig)
 
 
+def emit_derived(
+  sub: Path,
+  accuracy_rows: list[AccuracyRow],
+  shifts_rows: list,
+  quant_stats_rows: list[QuantStatsRow],
+) -> None:
+  if quant_stats_rows:
+    save_csv(build_distribution_counts(quant_stats_rows), sub / "distribution_counts.csv")
+    save_csv(build_mae_summary(quant_stats_rows), sub / "mae_summary.csv")
+    per_network = build_mae_per_network(quant_stats_rows)
+    save_csv(per_network, sub / "mae_per_network.csv")
+    save_csv(build_mae_average(per_network, accuracy_rows), sub / "mae_average.csv")
+    save_csv(build_wilcoxon(accuracy_rows, per_network), sub / "wilcoxon.csv")
+    plot_paired_diff_histograms(accuracy_rows, per_network, sub)
+    print(f"Emitted derived summaries to {sub}/")
+  plot_scatter(accuracy_rows, shifts_rows, BlockName, sub)
+  plot_per_layer_shift(shifts_rows, BlockName, BlockName2, sub)
+  plot_minmax_vs_aciq_accuracy(accuracy_rows, sub)
+  print(f"Plots saved to {sub}/")
+
+
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="Quantization distribution-shift analysis on MNIST with MiniConv")
   parser.add_argument("--n-models", type=int, default=100, help="Number of models to train")
   parser.add_argument("--steps", type=int, default=500, help="Training steps per model")
   parser.add_argument(
+    "--bits",
+    type=int,
+    nargs="+",
+    default=list(DEFAULT_BITS),
+    help="Bit widths to quantize at. One subdir per bit width is emitted.",
+  )
+  parser.add_argument(
     "--from-dir",
     type=Path,
     default=None,
-    help="Load `results.csv` from this experiment directory and re-render plots only (no training).",
+    help="Load existing per-bit subdirs from this parent directory and re-render derived CSVs and plots only (no training).",
   )
   args = parser.parse_args()
 
   ShiftsRow = _make_shifts_row_cls(MiniConv.__name__, BlockName)
-  save_dir = get_output_dir(RESULTS_DIR, "mnist_miniconv_quant_shift")
 
-  quant_stats_rows: list[QuantStatsRow] = []
   if args.from_dir:
-    accuracy_rows = load_csv(args.from_dir / "accuracy.csv", AccuracyRow)
-    shifts_rows = load_csv(args.from_dir / "shifts.csv", ShiftsRow)
-    print(f"Loaded {len(accuracy_rows)} models from {args.from_dir}/")
-    quant_stats_path = args.from_dir / "quant_stats.csv"
-    if quant_stats_path.exists():
-      quant_stats_rows = load_csv(quant_stats_path, QuantStatsRow)
+    for bits in args.bits:
+      sub = args.from_dir / f"{bits}bits"
+      if not sub.exists():
+        print(f"skipping {bits}bits — {sub} does not exist")
+        continue
+      accuracy_rows = load_csv(sub / "accuracy.csv", AccuracyRow)
+      shifts_rows = load_csv(sub / "shifts.csv", ShiftsRow)
+      print(f"Loaded {len(accuracy_rows)} models from {sub}/")
+      quant_stats_rows: list[QuantStatsRow] = []
+      quant_stats_path = sub / "quant_stats.csv"
+      if quant_stats_path.exists():
+        quant_stats_rows = load_csv(quant_stats_path, QuantStatsRow)
+      emit_derived(sub, accuracy_rows, shifts_rows, quant_stats_rows)
   else:
-    print(f"Running training with {args.n_models} models, {args.steps} steps each...")
-    accuracy_rows, shifts_rows, quant_stats_rows = run_training(ShiftsRow, args.n_models, args.steps)
-    save_csv(accuracy_rows, save_dir / "accuracy.csv")
-    save_csv(shifts_rows, save_dir / "shifts.csv")
-    if quant_stats_rows:
-      save_csv(quant_stats_rows, save_dir / "quant_stats.csv")
-
-  if quant_stats_rows:
-    save_csv(build_distribution_counts(quant_stats_rows), save_dir / "distribution_counts.csv")
-    save_csv(build_mae_summary(quant_stats_rows), save_dir / "mae_summary.csv")
-    per_network = build_mae_per_network(quant_stats_rows)
-    save_csv(per_network, save_dir / "mae_per_network.csv")
-    save_csv(build_mae_average(per_network, accuracy_rows), save_dir / "mae_average.csv")
-    save_csv(build_wilcoxon(accuracy_rows, per_network), save_dir / "wilcoxon.csv")
-    plot_paired_diff_histograms(accuracy_rows, per_network, save_dir)
-    print(f"Emitted derived summaries to {save_dir}/")
-
-  plot_scatter(accuracy_rows, shifts_rows, BlockName, save_dir)
-  plot_per_layer_shift(shifts_rows, BlockName, BlockName2, save_dir)
-  plot_minmax_vs_aciq_accuracy(accuracy_rows, save_dir)
-  print(f"Plots saved to {save_dir}/")
+    parent_dir = get_output_dir(RESULTS_DIR, "mnist_miniconv_quant_shift")
+    print(f"Running training with {args.n_models} models, {args.steps} steps each, bits={args.bits}...")
+    per_bits = run_training(ShiftsRow, args.n_models, args.steps, args.bits)
+    for bits, (accuracy_rows, shifts_rows, quant_stats_rows) in per_bits.items():
+      sub = parent_dir / f"{bits}bits"
+      sub.mkdir(parents=True, exist_ok=True)
+      save_csv(accuracy_rows, sub / "accuracy.csv")
+      save_csv(shifts_rows, sub / "shifts.csv")
+      if quant_stats_rows:
+        save_csv(quant_stats_rows, sub / "quant_stats.csv")
+      emit_derived(sub, accuracy_rows, shifts_rows, quant_stats_rows)
