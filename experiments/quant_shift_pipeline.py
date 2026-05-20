@@ -35,7 +35,8 @@ class QuantMethod(StrEnum):
 class QuantStatsRow:
   seed: int
   layer_name: str
-  n_weights: int
+  channel: int
+  channel_size: int
   minmax_alpha: float
   aciq_alpha: float
   aciq_best_fit: str
@@ -54,7 +55,8 @@ class DistributionCountsRow:
 class MaeSummaryRow:
   seed: int
   layer_name: str
-  n_weights: int
+  num_channels: int
+  total_weights: int
   minmax_total_err: float
   aciq_total_err: float
   minmax_mae: float
@@ -110,10 +112,10 @@ class WilcoxonRow:
 @dataclass
 class LayerQuantStats:
   layer_name: str
-  n_weights: int
-  alpha: float
-  best_fit: str
-  total_err: float
+  channel_size: int
+  alpha_per_channel: list[float]
+  best_fit_per_channel: list[str]
+  total_err_per_channel: list[float]
 
 
 @dataclass
@@ -146,25 +148,34 @@ def build_distribution_counts(rows: list[QuantStatsRow]) -> list[DistributionCou
 
 
 def build_mae_summary(rows: list[QuantStatsRow]) -> list[MaeSummaryRow]:
-  return [
-    MaeSummaryRow(
-      seed=r.seed,
-      layer_name=r.layer_name,
-      n_weights=r.n_weights,
-      minmax_total_err=r.minmax_weight_err,
-      aciq_total_err=r.aciq_weight_err,
-      minmax_mae=r.minmax_weight_err / r.n_weights,
-      aciq_mae=r.aciq_weight_err / r.n_weights,
-    )
-    for r in rows
-  ]
+  agg: dict[tuple[int, str], dict[str, float]] = defaultdict(lambda: {"n_ch": 0.0, "tot_w": 0.0, "mm": 0.0, "aq": 0.0})
+  for r in rows:
+    a = agg[(r.seed, r.layer_name)]
+    a["n_ch"] += 1
+    a["tot_w"] += r.channel_size
+    a["mm"] += r.minmax_weight_err
+    a["aq"] += r.aciq_weight_err
+  out: list[MaeSummaryRow] = []
+  for (seed, layer), a in sorted(agg.items()):
+    tot_w = int(a["tot_w"])
+    out.append(MaeSummaryRow(
+      seed=seed,
+      layer_name=layer,
+      num_channels=int(a["n_ch"]),
+      total_weights=tot_w,
+      minmax_total_err=a["mm"],
+      aciq_total_err=a["aq"],
+      minmax_mae=a["mm"] / tot_w,
+      aciq_mae=a["aq"] / tot_w,
+    ))
+  return out
 
 
 def build_mae_per_network(rows: list[QuantStatsRow]) -> list[MaePerNetworkRow]:
   agg: dict[int, dict[str, float]] = defaultdict(lambda: {"tot_w": 0.0, "mm": 0.0, "aq": 0.0})
   for r in rows:
     a = agg[r.seed]
-    a["tot_w"] += r.n_weights
+    a["tot_w"] += r.channel_size
     a["mm"] += r.minmax_weight_err
     a["aq"] += r.aciq_weight_err
   out: list[MaePerNetworkRow] = []
@@ -267,20 +278,30 @@ def quantize_model(model: MiniConv, method: QuantMethod, bits: int) -> tuple[Min
   stats: list[LayerQuantStats] = []
   for name, mod in qmodel.named_weight_modules:
     w = mod.weight.numpy()
-    vec = w.flatten()
-    if method == QuantMethod.MINMAX:
-      alpha = float(bound_symmetric_minmax(vec))
-      fit_name = ""
-    else:
-      alpha, fit_name = _aciq_alpha(vec, bits)
-    q_vec = quantize_symmetric(vec, alpha, bits)
-    mod.weight = Tensor(q_vec.reshape(w.shape).astype(np.float32))
+    ch_size = int(np.prod(w.shape[1:]))
+    q_buf = np.empty_like(w, dtype=np.float32)
+    alphas: list[float] = []
+    fits: list[str] = []
+    errs: list[float] = []
+    for c in range(w.shape[0]):
+      ch_vec = w[c].flatten()
+      if method == QuantMethod.MINMAX:
+        alpha = float(bound_symmetric_minmax(ch_vec))
+        fit_name = ""
+      else:
+        alpha, fit_name = _aciq_alpha(ch_vec, bits)
+      q_vec = quantize_symmetric(ch_vec, alpha, bits)
+      q_buf[c] = q_vec.reshape(w[c].shape).astype(np.float32)
+      alphas.append(alpha)
+      fits.append(fit_name)
+      errs.append(float(np.sum(np.abs(ch_vec - q_vec))))
+    mod.weight = Tensor(q_buf)
     stats.append(LayerQuantStats(
       layer_name=name,
-      n_weights=int(vec.size),
-      alpha=alpha,
-      best_fit=fit_name,
-      total_err=float(np.sum(np.abs(vec - q_vec))),
+      channel_size=ch_size,
+      alpha_per_channel=alphas,
+      best_fit_per_channel=fits,
+      total_err_per_channel=errs,
     ))
   type(qmodel).clear_jit_caches()
   return qmodel, stats
@@ -361,19 +382,29 @@ def run_training(
       accuracy_rows, shifts_rows, quant_stats_rows = per_bits[bits]
       for mm_layer, aciq_layer in zip(layer_stats[QuantMethod.MINMAX], layer_stats[QuantMethod.ACIQ]):
         assert mm_layer.layer_name == aciq_layer.layer_name
-        assert mm_layer.n_weights == aciq_layer.n_weights
-        quant_stats_rows.append(
-          QuantStatsRow(
-            seed=seed,
-            layer_name=mm_layer.layer_name,
-            n_weights=mm_layer.n_weights,
-            minmax_alpha=mm_layer.alpha,
-            aciq_alpha=aciq_layer.alpha,
-            aciq_best_fit=aciq_layer.best_fit,
-            minmax_weight_err=mm_layer.total_err,
-            aciq_weight_err=aciq_layer.total_err,
+        assert mm_layer.channel_size == aciq_layer.channel_size
+        for ch, (mm_alpha, aciq_alpha, aciq_fit, mm_err, aciq_err) in enumerate(
+          zip(
+            mm_layer.alpha_per_channel,
+            aciq_layer.alpha_per_channel,
+            aciq_layer.best_fit_per_channel,
+            mm_layer.total_err_per_channel,
+            aciq_layer.total_err_per_channel,
           )
-        )
+        ):
+          quant_stats_rows.append(
+            QuantStatsRow(
+              seed=seed,
+              layer_name=mm_layer.layer_name,
+              channel=ch,
+              channel_size=mm_layer.channel_size,
+              minmax_alpha=mm_alpha,
+              aciq_alpha=aciq_alpha,
+              aciq_best_fit=aciq_fit,
+              minmax_weight_err=mm_err,
+              aciq_weight_err=aciq_err,
+            )
+          )
 
       accuracy_rows.append(
         AccuracyRow(
