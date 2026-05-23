@@ -16,6 +16,16 @@ from aciq.models.resnet import ResNet, _weight_modules
 
 BIT_WIDTHS: tuple[int, ...] = (4, 8)
 
+PER_LAYER_GRID: dict[str, tuple[int, int]] = {
+  "resnet18": (3, 7),    # 21 weight layers
+  "resnet34": (5, 8),    # 37 weight layers
+  "resnet50": (6, 9),    # 54 weight layers
+  "resnet101": (11, 9),  # 105 weight layers — appendix layout from README
+  "resnet152": (13, 12), # 156 weight layers
+}
+
+CHANNEL_GRID: tuple[int, int] = (2, 4)
+
 
 @dataclass
 class LayerFits:
@@ -247,14 +257,13 @@ def compute_channel_fit_counts(fits: list[LayerFits]) -> list[ChannelFitCountsRo
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="Full weight-distribution analysis for a pretrained ResNet: per-layer histograms, moments, MinMax/ACIQ fit summary at int4 and int8, per-channel fit grids, and per-channel fit counts.")
   parser.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet34", "resnet50", "resnet101", "resnet152"])
-  parser.add_argument("--per-layer-rows", type=int, default=5)
-  parser.add_argument("--per-layer-cols", type=int, default=5)
   parser.add_argument("--per-layer-quantile", type=float, default=99.9, help="Per-layer percentile clip applied to each subplot's x-axis.")
   parser.add_argument("--channel-grid-layers", type=str, nargs="+", default=["layer3.0.conv1"], help="Layer names to render per-channel distribution grids for.")
-  parser.add_argument("--channel-grid-rows", type=int, default=2)
-  parser.add_argument("--channel-grid-cols", type=int, default=4)
   parser.add_argument("--channel-grid-quantile", type=float, default=99.9, help="Percent of data inside each per-channel subplot's x-range.")
   args = parser.parse_args()
+
+  per_layer_rows, per_layer_cols = PER_LAYER_GRID[args.model]
+  channel_grid_rows, channel_grid_cols = CHANNEL_GRID
 
   model = ResNet(int(args.model.removeprefix("resnet")))
   model.load_from_pretrained()
@@ -273,7 +282,7 @@ if __name__ == "__main__":
   fits_by_name = {f.name: f for f in fits}
 
   print("Rendering per-layer weight histogram grid")
-  plot_per_layer_grid(fits, args.per_layer_rows, args.per_layer_cols, args.per_layer_quantile, save_dir / "per_layer" / f"{args.per_layer_rows}x{args.per_layer_cols}.png")
+  plot_per_layer_grid(fits, per_layer_rows, per_layer_cols, args.per_layer_quantile, save_dir / "per_layer" / f"{per_layer_rows}x{per_layer_cols}.png")
 
   print("Computing per-layer moments")
   moment_rows = compute_moments(fits)
@@ -291,8 +300,8 @@ if __name__ == "__main__":
   for layer_name in args.channel_grid_layers:
     safe_name = layer_name.replace(".", "_")
     out_path = save_dir / "channel_grid" / f"channel_fit_grid_{safe_name}.png"
-    print(f"Rendering {args.channel_grid_rows}x{args.channel_grid_cols} channel grid for {layer_name}")
-    plot_channel_grid(fits_by_name[layer_name], args.channel_grid_rows, args.channel_grid_cols, args.channel_grid_quantile, out_path)
+    print(f"Rendering {channel_grid_rows}x{channel_grid_cols} channel grid for {layer_name}")
+    plot_channel_grid(fits_by_name[layer_name], channel_grid_rows, channel_grid_cols, args.channel_grid_quantile, out_path)
 
   print("Computing per-channel fit counts")
   count_rows = compute_channel_fit_counts(fits)
