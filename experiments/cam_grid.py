@@ -9,12 +9,11 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from tinygrad import Tensor
 
-from aciq.cam import compute_cam
 from aciq.distributions import fit_distributions
 from aciq.helpers import RESULTS_DIR, get_output_dir
 from aciq.datasets.imagenet import ImagenetClassIndex, parse_imagenet_val_labels, resize_and_center_crop, sample_imagenet_val
 from aciq.plotting_style import capped_savefig_dpi
-from aciq.models.resnet import ResNet, _bias_correct_model, _weight_modules, compute_input_stats
+from aciq.models.resnet import ResNet, _bias_correct_model, _weight_modules, compute_cam, compute_input_stats
 from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax, quantize_symmetric
 
 
