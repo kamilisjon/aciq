@@ -364,15 +364,24 @@ def _upsample_bilinear(cam: np.ndarray, size: int) -> np.ndarray:
   return np.asarray(img.resize((size, size), Image.Resampling.BILINEAR), dtype=np.float32)
 
 
-def compute_cam(model: ResNet, img: Image.Image) -> tuple[np.ndarray, int, float]:
-  cropped = resize_and_center_crop(img.convert("RGB"))
-  rgb = np.asarray(cropped)
-  x = Tensor(normalize_to_chw(cropped)[None, ...])
-  feat, class_idx, prob = _predict_with_features(model, x)
-  fc_weight = model.fc.weight.numpy()
-  cam = _cam_for_class(feat, fc_weight, class_idx)
-  cam_up = _upsample_bilinear(cam, size=rgb.shape[0])
+def compose_cam_overlay(raw_cam: np.ndarray, rgb: np.ndarray) -> np.ndarray:
+  cam_up = _upsample_bilinear(raw_cam, size=rgb.shape[0])
   cam_norm = (cam_up - cam_up.min()) / max(cam_up.max() - cam_up.min(), 1e-9)
   heatmap = (cm.jet(cam_norm)[..., :3] * 255).astype(np.float32)
   composite = (1 - _OVERLAY_ALPHA) * rgb.astype(np.float32) + _OVERLAY_ALPHA * heatmap
-  return composite.astype(np.uint8), class_idx, prob
+  return composite.astype(np.uint8)
+
+
+def compute_cam_for_class(model: ResNet, img: Image.Image, target_class_idx: int | None = None) -> tuple[np.ndarray, np.ndarray, int, float]:
+  cropped = resize_and_center_crop(img.convert("RGB"))
+  rgb = np.asarray(cropped)
+  x = Tensor(normalize_to_chw(cropped)[None, ...])
+  feat, pred_idx, pred_prob = _predict_with_features(model, x)
+  class_idx = pred_idx if target_class_idx is None else int(target_class_idx)
+  raw_cam = _cam_for_class(feat, model.fc.weight.numpy(), class_idx)
+  return compose_cam_overlay(raw_cam, rgb), raw_cam, pred_idx, pred_prob
+
+
+def compute_cam(model: ResNet, img: Image.Image) -> tuple[np.ndarray, int, float]:
+  composite, _raw, pred_idx, pred_prob = compute_cam_for_class(model, img, target_class_idx=None)
+  return composite, pred_idx, pred_prob
