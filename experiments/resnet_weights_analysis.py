@@ -5,13 +5,14 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from tinygrad.helpers import tqdm
 from tinygrad.nn import Conv2d, Linear
 
 from aciq.distributions import Distribution, Gaussian, GeneralizedGaussian, Laplace, StudentT, fit_distributions, kurtosis, skewness
-from aciq.helpers import RESULTS_DIR, get_output_dir, mean_absolute_error, save_csv
+from aciq.helpers import RESULTS_DIR, fuse_conv_bn, get_output_dir, mean_absolute_error, save_csv
 from aciq.plotting_style import DIST_COLORS, HIST_BINS, LINE_WIDTH, NEUTRAL_COLOR, TailwindColor, capped_savefig_dpi
 from aciq.quantization.clipping import bound_symmetric_aciq_mae, bound_symmetric_minmax, quantize_symmetric
-from aciq.models.resnet import ResNet, _weight_modules
+from aciq.models.resnet import ResNet, _conv_bn_pairs, _weight_modules
 
 
 BIT_WIDTHS: tuple[int, ...] = (4, 8)
@@ -233,6 +234,38 @@ def plot_channel_grid(f: LayerFits, rows: int, cols: int, quantile: float, out_p
   plt.close(fig)
 
 
+def plot_bn_fusion_layer(layer_idx: int, conv_name: str, pre_weight: np.ndarray, post_weight: np.ndarray, out_dir: Path) -> None:
+  out_ch = pre_weight.shape[0]
+  pre_flat = pre_weight.reshape(out_ch, -1)
+  post_flat = post_weight.reshape(out_ch, -1)
+
+  pre_min, pre_max = pre_flat.min(axis=1), pre_flat.max(axis=1)
+  post_min, post_max = post_flat.min(axis=1), post_flat.max(axis=1)
+
+  pre_tensor_alpha = float(np.abs(pre_weight).max())
+  post_tensor_alpha = float(np.abs(post_weight).max())
+
+  channels = np.arange(out_ch)
+
+  fig, ax = plt.subplots(figsize=(12, 5))
+  ax.vlines(channels - 0.15, pre_min, pre_max, colors=TailwindColor.BLUE, linewidth=0.8, alpha=0.7, label="Per-channel [min,max] before BN fusion")
+  ax.vlines(channels + 0.15, post_min, post_max, colors=TailwindColor.ROSE, linewidth=0.8, alpha=0.7, label="Per-channel [min,max] after BN fusion")
+  ax.axhline(y=-pre_tensor_alpha, color=TailwindColor.BLUE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={pre_tensor_alpha:.4f} before BN fusion")
+  ax.axhline(y=pre_tensor_alpha, color=TailwindColor.BLUE, linestyle="--", linewidth=1)
+  ax.axhline(y=-post_tensor_alpha, color=TailwindColor.ROSE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={post_tensor_alpha:.4f} after BN fusion")
+  ax.axhline(y=post_tensor_alpha, color=TailwindColor.ROSE, linestyle="--", linewidth=1)
+  ax.axhline(y=0, color="black", linewidth=0.5)
+  ax.set_xlabel("Output channel")
+  ax.set_ylabel("Weight value")
+  ax.legend(loc="upper left")
+  fig.tight_layout()
+
+  safe = conv_name.replace("/", "_").replace(":", "_").replace(".", "_")[:60]
+  out_dir.mkdir(parents=True, exist_ok=True)
+  fig.savefig(out_dir / f"layer_{layer_idx:03d}_{safe}.png")
+  plt.close(fig)
+
+
 def compute_channel_fit_counts(fits: list[LayerFits]) -> list[ChannelFitCountsRow]:
   rows: list[ChannelFitCountsRow] = []
   for f in fits:
@@ -267,7 +300,6 @@ if __name__ == "__main__":
 
   model = ResNet(int(args.model.removeprefix("resnet")))
   model.load_from_pretrained()
-  model.fuse()
 
   available = {name for name, _ in _weight_modules(model)}
   unknown = [layer for layer in args.channel_grid_layers if layer not in available]
@@ -276,6 +308,15 @@ if __name__ == "__main__":
 
   save_dir = get_output_dir(RESULTS_DIR, f"{args.model}_weights_analysis")
   print(f"Output directory: {save_dir}")
+
+  print("Rendering per-channel weight ranges before/after BN fusion")
+  bn_fusion_dir = save_dir / "bn_fusion"
+  for idx, (name, conv, bn) in enumerate(tqdm(_conv_bn_pairs(model))):
+    pre_weight = conv.weight.numpy()
+    post_weight, _ = fuse_conv_bn(conv, bn)
+    plot_bn_fusion_layer(idx, name, pre_weight, post_weight.numpy(), bn_fusion_dir)
+
+  model.fuse()
 
   print("Building per-layer + per-channel distribution fits")
   fits = build_layer_fits(model)

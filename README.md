@@ -30,7 +30,6 @@ python -m examples.mnist_images_grid
 python -m examples.mnist_train
 python -m examples.resnet_weights_analysis --model resnet18
 python -m examples.resnet_weights_analysis --model resnet101  # For appendix
-python -m examples.resnet_bn_fusion
 python -m examples.weights_per_channel --model resnet18 --layer layer1.0.conv2 --rows 3 --cols 7 --quantile 99  # small kernels
 python -m examples.weights_per_channel --model resnet18 --layer layer4.0.conv2 --rows 3 --cols 7 --quantile 99.9  # big kernels
 DEV=CPU python -m examples.cam_grid --dataset-path /home/kamilis/Downloads/imagenet-object-localization-challenge  --n-images 7 --bits 8 --seed 2
