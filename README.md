@@ -28,7 +28,6 @@ Small one-shot scripts independent of the main experiments.
 python -m examples.mnist_save_images
 python -m examples.mnist_images_grid
 python -m examples.mnist_train
-python -m examples.distribution_fits
 python -m examples.resnet_weights_analysis --model resnet18
 python -m examples.resnet_weights_analysis --model resnet101  # For appendix
 python -m examples.resnet_bn_fusion
