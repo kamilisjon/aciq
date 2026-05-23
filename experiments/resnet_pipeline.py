@@ -681,6 +681,9 @@ def main() -> None:
 
   # Shared FP32 work (bit-width independent).
   image_paths = sample_imagenet_val(args.dataset_path, args.n_per_class)
+  id2synset = parse_imagenet_val_labels(args.dataset_path)
+  class_idx_db = ImagenetClassIndex.load()
+  synset2idx = class_idx_db.synset_to_idx
   print(f"Using {len(image_paths)} images")
   print("Collecting FP32 activations...")
   ResNet.clear_jit_caches()
@@ -688,7 +691,7 @@ def main() -> None:
 
   print("Benchmarking FP32")
   ResNet.clear_jit_caches()
-  fp32_top1, fp32_top5 = benchmark_accuracy(model.infer, args.dataset_path, n_per_class=args.n_per_class)
+  fp32_top1, fp32_top5 = benchmark_accuracy(model.infer, image_paths, id2synset, synset2idx)
   print(f"FP32: top1={fp32_top1:.2f}  top5={fp32_top5:.2f}")
 
   input_stats = compute_input_stats(model)
@@ -743,7 +746,7 @@ def main() -> None:
     for (method, mode), m in variants.items():
       print(f"  benchmarking {method}::{mode}")
       ResNet.clear_jit_caches()
-      top1, top5 = benchmark_accuracy(m.infer, args.dataset_path, n_per_class=args.n_per_class)
+      top1, top5 = benchmark_accuracy(m.infer, image_paths, id2synset, synset2idx)
       bench_rows.append(BenchmarkRow(method=method, correction_mode=mode, top1=float(top1), top5=float(top5)))
       print(f"  {method}::{mode}: top1={top1:.2f}  top5={top5:.2f}")
     bench_csv = config.correction_results_dir / "benchmark_results.csv"
@@ -752,10 +755,7 @@ def main() -> None:
 
   print(f"\n========== Stage 5: CAM cosine analysis ==========")
 
-  class_idx_db = ImagenetClassIndex.load()
-  synset_lookup = parse_imagenet_val_labels(args.dataset_path)
-  synset_to_idx = class_idx_db.synset_to_idx
-  gt_indices = np.array([synset_to_idx[synset_lookup[p.stem]] for p in image_paths], dtype=np.int64)
+  gt_indices = np.array([synset2idx[id2synset[p.stem]] for p in image_paths], dtype=np.int64)
   gt_names = [class_idx_db.classes[i].name.replace("_", " ") for i in gt_indices]
 
   print("Computing FP32 GT-class CAMs")
