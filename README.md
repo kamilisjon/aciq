@@ -13,12 +13,23 @@ The two main experiments are `examples.mnist_quantization_shift` and `examples.r
 
 ### Smoke runs
 
-Exercise the full pipeline logic with minimal data; each finishes in seconds. Use after refactors to verify nothing is structurally broken.
+Exercise the full pipeline logic with minimal data. Use after refactors to verify nothing is structurally broken.
+
+MNIST (a few seconds): trains one MiniConv at 5 steps and quantizes it at both 4 and 8 bits.
 
 ```sh
-DEV=CUDA DEBUG=2 JITBEAM=1 python -m examples.mnist_quantization_shift --n-models 1 --steps 5
-DEV=CUDA DEBUG=2 JITBEAM=1 python -m examples.resnet_pipeline --dataset-path <imagenet-root> --model resnet18 --bits 8 --n-per-class 1
+DEV=CUDA DEBUG=2 JITBEAM=1 python -m experiments.quant_shift_pipeline --n-models 1 --steps 5
 ```
+
+ResNet (a few minutes on GPU): `--n-per-class 1` is the single global handle — it throttles every stage that touches ImageNet (Stage 3 shift collection, Stage 4 benchmark, Stage 5 CAM cosine analysis) to one image per class (1000 images total). The pipeline always runs both 4- and 8-bit quantization.
+
+```sh
+DEV=CUDA DEBUG=2 JITBEAM=1 python -m experiments.resnet_pipeline --dataset-path <imagenet-root> --n-per-class 1
+```
+
+Expected artefacts under `results/resnet18_<ts>/`:
+- `4bits/`, `8bits/` — per-bit stage outputs (`weight_analysis/`, `quantization_shift/`, `bias_variance_correction/`, `per_image_cosine.csv`)
+- `per_image_cosine.csv`, `global_summary.csv`, `cosine_bar_chart.png`, `qualitative_grid.png`, `selected_cams.json`, `selected_image_{A,B,C,D}.png` at the root
 
 ### Standalone utilities
 
