@@ -534,11 +534,13 @@ def plot_qualitative_grid(
     }
   """
   cols = len(_CAM_GRID_COLUMNS)
-  rows = len(_SECTION_LETTERS) * len(BIT_WIDTHS)
-  cell_size = 2.0
-  fig_w, fig_h = cols * cell_size, rows * cell_size + 1.0
+  n_sections = len(_SECTION_LETTERS)
+  n_bits = len(BIT_WIDTHS)
+  cell_size = 1.8
+  fig_w = cols * cell_size + 0.6
+  fig_h = n_sections * n_bits * cell_size + 1.0
   fig = plt.figure(figsize=(fig_w, fig_h))
-  gs = fig.add_gridspec(rows, cols, hspace=0.35)
+  outer_gs = fig.add_gridspec(n_sections, 1, hspace=0.35)
 
   for section_idx, letter in enumerate(_SECTION_LETTERS):
     payload = sections.get(letter, {})
@@ -546,12 +548,13 @@ def plot_qualitative_grid(
     cams = payload.get("cams", {})
     preds = payload.get("predictions", {})
     gt_idx = payload.get("gt_idx")
-    row_top = section_idx * len(BIT_WIDTHS)
+    inner_gs = outer_gs[section_idx].subgridspec(n_bits, cols, hspace=0.05, wspace=0.05)
 
-    ax_gt = fig.add_subplot(gs[row_top : row_top + len(BIT_WIDTHS), 0])
-    ax_fp32 = fig.add_subplot(gs[row_top : row_top + len(BIT_WIDTHS), 1])
+    ax_gt = fig.add_subplot(inner_gs[:, 0])
+    ax_fp32 = fig.add_subplot(inner_gs[:, 1])
     for ax in (ax_gt, ax_fp32):
       ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
+    ax_gt.set_ylabel(letter, rotation=0, ha="right", va="center", labelpad=24, fontsize=18, fontweight="bold")
 
     if img is None:
       ax_gt.set_visible(False)
@@ -570,13 +573,12 @@ def plot_qualitative_grid(
         ax_fp32.set_title(f"{fp32_pred['pred_name']}\n{fp32_pred['prob']:.2f}", fontsize=9, pad=2, color=title_color)
 
     for bit_row_idx, bits in enumerate(reversed(BIT_WIDTHS)):
-      r = row_top + bit_row_idx
       for c_offset, (_col_label, kind) in enumerate(_CAM_GRID_COLUMNS[2:]):
         c = c_offset + 2
-        ax = fig.add_subplot(gs[r, c])
+        ax = fig.add_subplot(inner_gs[bit_row_idx, c])
         ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
         if c_offset == 0:
-          ax.set_ylabel(f"INT{bits}", rotation=0, ha="right", va="center", labelpad=20, fontsize=10)
+          ax.set_ylabel(f"INT{bits}", rotation=0, ha="right", va="center", labelpad=10, fontsize=11)
         if img is None:
           ax.set_visible(False)
           continue
@@ -596,12 +598,7 @@ def plot_qualitative_grid(
     x_norm = (c + 0.5) / cols
     fig.text(x_norm, 0.995, col_label, ha="center", va="top", fontsize=10, fontweight="bold")
 
-  # Section headers: just the letter, on the left edge of each section.
-  for section_idx, letter in enumerate(_SECTION_LETTERS):
-    y_top = 1.0 - (section_idx * len(BIT_WIDTHS)) / rows * (1.0 - 0.02)
-    fig.text(0.005, y_top - 0.01, letter, ha="left", va="top", fontsize=12, fontweight="bold")
-
-  fig.tight_layout(rect=(0.05, 0.0, 1.0, 0.97))
+  fig.tight_layout(rect=(0.04, 0.0, 1.0, 0.97))
   out_path.parent.mkdir(parents=True, exist_ok=True)
   dpi = capped_savefig_dpi(fig_w, fig_h)
   fig.savefig(out_path, dpi=dpi)
