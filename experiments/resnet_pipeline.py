@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from PIL import Image
 from tinygrad import Tensor
 from tinygrad.helpers import tqdm
@@ -364,26 +365,66 @@ def _assemble_global_summary(
   return out
 
 
-def plot_cam_cosine_bars(summary: list[GlobalSummaryRow], out_path: Path) -> None:
-  group_labels = ["INT4 MinMax", "INT4 ACIQ", "INT8 MinMax", "INT8 ACIQ"]
+def plot_cam_cosine_bars(
+  summary: list[GlobalSummaryRow],
+  cosine_rows: list[CamCosineRow],
+  out_path: Path,
+) -> None:
   groups: list[tuple[int, str]] = [(4, "minmax"), (4, "aciq"), (8, "minmax"), (8, "aciq")]
+  group_labels = ["INT4 MinMax", "INT4 ACIQ", "INT8 MinMax", "INT8 ACIQ"]
   by_key: dict[tuple[int, str, bool], GlobalSummaryRow] = {(r.bit_width, r.method, r.bias_corrected): r for r in summary}
+  cos_by_key: dict[tuple[int, str, bool], np.ndarray] = {}
+  for bits, method in groups:
+    for bias_corrected in (False, True):
+      vals = np.array([
+        r.cosine for r in cosine_rows
+        if r.bit_width == bits and r.method == method and r.bias_corrected == bias_corrected
+      ])
+      cos_by_key[(bits, method, bias_corrected)] = vals[np.isfinite(vals)]
+
+  def yerr(vals_per_group: list[np.ndarray], means: list[float]) -> np.ndarray:
+    lowers = [means[i] - float(v.min()) if v.size else 0.0 for i, v in enumerate(vals_per_group)]
+    uppers = [float(v.max()) - means[i] if v.size else 0.0 for i, v in enumerate(vals_per_group)]
+    return np.array([lowers, uppers])
+
   x_pos = np.arange(len(groups))
   bar_width = 0.38
+  no_corr_x = x_pos - bar_width / 2
+  bias_x = x_pos + bar_width / 2
+
   no_corr_means = [by_key[(b, m, False)].mean_cosine for b, m in groups]
-  no_corr_stds = [by_key[(b, m, False)].std_cosine for b, m in groups]
   bias_means = [by_key[(b, m, True)].mean_cosine for b, m in groups]
-  bias_stds = [by_key[(b, m, True)].std_cosine for b, m in groups]
+  no_corr_vals = [cos_by_key[(b, m, False)] for b, m in groups]
+  bias_vals = [cos_by_key[(b, m, True)] for b, m in groups]
 
   fig, ax = plt.subplots(figsize=(8, 5))
-  ax.bar(x_pos - bar_width / 2, no_corr_means, bar_width, yerr=no_corr_stds, capsize=3, color=SERIES_COLORS[0], label="No correction")
-  ax.bar(x_pos + bar_width / 2, bias_means, bar_width, yerr=bias_stds, capsize=3, color=SERIES_COLORS[1], label="Bias correction")
+  GREY = "dimgrey"
+  ax.bar(no_corr_x, no_corr_means, bar_width, yerr=yerr(no_corr_vals, no_corr_means),
+         capsize=3, color=GREY, edgecolor=GREY, ecolor=GREY)
+  ax.bar(bias_x, bias_means, bar_width, yerr=yerr(bias_vals, bias_means),
+         capsize=3, color=GREY, edgecolor=GREY, ecolor=GREY)
+
+  no_corr_color = SERIES_COLORS[0]
+  bias_color = SERIES_COLORS[1]
+  for i in range(len(groups)):
+    nc, bc = no_corr_vals[i], bias_vals[i]
+    if nc.size:
+      ax.scatter(np.full(nc.size, no_corr_x[i]), nc, color=no_corr_color, s=10, alpha=0.6, edgecolors="none", zorder=3)
+    if bc.size:
+      ax.scatter(np.full(bc.size, bias_x[i]), bc, color=bias_color, s=10, alpha=0.6, edgecolors="none", zorder=3)
+
   ax.axvline(1.5, color=NEUTRAL_COLOR, linestyle=":", linewidth=0.8)
   ax.set_xticks(x_pos)
   ax.set_xticklabels(group_labels)
-  ax.set_ylabel("Mean CAM cosine similarity vs FP32")
-  ax.set_ylim(0.0, 1.0)
-  ax.legend(loc="lower right")
+  ax.set_ylabel("CAM cosine similarity vs FP32")
+  ax.set_ylim(-0.1, 1.1)
+  ax.legend(
+    handles=[
+      Line2D([0], [0], marker="o", color="w", markerfacecolor=no_corr_color, markersize=8, label="No correction"),
+      Line2D([0], [0], marker="o", color="w", markerfacecolor=bias_color, markersize=8, label="Bias correction"),
+    ],
+    loc="lower right",
+  )
   fig.tight_layout()
   out_path.parent.mkdir(parents=True, exist_ok=True)
   fig.savefig(out_path)
@@ -846,7 +887,7 @@ def main() -> None:
   save_csv(summary, save_dir / "global_summary.csv")
   print(f"wrote {save_dir}/global_summary.csv")
 
-  plot_cam_cosine_bars(summary, save_dir / "cosine_bar_chart.png")
+  plot_cam_cosine_bars(summary, cosine_rows, save_dir / "cosine_bar_chart.png")
   print(f"wrote {save_dir}/cosine_bar_chart.png")
 
   selections = select_fp32_confidence_images(fp32_preds, fp32_probs, gt_indices)
