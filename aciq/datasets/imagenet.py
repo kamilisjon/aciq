@@ -92,6 +92,23 @@ def resize_and_center_crop(img: Image.Image) -> Image.Image:
   return img.crop((left, top, left + _CROP_SIZE, top + _CROP_SIZE))
 
 
+def compute_orig_crop_box(img_size: tuple[int, int]) -> tuple[float, float, float, float]:
+  """Crop box (left, top, right, bottom) in original-image pixel coordinates.
+
+  Mirrors `resize_and_center_crop` exactly so the returned box maps back to the
+  region the preprocessing pipeline actually feeds to the model.
+  """
+  w, h = img_size
+  if w <= h:
+    new_w, new_h = _RESIZE_SIZE, int(_RESIZE_SIZE * h / w)
+  else:
+    new_h, new_w = _RESIZE_SIZE, int(_RESIZE_SIZE * w / h)
+  left_r = (new_w - _CROP_SIZE) // 2
+  top_r = (new_h - _CROP_SIZE) // 2
+  scale = _RESIZE_SIZE / min(w, h)
+  return (left_r / scale, top_r / scale, (left_r + _CROP_SIZE) / scale, (top_r + _CROP_SIZE) / scale)
+
+
 def normalize_to_chw(img: Image.Image) -> np.ndarray:
   arr = np.asarray(img, dtype=np.float32) / 255.0
   arr = arr.transpose(2, 0, 1)

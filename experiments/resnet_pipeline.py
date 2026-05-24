@@ -537,7 +537,7 @@ def plot_qualitative_grid(
   n_sections = len(_SECTION_LETTERS)
   n_bits = len(BIT_WIDTHS)
   cell_size = 1.6
-  LEFT, RIGHT, TOP, BOT = 0.07, 0.99, 0.92, 0.02
+  LEFT, RIGHT, TOP, BOT = 0.07, 0.99, 0.94, 0.02
   OUTER_HSPACE, INNER_HSPACE, INNER_WSPACE = 0.15, 0.30, 0.05
   INNER_WIDTH_RATIOS = (1.0, 1.0, 0.35, 1.0, 1.0, 1.0, 1.0)
   INNER_COL_INDICES = (0, 1, 3, 4, 5, 6)  # visual-col index -> inner-gridspec col index
@@ -582,6 +582,7 @@ def plot_qualitative_grid(
       ax_fp32.set_visible(False)
     else:
       ax_gt.imshow(img)
+      ax_gt.set_anchor('N')
       ax_gt.set_title(payload.get("gt_name", ""), fontsize=9, pad=2)
       fp32_cam = cams.get("fp32")
       fp32_pred = preds.get("fp32")
@@ -590,6 +591,7 @@ def plot_qualitative_grid(
       else:
         composite = compose_cam_overlay(np.asarray(fp32_cam, dtype=np.float32), img)
         ax_fp32.imshow(composite)
+        ax_fp32.set_anchor('N')
         title_color = "tab:green" if fp32_pred["pred_idx"] == gt_idx else "tab:red"
         ax_fp32.set_title(f"{fp32_pred['pred_name']}\n{fp32_pred['prob']:.2f}", fontsize=9, pad=2, color=title_color)
 
@@ -628,7 +630,7 @@ def plot_qualitative_grid(
 
   for letter, ax in section_gt_axes:
     bbox = ax.get_position()
-    fig.text(bbox.x0, bbox.y1, letter, ha="right", va="bottom", fontsize=20, fontweight="bold")
+    fig.text(bbox.x0, bbox.y1, letter, ha="left", va="bottom", fontsize=24, fontweight="bold")
 
   out_path.parent.mkdir(parents=True, exist_ok=True)
   dpi = capped_savefig_dpi(fig_w, fig_h)
