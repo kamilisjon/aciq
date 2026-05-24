@@ -509,12 +509,7 @@ _CAM_GRID_COLUMNS: list[tuple[str, str | None]] = [
   ("ACIQ + Bias Corr", "per_channel_aciq_bias"),
 ]
 
-_SECTION_LABELS = [
-  ("A", "Most confident correct"),
-  ("B", "Most confident incorrect"),
-  ("C", "Least confident correct"),
-  ("D", "Least confident incorrect"),
-]
+_SECTION_LETTERS: tuple[str, ...] = ("A", "B", "C", "D")
 
 
 def _column_key(bits: int, kind: str | None) -> str | None:
@@ -539,54 +534,72 @@ def plot_qualitative_grid(
     }
   """
   cols = len(_CAM_GRID_COLUMNS)
-  rows = 8
+  rows = len(_SECTION_LETTERS) * len(BIT_WIDTHS)
   cell_size = 2.0
   fig_w, fig_h = cols * cell_size, rows * cell_size + 1.0
-  fig, axes = plt.subplots(rows, cols, figsize=(fig_w, fig_h), gridspec_kw={"hspace": 0.35})
+  fig = plt.figure(figsize=(fig_w, fig_h))
+  gs = fig.add_gridspec(rows, cols, hspace=0.35)
 
-  for section_idx, (letter, _) in enumerate(_SECTION_LABELS):
+  for section_idx, letter in enumerate(_SECTION_LETTERS):
     payload = sections.get(letter, {})
     img = payload.get("image")
     cams = payload.get("cams", {})
     preds = payload.get("predictions", {})
     gt_idx = payload.get("gt_idx")
+    row_top = section_idx * len(BIT_WIDTHS)
+
+    ax_gt = fig.add_subplot(gs[row_top : row_top + len(BIT_WIDTHS), 0])
+    ax_fp32 = fig.add_subplot(gs[row_top : row_top + len(BIT_WIDTHS), 1])
+    for ax in (ax_gt, ax_fp32):
+      ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
+
+    if img is None:
+      ax_gt.set_visible(False)
+      ax_fp32.set_visible(False)
+    else:
+      ax_gt.imshow(img)
+      ax_gt.set_title(payload.get("gt_name", ""), fontsize=9, pad=2)
+      fp32_cam = cams.get("fp32")
+      fp32_pred = preds.get("fp32")
+      if fp32_cam is None or fp32_pred is None:
+        ax_fp32.set_visible(False)
+      else:
+        composite = compose_cam_overlay(np.asarray(fp32_cam, dtype=np.float32), img)
+        ax_fp32.imshow(composite)
+        title_color = "tab:green" if fp32_pred["pred_idx"] == gt_idx else "tab:red"
+        ax_fp32.set_title(f"{fp32_pred['pred_name']}\n{fp32_pred['prob']:.2f}", fontsize=9, pad=2, color=title_color)
+
     for bit_row_idx, bits in enumerate(BIT_WIDTHS):
-      r = section_idx * 2 + bit_row_idx
-      for c, (col_label, kind) in enumerate(_CAM_GRID_COLUMNS):
-        ax = axes[r, c]
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.grid(False)
-        if c == 0:
+      r = row_top + bit_row_idx
+      for c_offset, (_col_label, kind) in enumerate(_CAM_GRID_COLUMNS[2:]):
+        c = c_offset + 2
+        ax = fig.add_subplot(gs[r, c])
+        ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
+        if c_offset == 0:
           ax.set_ylabel(f"INT{bits}", rotation=0, ha="right", va="center", labelpad=20, fontsize=10)
         if img is None:
           ax.set_visible(False)
           continue
-        if kind is None:
-          ax.imshow(img)
-          if bit_row_idx == 0:
-            ax.set_title(payload.get("gt_name", ""), fontsize=9, pad=2)
-        else:
-          key = _column_key(bits, kind)
-          cam = cams.get(key)
-          pred = preds.get(key)
-          if cam is None or pred is None:
-            ax.set_visible(False)
-            continue
-          composite = compose_cam_overlay(np.asarray(cam, dtype=np.float32), img)
-          ax.imshow(composite)
-          title_color = "tab:green" if pred["pred_idx"] == gt_idx else "tab:red"
-          ax.set_title(f"{pred['pred_name']}\n{pred['prob']:.2f}", fontsize=9, pad=2, color=title_color)
+        key = _column_key(bits, kind)
+        cam = cams.get(key)
+        pred = preds.get(key)
+        if cam is None or pred is None:
+          ax.set_visible(False)
+          continue
+        composite = compose_cam_overlay(np.asarray(cam, dtype=np.float32), img)
+        ax.imshow(composite)
+        title_color = "tab:green" if pred["pred_idx"] == gt_idx else "tab:red"
+        ax.set_title(f"{pred['pred_name']}\n{pred['prob']:.2f}", fontsize=9, pad=2, color=title_color)
 
   # Column titles at the top of the figure.
   for c, (col_label, _) in enumerate(_CAM_GRID_COLUMNS):
     x_norm = (c + 0.5) / cols
     fig.text(x_norm, 0.995, col_label, ha="center", va="top", fontsize=10, fontweight="bold")
 
-  # Section headers between groups, on the left side of the figure.
-  for section_idx, (letter, criterion) in enumerate(_SECTION_LABELS):
-    y_top = 1.0 - (section_idx * 2 + 0) / rows * (1.0 - 0.02)
-    fig.text(0.005, y_top - 0.01, f"{letter}\n{criterion}", ha="left", va="top", fontsize=10, fontweight="bold")
+  # Section headers: just the letter, on the left edge of each section.
+  for section_idx, letter in enumerate(_SECTION_LETTERS):
+    y_top = 1.0 - (section_idx * len(BIT_WIDTHS)) / rows * (1.0 - 0.02)
+    fig.text(0.005, y_top - 0.01, letter, ha="left", va="top", fontsize=12, fontweight="bold")
 
   fig.tight_layout(rect=(0.05, 0.0, 1.0, 0.97))
   out_path.parent.mkdir(parents=True, exist_ok=True)
