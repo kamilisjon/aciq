@@ -538,7 +538,9 @@ def plot_qualitative_grid(
   n_bits = len(BIT_WIDTHS)
   cell_size = 1.6
   LEFT, RIGHT, TOP, BOT = 0.07, 0.99, 0.92, 0.02
-  OUTER_HSPACE, INNER_HSPACE, INNER_WSPACE = 0.30, 0.30, 0.05
+  OUTER_HSPACE, INNER_HSPACE, INNER_WSPACE = 0.15, 0.30, 0.05
+  INNER_WIDTH_RATIOS = (1.0, 1.0, 0.35, 1.0, 1.0, 1.0, 1.0)
+  INNER_COL_INDICES = (0, 1, 3, 4, 5, 6)  # visual-col index -> inner-gridspec col index
 
   fig_w = cols * cell_size / (RIGHT - LEFT)
   fig_h = (n_sections * n_bits * cell_size) / (TOP - BOT)
