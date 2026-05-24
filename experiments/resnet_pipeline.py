@@ -419,9 +419,12 @@ def plot_cam_cosine_bars(
       Line2D([0], [0], color="black", linewidth=2.5, label="Mean cosine similarity"),
       Line2D([0], [0], color="red", linestyle="--", linewidth=1.0, alpha=0.6, label="Cosine similarity bounds"),
     ],
-    loc="lower right",
+    loc="upper center",
+    bbox_to_anchor=(0.5, -0.15),
+    ncol=4,
+    frameon=False,
   )
-  fig.tight_layout()
+  fig.tight_layout(rect=(0, 0.10, 1, 1))
   out_path.parent.mkdir(parents=True, exist_ok=True)
   fig.savefig(out_path)
   plt.close(fig)
