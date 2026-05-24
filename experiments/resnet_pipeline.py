@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import to_rgba
 from matplotlib.lines import Line2D
 from PIL import Image
 from tinygrad import Tensor
@@ -382,11 +383,6 @@ def plot_cam_cosine_bars(
       ])
       cos_by_key[(bits, method, bias_corrected)] = vals[np.isfinite(vals)]
 
-  def yerr(vals_per_group: list[np.ndarray], means: list[float]) -> np.ndarray:
-    lowers = [means[i] - float(v.min()) if v.size else 0.0 for i, v in enumerate(vals_per_group)]
-    uppers = [float(v.max()) - means[i] if v.size else 0.0 for i, v in enumerate(vals_per_group)]
-    return np.array([lowers, uppers])
-
   x_pos = np.arange(len(groups))
   bar_width = 0.38
   no_corr_x = x_pos - bar_width / 2
@@ -398,11 +394,10 @@ def plot_cam_cosine_bars(
   bias_vals = [cos_by_key[(b, m, True)] for b, m in groups]
 
   fig, ax = plt.subplots(figsize=(8, 5))
-  GREY = "dimgrey"
-  ax.bar(no_corr_x, no_corr_means, bar_width, yerr=yerr(no_corr_vals, no_corr_means),
-         capsize=3, color=GREY, edgecolor=GREY, ecolor=GREY)
-  ax.bar(bias_x, bias_means, bar_width, yerr=yerr(bias_vals, bias_means),
-         capsize=3, color=GREY, edgecolor=GREY, ecolor=GREY)
+  face = to_rgba("dimgrey", 0.1)
+  edge = to_rgba("dimgrey", 0.4)
+  ax.bar(no_corr_x, no_corr_means, bar_width, color=face, edgecolor=edge, linewidth=1.2)
+  ax.bar(bias_x, bias_means, bar_width, color=face, edgecolor=edge, linewidth=1.2)
 
   no_corr_color = SERIES_COLORS[0]
   bias_color = SERIES_COLORS[1]
@@ -417,17 +412,20 @@ def plot_cam_cosine_bars(
   ax.set_xticks(x_pos)
   ax.set_xticklabels(group_labels)
   ax.set_ylabel("CAM cosine similarity vs FP32")
-  ax.set_ylim(-0.1, 1.1)
+  ax.set_ylim(-0.1, 1.2)
   ax.legend(
     handles=[
       Line2D([0], [0], marker="o", color="w", markerfacecolor=no_corr_color, markersize=8, label="No correction"),
       Line2D([0], [0], marker="o", color="w", markerfacecolor=bias_color, markersize=8, label="Bias correction"),
     ],
-    loc="lower right",
+    loc="lower center",
+    bbox_to_anchor=(0.5, 1.02),
+    ncol=2,
+    frameon=False,
   )
   fig.tight_layout()
   out_path.parent.mkdir(parents=True, exist_ok=True)
-  fig.savefig(out_path)
+  fig.savefig(out_path, bbox_inches="tight")
   plt.close(fig)
 
 
