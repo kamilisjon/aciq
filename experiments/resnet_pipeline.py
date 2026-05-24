@@ -504,9 +504,9 @@ _CAM_GRID_COLUMNS: list[tuple[str, str | None]] = [
   ("Ground Truth", None),
   ("FP32", "fp32"),
   ("MinMax", "per_channel_minmax"),
-  ("MinMax + Bias Corr", "per_channel_minmax_bias"),
+  ("MinMax + Bias corr.", "per_channel_minmax_bias"),
   ("ACIQ", "per_channel_aciq"),
-  ("ACIQ + Bias Corr", "per_channel_aciq_bias"),
+  ("ACIQ + Bias corr.", "per_channel_aciq_bias"),
 ]
 
 _SECTION_LETTERS: tuple[str, ...] = ("A", "B", "C", "D")
