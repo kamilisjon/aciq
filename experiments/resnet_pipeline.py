@@ -423,9 +423,9 @@ def plot_cam_cosine_bars(
     ncol=2,
     frameon=False,
   )
-  fig.tight_layout()
+  fig.tight_layout(rect=(0, 0, 1, 0.92))
   out_path.parent.mkdir(parents=True, exist_ok=True)
-  fig.savefig(out_path, bbox_inches="tight")
+  fig.savefig(out_path)
   plt.close(fig)
 
 
