@@ -630,7 +630,7 @@ def plot_qualitative_grid(
 
   for letter, ax in section_gt_axes:
     bbox = ax.get_position()
-    fig.text(bbox.x0, bbox.y1, letter, ha="left", va="bottom", fontsize=24, fontweight="bold")
+    fig.text(bbox.x0, bbox.y1, letter, ha="right", va="bottom", fontsize=24, fontweight="bold")
 
   out_path.parent.mkdir(parents=True, exist_ok=True)
   dpi = capped_savefig_dpi(fig_w, fig_h)
