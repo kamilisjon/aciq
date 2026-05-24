@@ -569,7 +569,7 @@ def plot_qualitative_grid(
         title_color = "tab:green" if fp32_pred["pred_idx"] == gt_idx else "tab:red"
         ax_fp32.set_title(f"{fp32_pred['pred_name']}\n{fp32_pred['prob']:.2f}", fontsize=9, pad=2, color=title_color)
 
-    for bit_row_idx, bits in enumerate(BIT_WIDTHS):
+    for bit_row_idx, bits in enumerate(reversed(BIT_WIDTHS)):
       r = row_top + bit_row_idx
       for c_offset, (_col_label, kind) in enumerate(_CAM_GRID_COLUMNS[2:]):
         c = c_offset + 2
