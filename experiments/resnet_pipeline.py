@@ -537,8 +537,8 @@ def plot_qualitative_grid(
   n_sections = len(_SECTION_LETTERS)
   n_bits = len(BIT_WIDTHS)
   cell_size = 1.6
-  LEFT, RIGHT, TOP, BOT = 0.07, 0.99, 0.97, 0.02
-  OUTER_HSPACE, INNER_HSPACE, INNER_WSPACE = 0.30, 0.20, 0.05
+  LEFT, RIGHT, TOP, BOT = 0.07, 0.99, 0.92, 0.02
+  OUTER_HSPACE, INNER_HSPACE, INNER_WSPACE = 0.30, 0.30, 0.05
 
   fig_w = cols * cell_size / (RIGHT - LEFT)
   fig_h = (n_sections * n_bits * cell_size) / (TOP - BOT)
@@ -550,6 +550,7 @@ def plot_qualitative_grid(
   )
 
   axes_for_titles: dict[int, object] = {}
+  section_gt_axes: list = []
 
   for section_idx, letter in enumerate(_SECTION_LETTERS):
     payload = sections.get(letter, {})
@@ -564,9 +565,7 @@ def plot_qualitative_grid(
     for ax in (ax_gt, ax_fp32):
       ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
 
-    # Section letter in the left margin, top-aligned with the section.
-    ax_gt.text(-0.10, 1.0, letter, transform=ax_gt.transAxes,
-               ha="right", va="top", fontsize=18, fontweight="bold")
+    section_gt_axes.append((letter, ax_gt))
 
     if section_idx == 0:
       axes_for_titles[0] = ax_gt
@@ -618,7 +617,11 @@ def plot_qualitative_grid(
       continue
     bbox = ax.get_position()
     x_center = bbox.x0 + bbox.width / 2
-    fig.text(x_center, TOP + 0.008, col_label, ha="center", va="bottom", fontsize=10, fontweight="bold")
+    fig.text(x_center, 0.97, col_label, ha="center", va="bottom", fontsize=10, fontweight="bold")
+
+  for letter, ax in section_gt_axes:
+    y_top = ax.get_position().y1
+    fig.text(0.01, y_top, letter, ha="left", va="top", fontsize=20, fontweight="bold")
 
   out_path.parent.mkdir(parents=True, exist_ok=True)
   dpi = capped_savefig_dpi(fig_w, fig_h)
