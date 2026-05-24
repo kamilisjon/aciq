@@ -398,9 +398,9 @@ def plot_cam_cosine_bars(
   for i in range(len(groups)):
     nc, bc = no_corr_vals[i], bias_vals[i]
     if nc.size:
-      ax.scatter(np.full(nc.size, no_corr_x[i]), nc, color=no_corr_color, s=10, alpha=0.6, edgecolors="none", zorder=3)
+      ax.scatter(np.full(nc.size, no_corr_x[i]), nc, color=no_corr_color, s=10, alpha=0.15, edgecolors="none", zorder=3)
     if bc.size:
-      ax.scatter(np.full(bc.size, bias_x[i]), bc, color=bias_color, s=10, alpha=0.6, edgecolors="none", zorder=3)
+      ax.scatter(np.full(bc.size, bias_x[i]), bc, color=bias_color, s=10, alpha=0.15, edgecolors="none", zorder=3)
   mean_half = 0.18
   ax.hlines(no_corr_means, xmin=no_corr_x - mean_half, xmax=no_corr_x + mean_half, colors="black", linewidth=2.5, zorder=2)
   ax.hlines(bias_means, xmin=bias_x - mean_half, xmax=bias_x + mean_half, colors="black", linewidth=2.5, zorder=2)
