@@ -537,7 +537,7 @@ def plot_qualitative_grid(
   n_sections = len(_SECTION_LETTERS)
   n_bits = len(BIT_WIDTHS)
   cell_size = 1.6
-  LEFT, RIGHT, TOP, BOT = 0.05, 0.99, 0.96, 0.02
+  LEFT, RIGHT, TOP, BOT = 0.07, 0.99, 0.97, 0.02
   OUTER_HSPACE, INNER_HSPACE, INNER_WSPACE = 0.30, 0.20, 0.05
 
   fig_w = cols * cell_size / (RIGHT - LEFT)
@@ -548,6 +548,8 @@ def plot_qualitative_grid(
     left=LEFT, right=RIGHT, top=TOP, bottom=BOT,
     hspace=OUTER_HSPACE,
   )
+
+  axes_for_titles: dict[int, object] = {}
 
   for section_idx, letter in enumerate(_SECTION_LETTERS):
     payload = sections.get(letter, {})
@@ -562,9 +564,13 @@ def plot_qualitative_grid(
     for ax in (ax_gt, ax_fp32):
       ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
 
-    # Section letter at top-left corner of the section, just above the GT cell.
-    ax_gt.text(0.0, 1.02, letter, transform=ax_gt.transAxes,
-               ha="left", va="bottom", fontsize=16, fontweight="bold")
+    # Section letter in the left margin, top-aligned with the section.
+    ax_gt.text(-0.10, 1.0, letter, transform=ax_gt.transAxes,
+               ha="right", va="top", fontsize=18, fontweight="bold")
+
+    if section_idx == 0:
+      axes_for_titles[0] = ax_gt
+      axes_for_titles[1] = ax_fp32
 
     if img is None:
       ax_gt.set_visible(False)
@@ -589,6 +595,8 @@ def plot_qualitative_grid(
         ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
         if c_offset == 0:
           ax.set_ylabel(f"INT{bits}", rotation=0, ha="right", va="center", labelpad=8, fontsize=11)
+        if section_idx == 0 and bit_row_idx == 0:
+          axes_for_titles[c] = ax
         if img is None:
           ax.set_visible(False)
           continue
@@ -603,11 +611,14 @@ def plot_qualitative_grid(
         title_color = "tab:green" if pred["pred_idx"] == gt_idx else "tab:red"
         ax.set_title(f"{pred['pred_name']}\n{pred['prob']:.2f}", fontsize=9, pad=2, color=title_color)
 
-  # Column titles aligned with actual axis x positions (same LEFT/RIGHT as the gridspec).
-  plot_width = RIGHT - LEFT
+  # Column titles anchored to real axis positions (handles wspace + any future layout tweaks).
   for c, (col_label, _) in enumerate(_CAM_GRID_COLUMNS):
-    x_center = LEFT + (c + 0.5) / cols * plot_width
-    fig.text(x_center, TOP + 0.005, col_label, ha="center", va="bottom", fontsize=10, fontweight="bold")
+    ax = axes_for_titles.get(c)
+    if ax is None:
+      continue
+    bbox = ax.get_position()
+    x_center = bbox.x0 + bbox.width / 2
+    fig.text(x_center, TOP + 0.008, col_label, ha="center", va="bottom", fontsize=10, fontweight="bold")
 
   out_path.parent.mkdir(parents=True, exist_ok=True)
   dpi = capped_savefig_dpi(fig_w, fig_h)
