@@ -6,7 +6,6 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import to_rgba
 from matplotlib.lines import Line2D
 from PIL import Image
 from tinygrad import Tensor
@@ -394,11 +393,6 @@ def plot_cam_cosine_bars(
   bias_vals = [cos_by_key[(b, m, True)] for b, m in groups]
 
   fig, ax = plt.subplots(figsize=(8, 5))
-  face = to_rgba("dimgrey", 0.1)
-  edge = to_rgba("dimgrey", 0.4)
-  ax.bar(no_corr_x, no_corr_means, bar_width, color=face, edgecolor=edge, linewidth=1.2)
-  ax.bar(bias_x, bias_means, bar_width, color=face, edgecolor=edge, linewidth=1.2)
-
   no_corr_color = SERIES_COLORS[0]
   bias_color = SERIES_COLORS[1]
   for i in range(len(groups)):
@@ -407,6 +401,8 @@ def plot_cam_cosine_bars(
       ax.scatter(np.full(nc.size, no_corr_x[i]), nc, color=no_corr_color, s=10, alpha=0.6, edgecolors="none", zorder=3)
     if bc.size:
       ax.scatter(np.full(bc.size, bias_x[i]), bc, color=bias_color, s=10, alpha=0.6, edgecolors="none", zorder=3)
+  ax.scatter(no_corr_x, no_corr_means, color="red", s=150, zorder=2, edgecolors="none")
+  ax.scatter(bias_x, bias_means, color="red", s=150, zorder=2, edgecolors="none")
 
   ax.axvline(1.5, color=NEUTRAL_COLOR, linestyle=":", linewidth=0.8)
   ax.axhline(1.0, color="red", linestyle="--", linewidth=1.0, alpha=0.6)
@@ -419,10 +415,11 @@ def plot_cam_cosine_bars(
     handles=[
       Line2D([0], [0], marker="o", color="w", markerfacecolor=no_corr_color, markersize=8, label="No correction"),
       Line2D([0], [0], marker="o", color="w", markerfacecolor=bias_color, markersize=8, label="Bias correction"),
+      Line2D([0], [0], marker="o", color="w", markerfacecolor="red", markersize=12, label="Mean"),
     ],
     loc="lower center",
     bbox_to_anchor=(0.5, 1.02),
-    ncol=2,
+    ncol=3,
     frameon=False,
   )
   fig.tight_layout(rect=(0, 0, 1, 0.92))
