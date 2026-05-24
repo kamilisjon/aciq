@@ -402,12 +402,12 @@ def plot_cam_cosine_bars(
     if bc.size:
       ax.scatter(np.full(bc.size, bias_x[i]), bc, color=bias_color, s=10, alpha=0.6, edgecolors="none", zorder=3)
   mean_half = 0.18
-  ax.hlines(no_corr_means, xmin=no_corr_x - mean_half, xmax=no_corr_x + mean_half, colors="black", linewidth=2.5, zorder=4)
-  ax.hlines(bias_means, xmin=bias_x - mean_half, xmax=bias_x + mean_half, colors="black", linewidth=2.5, zorder=4)
+  ax.hlines(no_corr_means, xmin=no_corr_x - mean_half, xmax=no_corr_x + mean_half, colors="black", linewidth=2.5, zorder=2)
+  ax.hlines(bias_means, xmin=bias_x - mean_half, xmax=bias_x + mean_half, colors="black", linewidth=2.5, zorder=2)
 
   ax.axvline(1.5, color=NEUTRAL_COLOR, linestyle=":", linewidth=0.8)
-  ax.axhline(1.0, color="red", linestyle="--", linewidth=1.0, alpha=0.6)
-  ax.axhline(-1.0, color="red", linestyle="--", linewidth=1.0, alpha=0.6)
+  ax.axhline(1.0, color="red", linestyle="--", linewidth=1.0, alpha=0.6, zorder=1)
+  ax.axhline(-1.0, color="red", linestyle="--", linewidth=1.0, alpha=0.6, zorder=1)
   ax.set_xticks(x_pos)
   ax.set_xticklabels(group_labels)
   ax.set_ylabel("CAM cosine similarity vs FP32")
@@ -416,7 +416,8 @@ def plot_cam_cosine_bars(
     handles=[
       Line2D([0], [0], marker="o", color="w", markerfacecolor=no_corr_color, markersize=8, label="No correction"),
       Line2D([0], [0], marker="o", color="w", markerfacecolor=bias_color, markersize=8, label="Bias correction"),
-      Line2D([0], [0], color="black", linewidth=2.5, label="Mean"),
+      Line2D([0], [0], color="black", linewidth=2.5, label="Mean cosine similarity"),
+      Line2D([0], [0], color="red", linestyle="--", linewidth=1.0, alpha=0.6, label="Cosine similarity bounds"),
     ],
     loc="lower right",
   )
