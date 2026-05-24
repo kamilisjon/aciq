@@ -409,10 +409,12 @@ def plot_cam_cosine_bars(
       ax.scatter(np.full(bc.size, bias_x[i]), bc, color=bias_color, s=10, alpha=0.6, edgecolors="none", zorder=3)
 
   ax.axvline(1.5, color=NEUTRAL_COLOR, linestyle=":", linewidth=0.8)
+  ax.axhline(1.0, color="red", linestyle="--", linewidth=1.0, alpha=0.6)
+  ax.axhline(-1.0, color="red", linestyle="--", linewidth=1.0, alpha=0.6)
   ax.set_xticks(x_pos)
   ax.set_xticklabels(group_labels)
   ax.set_ylabel("CAM cosine similarity vs FP32")
-  ax.set_ylim(-0.1, 1.2)
+  ax.set_ylim(-1.2, 1.2)
   ax.legend(
     handles=[
       Line2D([0], [0], marker="o", color="w", markerfacecolor=no_corr_color, markersize=8, label="No correction"),
