@@ -560,10 +560,14 @@ def plot_qualitative_grid(
     cams = payload.get("cams", {})
     preds = payload.get("predictions", {})
     gt_idx = payload.get("gt_idx")
-    inner_gs = outer_gs[section_idx].subgridspec(n_bits, cols, hspace=INNER_HSPACE, wspace=INNER_WSPACE)
+    inner_gs = outer_gs[section_idx].subgridspec(
+      n_bits, len(INNER_WIDTH_RATIOS),
+      hspace=INNER_HSPACE, wspace=INNER_WSPACE,
+      width_ratios=list(INNER_WIDTH_RATIOS),
+    )
 
-    ax_gt = fig.add_subplot(inner_gs[:, 0])
-    ax_fp32 = fig.add_subplot(inner_gs[:, 1])
+    ax_gt = fig.add_subplot(inner_gs[:, INNER_COL_INDICES[0]])
+    ax_fp32 = fig.add_subplot(inner_gs[:, INNER_COL_INDICES[1]])
     for ax in (ax_gt, ax_fp32):
       ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
 
@@ -591,13 +595,14 @@ def plot_qualitative_grid(
 
     for bit_row_idx, bits in enumerate(reversed(BIT_WIDTHS)):
       for c_offset, (_col_label, kind) in enumerate(_CAM_GRID_COLUMNS[2:]):
-        c = c_offset + 2
-        ax = fig.add_subplot(inner_gs[bit_row_idx, c])
+        visual_c = c_offset + 2
+        inner_c = INNER_COL_INDICES[visual_c]
+        ax = fig.add_subplot(inner_gs[bit_row_idx, inner_c])
         ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
         if c_offset == 0:
-          ax.set_ylabel(f"INT{bits}", rotation=0, ha="right", va="center", labelpad=8, fontsize=11)
+          ax.set_ylabel(f"INT{bits}", rotation=0, ha="right", va="center", labelpad=8, fontsize=11, fontweight="bold")
         if section_idx == 0 and bit_row_idx == 0:
-          axes_for_titles[c] = ax
+          axes_for_titles[visual_c] = ax
         if img is None:
           ax.set_visible(False)
           continue
@@ -622,8 +627,8 @@ def plot_qualitative_grid(
     fig.text(x_center, 0.97, col_label, ha="center", va="bottom", fontsize=10, fontweight="bold")
 
   for letter, ax in section_gt_axes:
-    y_top = ax.get_position().y1
-    fig.text(0.01, y_top, letter, ha="left", va="top", fontsize=20, fontweight="bold")
+    bbox = ax.get_position()
+    fig.text(bbox.x0, bbox.y1, letter, ha="right", va="bottom", fontsize=20, fontweight="bold")
 
   out_path.parent.mkdir(parents=True, exist_ok=True)
   dpi = capped_savefig_dpi(fig_w, fig_h)
