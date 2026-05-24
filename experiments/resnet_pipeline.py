@@ -753,6 +753,15 @@ def main() -> None:
       print(f"Re-rendered {args.from_dir / 'qualitative_grid.png'}")
     else:
       print(f"skipping qualitative grid — selected_cams.json missing in {args.from_dir}")
+    summary_path = args.from_dir / "global_summary.csv"
+    cosine_path = args.from_dir / "per_image_cosine.csv"
+    if summary_path.exists() and cosine_path.exists():
+      loaded_summary = load_csv(summary_path, GlobalSummaryRow)
+      loaded_cosines = load_csv(cosine_path, CamCosineRow)
+      plot_cam_cosine_bars(loaded_summary, loaded_cosines, args.from_dir / "cosine_bar_chart.png")
+      print(f"Re-rendered {args.from_dir / 'cosine_bar_chart.png'}")
+    else:
+      print(f"skipping cosine bar chart — global_summary.csv or per_image_cosine.csv missing in {args.from_dir}")
     return
 
   assert args.dataset_path is not None, "--dataset-path is required unless --from-dir is set"
