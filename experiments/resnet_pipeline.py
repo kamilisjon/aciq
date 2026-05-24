@@ -370,8 +370,8 @@ def plot_cam_cosine_bars(
   cosine_rows: list[CamCosineRow],
   out_path: Path,
 ) -> None:
-  groups: list[tuple[int, str]] = [(4, "minmax"), (4, "aciq"), (8, "minmax"), (8, "aciq")]
-  group_labels = ["INT4 MinMax", "INT4 ACIQ", "INT8 MinMax", "INT8 ACIQ"]
+  groups: list[tuple[int, str]] = [(8, "minmax"), (8, "aciq"), (4, "minmax"), (4, "aciq")]
+  group_labels = ["INT8 MinMax", "INT8 ACIQ", "INT4 MinMax", "INT4 ACIQ"]
   by_key: dict[tuple[int, str, bool], GlobalSummaryRow] = {(r.bit_width, r.method, r.bias_corrected): r for r in summary}
   cos_by_key: dict[tuple[int, str, bool], np.ndarray] = {}
   for bits, method in groups:
