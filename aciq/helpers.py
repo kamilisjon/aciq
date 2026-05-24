@@ -31,12 +31,18 @@ def save_csv(rows: list[Any], path: Path) -> None:
       writer.writerow(asdict(row))
 
 
+def _parse_csv_value(t: type, v: str) -> Any:
+  if t is bool:
+    return v == "True"
+  return t(v)
+
+
 def load_csv(path: Path, row_type: type[Any]) -> list[Any]:
   assert is_dataclass(row_type), f"load_csv expects a dataclass type, got {row_type.__name__}"
   hints = get_type_hints(row_type)
   with open(path) as f:
     reader = csv.DictReader(f, delimiter=CSV_SEPARATOR)
-    return [row_type(**{k: hints[k](v) for k, v in raw.items()}) for raw in reader]
+    return [row_type(**{k: _parse_csv_value(hints[k], v) for k, v in raw.items()}) for raw in reader]
 
 
 def fuse_conv_bn(conv: Conv2d, bn: BatchNorm) -> tuple[Tensor, Tensor]:
