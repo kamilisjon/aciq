@@ -42,7 +42,7 @@ testing = [
 [tool.mypy]
 python_version = "3.11"
 warn_unused_configs = true
-files = ["aciq", "test", "examples"]
+files = ["aciq", "test", "experiments"]
 ignore_missing_imports = true
 check_untyped_defs = true
 explicit_package_bases = true

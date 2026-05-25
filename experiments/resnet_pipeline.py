@@ -12,7 +12,14 @@ from tinygrad import Tensor
 from tinygrad.helpers import tqdm
 from tinygrad.nn import Conv2d, Linear
 
-from aciq.datasets.imagenet import ImagenetClassIndex, benchmark_accuracy, load_and_preprocess, parse_imagenet_val_labels, resize_and_center_crop, sample_imagenet_val
+from aciq.datasets.imagenet import (
+  ImagenetClassIndex,
+  benchmark_accuracy,
+  load_and_preprocess,
+  parse_imagenet_val_labels,
+  resize_and_center_crop,
+  sample_imagenet_val,
+)
 from aciq.quantization.bias_correction import ChannelMeansAccumulator, MeanShift
 from aciq.helpers import RESULTS_DIR, get_output_dir, load_csv, mean_absolute_error, save_csv
 from aciq.models.resnet import ResNet, compose_cam_overlay, compute_input_stats, _weight_modules, _bias_correct_model
@@ -333,10 +340,16 @@ def _assemble_global_summary(
 ) -> list[GlobalSummaryRow]:
   out: list[GlobalSummaryRow] = []
   variant_keys = [
-    (False, "minmax"), (True, "minmax"), (False, "aciq"), (True, "aciq"),
+    (False, "minmax"),
+    (True, "minmax"),
+    (False, "aciq"),
+    (True, "aciq"),
   ]
   for bits in BIT_WIDTHS:
-    bench = {(r.method, r.correction_mode): r for r in load_csv(save_dir / f"{bits}bits" / "bias_variance_correction" / "benchmark_results.csv", BenchmarkRow)}
+    bench = {
+      (r.method, r.correction_mode): r
+      for r in load_csv(save_dir / f"{bits}bits" / "bias_variance_correction" / "benchmark_results.csv", BenchmarkRow)
+    }
     mae_rows = load_csv(save_dir / f"{bits}bits" / "weight_analysis" / "mae_comparison.csv", MaeComparisonRow)
     total_n = sum(r.n for r in mae_rows)
     mae_minmax = sum(r.err_channel for r in mae_rows) / total_n
@@ -345,23 +358,22 @@ def _assemble_global_summary(
     for bias_corrected, method in variant_keys:
       mode = "bias" if bias_corrected else "none"
       full_method = f"per_channel_{method}"
-      values = np.array([
-        r.cosine for r in cosine_rows
-        if r.bit_width == bits and r.method == method and r.bias_corrected == bias_corrected
-      ])
+      values = np.array([r.cosine for r in cosine_rows if r.bit_width == bits and r.method == method and r.bias_corrected == bias_corrected])
       finite = values[np.isfinite(values)]
       mean_c = float(finite.mean()) if finite.size else float("nan")
       std_c = float(finite.std(ddof=1)) if finite.size > 1 else 0.0
-      out.append(GlobalSummaryRow(
-        bit_width=bits,
-        method=method,
-        bias_corrected=bias_corrected,
-        mae=mae_by_method[method],
-        top1=float(bench[(full_method, mode)].top1),
-        n_images=int(finite.size),
-        mean_cosine=mean_c,
-        std_cosine=std_c,
-      ))
+      out.append(
+        GlobalSummaryRow(
+          bit_width=bits,
+          method=method,
+          bias_corrected=bias_corrected,
+          mae=mae_by_method[method],
+          top1=float(bench[(full_method, mode)].top1),
+          n_images=int(finite.size),
+          mean_cosine=mean_c,
+          std_cosine=std_c,
+        )
+      )
   return out
 
 
@@ -376,10 +388,7 @@ def plot_cam_cosine_bars(
   cos_by_key: dict[tuple[int, str, bool], np.ndarray] = {}
   for bits, method in groups:
     for bias_corrected in (False, True):
-      vals = np.array([
-        r.cosine for r in cosine_rows
-        if r.bit_width == bits and r.method == method and r.bias_corrected == bias_corrected
-      ])
+      vals = np.array([r.cosine for r in cosine_rows if r.bit_width == bits and r.method == method and r.bias_corrected == bias_corrected])
       cos_by_key[(bits, method, bias_corrected)] = vals[np.isfinite(vals)]
 
   x_pos = np.arange(len(groups))
@@ -432,9 +441,9 @@ def plot_cam_cosine_bars(
 
 @dataclass
 class Selection:
-  letter: str            # "A" | "B" | "C" | "D"
-  criterion: str         # human-readable label
-  index: int | None      # index into image_paths; None when the set is empty
+  letter: str  # "A" | "B" | "C" | "D"
+  criterion: str  # human-readable label
+  index: int | None  # index into image_paths; None when the set is empty
 
 
 _SELECTION_CRITERIA = (
@@ -586,8 +595,12 @@ def plot_qualitative_grid(
   fig_h = (n_sections * n_bits * cell_size) / (TOP - BOT)
   fig = plt.figure(figsize=(fig_w, fig_h))
   outer_gs = fig.add_gridspec(
-    n_sections, 1,
-    left=LEFT, right=RIGHT, top=TOP, bottom=BOT,
+    n_sections,
+    1,
+    left=LEFT,
+    right=RIGHT,
+    top=TOP,
+    bottom=BOT,
     hspace=OUTER_HSPACE,
   )
 
@@ -601,15 +614,19 @@ def plot_qualitative_grid(
     preds = payload.get("predictions", {})
     gt_idx = payload.get("gt_idx")
     inner_gs = outer_gs[section_idx].subgridspec(
-      n_bits, len(INNER_WIDTH_RATIOS),
-      hspace=INNER_HSPACE, wspace=INNER_WSPACE,
+      n_bits,
+      len(INNER_WIDTH_RATIOS),
+      hspace=INNER_HSPACE,
+      wspace=INNER_WSPACE,
       width_ratios=list(INNER_WIDTH_RATIOS),
     )
 
     ax_gt = fig.add_subplot(inner_gs[:, INNER_COL_INDICES[0]])
     ax_fp32 = fig.add_subplot(inner_gs[:, INNER_COL_INDICES[1]])
     for ax in (ax_gt, ax_fp32):
-      ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
+      ax.set_xticks([])
+      ax.set_yticks([])
+      ax.grid(False)
 
     section_gt_axes.append((letter, ax_gt))
 
@@ -622,7 +639,7 @@ def plot_qualitative_grid(
       ax_fp32.set_visible(False)
     else:
       ax_gt.imshow(img)
-      ax_gt.set_anchor('N')
+      ax_gt.set_anchor("N")
       ax_gt.set_title(payload.get("gt_name", ""), fontsize=9, pad=2)
       fp32_cam = cams.get("fp32")
       fp32_pred = preds.get("fp32")
@@ -631,7 +648,7 @@ def plot_qualitative_grid(
       else:
         composite = compose_cam_overlay(np.asarray(fp32_cam, dtype=np.float32), img)
         ax_fp32.imshow(composite)
-        ax_fp32.set_anchor('N')
+        ax_fp32.set_anchor("N")
         title_color = "tab:green" if fp32_pred["pred_idx"] == gt_idx else "tab:red"
         ax_fp32.set_title(f"{fp32_pred['pred_name']}\n{fp32_pred['prob']:.2f}", fontsize=9, pad=2, color=title_color)
 
@@ -640,7 +657,9 @@ def plot_qualitative_grid(
         visual_c = c_offset + 2
         inner_c = INNER_COL_INDICES[visual_c]
         ax = fig.add_subplot(inner_gs[bit_row_idx, inner_c])
-        ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.grid(False)
         if c_offset == 0:
           ax.set_ylabel(f"INT{bits}", rotation=0, ha="right", va="center", labelpad=8, fontsize=11, fontweight="bold")
         if section_idx == 0 and bit_row_idx == 0:
@@ -737,7 +756,10 @@ def main() -> None:
     "--from-dir",
     type=Path,
     default=None,
-    help="Load `{bits}bits/quantization_shift/shifts.csv` from each per-bit subdir of this parent directory and re-render the shift plots only (no model loading, no inference).",
+    help=(
+      "Load `{bits}bits/quantization_shift/shifts.csv` from each per-bit subdir of this parent directory "
+      "and re-render the shift plots only (no model loading, no inference)."
+    ),
   )
   args = parser.parse_args()
 
@@ -845,7 +867,7 @@ def main() -> None:
     save_csv(bench_rows, bench_csv)
     print(f"  CSV saved to {bench_csv}")
 
-  print(f"\n========== Stage 5: CAM cosine analysis ==========")
+  print("\n========== Stage 5: CAM cosine analysis ==========")
 
   gt_indices = np.array([synset2idx[id2synset[p.stem]] for p in image_paths], dtype=np.int64)
   gt_names = [class_idx_db.classes[i].name.replace("_", " ") for i in gt_indices]
@@ -929,7 +951,13 @@ def main() -> None:
     i = sel.index
     img = np.asarray(resize_and_center_crop(Image.open(image_paths[i]).convert("RGB")))
     cams_section: dict[str, np.ndarray] = {"fp32": fp32_cams[i]}
-    preds_section: dict[str, dict] = {"fp32": {"pred_idx": int(fp32_preds[i]), "pred_name": class_idx_db.classes[int(fp32_preds[i])].name.replace("_", " "), "prob": float(fp32_probs[i])}}
+    preds_section: dict[str, dict] = {
+      "fp32": {
+        "pred_idx": int(fp32_preds[i]),
+        "pred_name": class_idx_db.classes[int(fp32_preds[i])].name.replace("_", " "),
+        "prob": float(fp32_probs[i]),
+      }
+    }
     for (bits, method, bias_corrected), cams in variant_cams.items():
       key = _variant_key(bits, method, bias_corrected)
       cams_section[key] = cams[i]
@@ -938,7 +966,14 @@ def main() -> None:
         "pred_name": class_idx_db.classes[int(variant_preds[(bits, method, bias_corrected)][i])].name.replace("_", " "),
         "prob": float(variant_probs[(bits, method, bias_corrected)][i]),
       }
-    sections_payload[sel.letter] = {"criterion": sel.criterion, "image": img, "cams": cams_section, "predictions": preds_section, "gt_idx": int(gt_indices[i]), "gt_name": gt_names[i]}
+    sections_payload[sel.letter] = {
+      "criterion": sel.criterion,
+      "image": img,
+      "cams": cams_section,
+      "predictions": preds_section,
+      "gt_idx": int(gt_indices[i]),
+      "gt_name": gt_names[i],
+    }
 
   plot_qualitative_grid(sections_payload, save_dir / "qualitative_grid.png")
   print(f"wrote {save_dir}/qualitative_grid.png")

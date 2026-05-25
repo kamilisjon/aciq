@@ -20,10 +20,16 @@ def visualize_crop(image_path: Path, out_path: Path) -> None:
   fig_h_in = fig_w_in * h / w
   fig, ax = plt.subplots(figsize=(fig_w_in, fig_h_in))
   ax.imshow(np.asarray(img))
-  ax.add_patch(Rectangle(
-    (left, top), right - left, bottom - top,
-    fill=False, linewidth=2, edgecolor=SERIES_COLORS[0],
-  ))
+  ax.add_patch(
+    Rectangle(
+      (left, top),
+      right - left,
+      bottom - top,
+      fill=False,
+      linewidth=2,
+      edgecolor=SERIES_COLORS[0],
+    )
+  )
   ax.set_xticks([])
   ax.set_yticks([])
   ax.grid(False)

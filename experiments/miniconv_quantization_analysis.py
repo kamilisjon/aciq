@@ -158,16 +158,18 @@ def build_mae_summary(rows: list[QuantStatsRow]) -> list[MaeSummaryRow]:
   out: list[MaeSummaryRow] = []
   for (seed, layer), a in sorted(agg.items()):
     tot_w = int(a["tot_w"])
-    out.append(MaeSummaryRow(
-      seed=seed,
-      layer_name=layer,
-      num_channels=int(a["n_ch"]),
-      total_weights=tot_w,
-      minmax_total_err=a["mm"],
-      aciq_total_err=a["aq"],
-      minmax_mae=a["mm"] / tot_w,
-      aciq_mae=a["aq"] / tot_w,
-    ))
+    out.append(
+      MaeSummaryRow(
+        seed=seed,
+        layer_name=layer,
+        num_channels=int(a["n_ch"]),
+        total_weights=tot_w,
+        minmax_total_err=a["mm"],
+        aciq_total_err=a["aq"],
+        minmax_mae=a["mm"] / tot_w,
+        aciq_mae=a["aq"] / tot_w,
+      )
+    )
   return out
 
 
@@ -181,14 +183,16 @@ def build_mae_per_network(rows: list[QuantStatsRow]) -> list[MaePerNetworkRow]:
   out: list[MaePerNetworkRow] = []
   for seed, a in sorted(agg.items()):
     tot_w = int(a["tot_w"])
-    out.append(MaePerNetworkRow(
-      seed=seed,
-      total_weights=tot_w,
-      minmax_total_err=a["mm"],
-      aciq_total_err=a["aq"],
-      minmax_mae=a["mm"] / tot_w,
-      aciq_mae=a["aq"] / tot_w,
-    ))
+    out.append(
+      MaePerNetworkRow(
+        seed=seed,
+        total_weights=tot_w,
+        minmax_total_err=a["mm"],
+        aciq_total_err=a["aq"],
+        minmax_mae=a["mm"] / tot_w,
+        aciq_mae=a["aq"] / tot_w,
+      )
+    )
   return out
 
 
@@ -238,31 +242,36 @@ def build_mae_average(per_network: list[MaePerNetworkRow], accuracy_rows: list[A
   aq_bias_gain = aq_bias_acc - aq_acc
   mm_mae = np.array([r.minmax_mae for r in per_network], dtype=np.float64)
   aq_mae = np.array([r.aciq_mae for r in per_network], dtype=np.float64)
-  std = lambda x: float(x.std(ddof=1)) if len(x) > 1 else 0.0
-  return [MaeAverageRow(
-    n_seeds=len(per_network),
-    total_weights_per_network=per_network[0].total_weights,
-    mean_fp32_acc=float(fp.mean()),
-    std_fp32_acc=std(fp),
-    mean_minmax_acc=float(mm_acc.mean()),
-    std_minmax_acc=std(mm_acc),
-    mean_minmax_bias_acc=float(mm_bias_acc.mean()),
-    std_minmax_bias_acc=std(mm_bias_acc),
-    mean_aciq_acc=float(aq_acc.mean()),
-    std_aciq_acc=std(aq_acc),
-    mean_aciq_bias_acc=float(aq_bias_acc.mean()),
-    std_aciq_bias_acc=std(aq_bias_acc),
-    mean_paired_acc_diff=float(d_acc.mean()),
-    std_paired_acc_diff=std(d_acc),
-    mean_minmax_bias_gain=float(mm_bias_gain.mean()),
-    std_minmax_bias_gain=std(mm_bias_gain),
-    mean_aciq_bias_gain=float(aq_bias_gain.mean()),
-    std_aciq_bias_gain=std(aq_bias_gain),
-    mean_minmax_mae=float(mm_mae.mean()),
-    std_minmax_mae=std(mm_mae),
-    mean_aciq_mae=float(aq_mae.mean()),
-    std_aciq_mae=std(aq_mae),
-  )]
+
+  def std(x):
+    return float(x.std(ddof=1)) if len(x) > 1 else 0.0
+
+  return [
+    MaeAverageRow(
+      n_seeds=len(per_network),
+      total_weights_per_network=per_network[0].total_weights,
+      mean_fp32_acc=float(fp.mean()),
+      std_fp32_acc=std(fp),
+      mean_minmax_acc=float(mm_acc.mean()),
+      std_minmax_acc=std(mm_acc),
+      mean_minmax_bias_acc=float(mm_bias_acc.mean()),
+      std_minmax_bias_acc=std(mm_bias_acc),
+      mean_aciq_acc=float(aq_acc.mean()),
+      std_aciq_acc=std(aq_acc),
+      mean_aciq_bias_acc=float(aq_bias_acc.mean()),
+      std_aciq_bias_acc=std(aq_bias_acc),
+      mean_paired_acc_diff=float(d_acc.mean()),
+      std_paired_acc_diff=std(d_acc),
+      mean_minmax_bias_gain=float(mm_bias_gain.mean()),
+      std_minmax_bias_gain=std(mm_bias_gain),
+      mean_aciq_bias_gain=float(aq_bias_gain.mean()),
+      std_aciq_bias_gain=std(aq_bias_gain),
+      mean_minmax_mae=float(mm_mae.mean()),
+      std_minmax_mae=std(mm_mae),
+      mean_aciq_mae=float(aq_mae.mean()),
+      std_aciq_mae=std(aq_mae),
+    )
+  ]
 
 
 def _aciq_alpha(vec: np.ndarray, bits: int) -> tuple[float, str]:
@@ -296,13 +305,15 @@ def quantize_model(model: MiniConv, method: QuantMethod, bits: int) -> tuple[Min
       fits.append(fit_name)
       errs.append(float(np.sum(np.abs(ch_vec - q_vec))))
     mod.weight = Tensor(q_buf)
-    stats.append(LayerQuantStats(
-      layer_name=name,
-      channel_size=ch_size,
-      alpha_per_channel=alphas,
-      best_fit_per_channel=fits,
-      total_err_per_channel=errs,
-    ))
+    stats.append(
+      LayerQuantStats(
+        layer_name=name,
+        channel_size=ch_size,
+        alpha_per_channel=alphas,
+        best_fit_per_channel=fits,
+        total_err_per_channel=errs,
+      )
+    )
   type(qmodel).clear_jit_caches()
   return qmodel, stats
 
@@ -326,13 +337,12 @@ def run_training(
 ) -> dict[int, tuple[list[AccuracyRow], list, list[QuantStatsRow]]]:
   _, _, x_test, y_test = _load_normalized()
 
-  per_bits: dict[int, tuple[list[AccuracyRow], list, list[QuantStatsRow]]] = {
-    bits: ([], [], []) for bits in bit_widths
-  }
+  per_bits: dict[int, tuple[list[AccuracyRow], list, list[QuantStatsRow]]] = {bits: ([], [], []) for bits in bit_widths}
   t_start = time.perf_counter()
   for seed in range(n_models):
     timings: dict[str, float] = {}
     t = time.perf_counter()
+
     def lap(name: str) -> None:
       nonlocal t
       now = time.perf_counter()
@@ -426,13 +436,9 @@ def run_training(
     seed_total = sum(timings.values())
     timing_str = " ".join(f"{k}={v:.1f}s" for k, v in timings.items())
     accs_str = "  ".join(
-      f"[{bits}b] mm={a['minmax']:.3f} mm+b={a['minmax_bias']:.3f} aq={a['aciq']:.3f} aq+b={a['aciq_bias']:.3f}"
-      for bits, a in per_bits_accs.items()
+      f"[{bits}b] mm={a['minmax']:.3f} mm+b={a['minmax_bias']:.3f} aq={a['aciq']:.3f} aq+b={a['aciq_bias']:.3f}" for bits, a in per_bits_accs.items()
     )
-    print(
-      f"[{seed + 1}/{n_models}] seed={seed}  total={seed_total:.1f}s  ({timing_str})  "
-      f"fp32={fp32_acc:.3f}  {accs_str}"
-    )
+    print(f"[{seed + 1}/{n_models}] seed={seed}  total={seed_total:.1f}s  ({timing_str})  fp32={fp32_acc:.3f}  {accs_str}")
   elapsed = time.perf_counter() - t_start
   per_seed = elapsed / n_models if n_models else 0.0
   print(f"\nrun_training complete: {n_models} seeds in {elapsed:.1f}s ({per_seed:.1f}s/seed)")
@@ -486,7 +492,7 @@ def plot_paired_diff_histograms(accuracy_rows: list[AccuracyRow], per_network: l
     ax.set_ylabel("Number of networks")
     ax.legend(loc="upper right", fontsize=9)
     ax.grid(False)
-  for ax in axes.flat[len(panels):]:
+  for ax in axes.flat[len(panels) :]:
     ax.set_visible(False)
   fig.tight_layout()
   fig.savefig(save_dir / "paired_diff_histograms.png")
@@ -510,7 +516,9 @@ def plot_minmax_vs_aciq_accuracy(accuracy_rows: list[AccuracyRow], save_dir: Pat
   ax.set_xlabel("MINMAX tikslumas")
   ax.set_ylabel("ACIQ tikslumas")
   wins_aciq = int(np.sum(aciq > mm))
-  ax.set_title(f"MINMAX prieš ACIQ tikslumas\nvidurkis: MINMAX={mm.mean():.3f}  ACIQ={aciq.mean():.3f}  ACIQ > MINMAX: {wins_aciq}/{len(accuracy_rows)}")
+  ax.set_title(
+    f"MINMAX prieš ACIQ tikslumas\nvidurkis: MINMAX={mm.mean():.3f}  ACIQ={aciq.mean():.3f}  ACIQ > MINMAX: {wins_aciq}/{len(accuracy_rows)}"
+  )
   ax.grid(False)
   ax.legend(loc="lower right")
   fig.tight_layout()

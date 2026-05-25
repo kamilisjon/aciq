@@ -18,11 +18,11 @@ from aciq.models.resnet import ResNet, _conv_bn_pairs, _weight_modules
 BIT_WIDTHS: tuple[int, ...] = (4, 8)
 
 PER_LAYER_GRID: dict[str, tuple[int, int]] = {
-  "resnet18": (3, 7),    # 21 weight layers
-  "resnet34": (5, 8),    # 37 weight layers
-  "resnet50": (6, 9),    # 54 weight layers
+  "resnet18": (3, 7),  # 21 weight layers
+  "resnet34": (5, 8),  # 37 weight layers
+  "resnet50": (6, 9),  # 54 weight layers
   "resnet101": (11, 9),  # 105 weight layers — appendix layout from README
-  "resnet152": (13, 12), # 156 weight layers
+  "resnet152": (13, 12),  # 156 weight layers
 }
 
 CHANNEL_GRID: tuple[int, int] = (2, 4)
@@ -161,7 +161,10 @@ def compute_fit_summary(fits: list[LayerFits], bit_widths: tuple[int, ...]) -> l
   rows: list[FitSummaryRow] = []
   for f in fits:
     alpha_minmax = float(bound_symmetric_minmax(f.flat))
-    cdf = lambda x, dist=f.layer_best: float(dist.cdf_at(np.asarray(x)))
+
+    def cdf(x, dist=f.layer_best):
+      return float(dist.cdf_at(np.asarray(x)))
+
     for bits in bit_widths:
       alpha_aciq = float(bound_symmetric_aciq_mae(cdf=cdf, b=bits, alpha_max=alpha_minmax))
       mae_minmax = float(mean_absolute_error(f.flat, quantize_symmetric(f.flat, alpha_minmax, bits)))
@@ -250,9 +253,13 @@ def plot_bn_fusion_layer(layer_idx: int, conv_name: str, pre_weight: np.ndarray,
   fig, ax = plt.subplots(figsize=(12, 5))
   ax.vlines(channels - 0.15, pre_min, pre_max, colors=TailwindColor.BLUE, linewidth=0.8, alpha=0.7, label="Per-channel [min,max] before BN fusion")
   ax.vlines(channels + 0.15, post_min, post_max, colors=TailwindColor.ROSE, linewidth=0.8, alpha=0.7, label="Per-channel [min,max] after BN fusion")
-  ax.axhline(y=-pre_tensor_alpha, color=TailwindColor.BLUE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={pre_tensor_alpha:.4f} before BN fusion")
+  ax.axhline(
+    y=-pre_tensor_alpha, color=TailwindColor.BLUE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={pre_tensor_alpha:.4f} before BN fusion"
+  )
   ax.axhline(y=pre_tensor_alpha, color=TailwindColor.BLUE, linestyle="--", linewidth=1)
-  ax.axhline(y=-post_tensor_alpha, color=TailwindColor.ROSE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={post_tensor_alpha:.4f} after BN fusion")
+  ax.axhline(
+    y=-post_tensor_alpha, color=TailwindColor.ROSE, linestyle="--", linewidth=1, label=f"Per-tensor clip α={post_tensor_alpha:.4f} after BN fusion"
+  )
   ax.axhline(y=post_tensor_alpha, color=TailwindColor.ROSE, linestyle="--", linewidth=1)
   ax.axhline(y=0, color="black", linewidth=0.5)
   ax.set_xlabel("Output channel")
@@ -288,10 +295,17 @@ def compute_channel_fit_counts(fits: list[LayerFits]) -> list[ChannelFitCountsRo
 
 
 if __name__ == "__main__":
-  parser = argparse.ArgumentParser(description="Full weight-distribution analysis for a pretrained ResNet: per-layer histograms, moments, MinMax/ACIQ fit summary at int4 and int8, per-channel fit grids, and per-channel fit counts.")
+  parser = argparse.ArgumentParser(
+    description=(
+      "Full weight-distribution analysis for a pretrained ResNet: per-layer histograms, moments, "
+      "MinMax/ACIQ fit summary at int4 and int8, per-channel fit grids, and per-channel fit counts."
+    )
+  )
   parser.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet34", "resnet50", "resnet101", "resnet152"])
   parser.add_argument("--per-layer-quantile", type=float, default=99.9, help="Per-layer percentile clip applied to each subplot's x-axis.")
-  parser.add_argument("--channel-grid-layers", type=str, nargs="+", default=["layer3.0.conv1"], help="Layer names to render per-channel distribution grids for.")
+  parser.add_argument(
+    "--channel-grid-layers", type=str, nargs="+", default=["layer3.0.conv1"], help="Layer names to render per-channel distribution grids for."
+  )
   parser.add_argument("--channel-grid-quantile", type=float, default=99.9, help="Percent of data inside each per-channel subplot's x-range.")
   args = parser.parse_args()
 
@@ -323,7 +337,9 @@ if __name__ == "__main__":
   fits_by_name = {f.name: f for f in fits}
 
   print("Rendering per-layer weight histogram grid")
-  plot_per_layer_grid(fits, per_layer_rows, per_layer_cols, args.per_layer_quantile, save_dir / "per_layer" / f"{per_layer_rows}x{per_layer_cols}.png")
+  plot_per_layer_grid(
+    fits, per_layer_rows, per_layer_cols, args.per_layer_quantile, save_dir / "per_layer" / f"{per_layer_rows}x{per_layer_cols}.png"
+  )
 
   print("Computing per-layer moments")
   moment_rows = compute_moments(fits)
