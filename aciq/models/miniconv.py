@@ -7,7 +7,7 @@ from enum import StrEnum
 import numpy as np
 import tinygrad.nn as nn
 from tinygrad import Tensor, TinyJit, function
-from tinygrad.nn.optim import AdamW
+from tinygrad.nn.optim import Optimizer
 
 from aciq.distributions import ClippedGaussian
 from aciq.helpers import fuse_conv_bn_inplace
@@ -57,7 +57,7 @@ class MiniConv:
 
   @TinyJit
   @Tensor.train()
-  def train_step(self, X_train: Tensor, Y_train: Tensor, opt: AdamW, batch_size: int) -> Tensor:
+  def train_step(self, X_train: Tensor, Y_train: Tensor, opt: Optimizer, batch_size: int) -> Tensor:
     opt.zero_grad()
     samples = Tensor.randint(batch_size, high=X_train.shape[0])
     loss = self(X_train[samples]).sparse_categorical_crossentropy(Y_train[samples]).backward()

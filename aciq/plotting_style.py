@@ -1,4 +1,5 @@
 from enum import StrEnum
+from typing import Any
 
 import matplotlib.pyplot as plt
 
@@ -82,7 +83,7 @@ plt.rcParams.update({
 })
 
 
-STATS_TEXT_KW: dict[str, object] = {
+STATS_TEXT_KW: dict[str, Any] = {
   "fontsize": 8,
   "va": "top",
   "ha": "right",

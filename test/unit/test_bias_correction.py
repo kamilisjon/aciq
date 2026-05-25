@@ -68,6 +68,7 @@ class TestApplyCorrection(unittest.TestCase):
     E_x = rng.normal(size=(16,))
     apply_bias_correction(layer, W_fp, b, E_x)
     np.testing.assert_allclose(layer.weight.numpy(), W_q)
+    assert layer.bias is not None
     assert not np.allclose(layer.bias.numpy(), b)
 
 

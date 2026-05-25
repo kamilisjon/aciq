@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.lines import Line2D
 from PIL import Image
 from tinygrad import Tensor
@@ -604,7 +605,7 @@ def plot_qualitative_grid(
     hspace=OUTER_HSPACE,
   )
 
-  axes_for_titles: dict[int, object] = {}
+  axes_for_titles: dict[int, Axes] = {}
   section_gt_axes: list = []
 
   for section_idx, letter in enumerate(_SECTION_LETTERS):
@@ -680,10 +681,10 @@ def plot_qualitative_grid(
 
   # Column titles anchored to real axis positions (handles wspace + any future layout tweaks).
   for c, (col_label, _) in enumerate(_CAM_GRID_COLUMNS):
-    ax = axes_for_titles.get(c)
-    if ax is None:
+    title_ax = axes_for_titles.get(c)
+    if title_ax is None:
       continue
-    bbox = ax.get_position()
+    bbox = title_ax.get_position()
     x_center = bbox.x0 + bbox.width / 2
     fig.text(x_center, 0.97, col_label, ha="center", va="bottom", fontsize=10, fontweight="bold")
 
