@@ -2,7 +2,6 @@ from __future__ import annotations
 import functools
 import math
 from abc import ABC, abstractmethod
-from enum import Enum, auto
 from typing import Any
 
 from scipy import stats
@@ -19,14 +18,9 @@ def kurtosis(data: np.ndarray) -> np.floating[Any]:
   return np.mean(d**4) / np.mean(d**2) ** 2 - 3.0
 
 
-class DistributionType(Enum):
-  GAUSSIAN = auto()
-  LAPLACE = auto()
-  STUDENT_T = auto()
-  GENERALIZED_GAUSSIAN = auto()
-
-
 class Distribution(ABC):
+  name: str
+
   def __init__(self, data: np.ndarray):
     self._data = data
 
@@ -50,24 +44,12 @@ class Distribution(ABC):
   def log_likelihood(self) -> float:
     return float(np.sum(self.logpdf()))
 
-  @staticmethod
-  def fit(data: np.ndarray, dist_type: DistributionType) -> Distribution:
-    match dist_type:
-      case DistributionType.GAUSSIAN:
-        return Gaussian(data)
-      case DistributionType.LAPLACE:
-        return Laplace(data)
-      case DistributionType.STUDENT_T:
-        return StudentT(data)
-      case DistributionType.GENERALIZED_GAUSSIAN:
-        return GeneralizedGaussian(data)
-      case _:
-        raise ValueError(f"Unsupported distribution type: {dist_type}")
-
 
 class Gaussian(Distribution):
+  name = "Normalusis"
+
   def __repr__(self) -> str:
-    return f"Gaussian({self.mu:.2f}, {self.sigma:.2f})"
+    return f"{self.name} ({self.mu:.4f}, {self.sigma:.4f})"
 
   @property
   def mu(self) -> np.floating[Any]:
@@ -85,8 +67,10 @@ class Gaussian(Distribution):
 
 
 class Laplace(Distribution):
+  name = "Laplaso"
+
   def __repr__(self) -> str:
-    return f"Laplace({self.mu:.2f}, {self.b:.2f})"
+    return f"{self.name} ({self.mu:.4f}, {self.b:.4f})"
 
   @property
   def mu(self) -> np.floating[Any]:
@@ -104,8 +88,10 @@ class Laplace(Distribution):
 
 
 class StudentT(Distribution):
+  name = "Studento t"
+
   def __repr__(self) -> str:
-    return f"Student-t({self.df:.2f}, {self.loc:.2f}, {self.scale:.2f})"
+    return f"{self.name} ({self.df:.4f}, {self.loc:.4f}, {self.scale:.4f})"
 
   @functools.cached_property
   def _fit(self) -> tuple[float, float, float]:
@@ -132,8 +118,10 @@ class StudentT(Distribution):
 
 
 class GeneralizedGaussian(Distribution):
+  name = "Apibendrintas normalusis"
+
   def __repr__(self) -> str:
-    return f"GED({self.beta:.2f}, {self.loc:.2f}, {self.scale:.2f})"
+    return f"{self.name} ({self.beta:.4f}, {self.loc:.4f}, {self.scale:.4f})"
 
   @functools.cached_property
   def _fit(self) -> tuple[float, float, float]:
@@ -156,3 +144,60 @@ class GeneralizedGaussian(Distribution):
 
   def cdf_at(self, x: np.ndarray) -> np.ndarray:
     return stats.gennorm.cdf(x, self.beta, loc=self.loc, scale=self.scale)
+
+
+Distributions: set[type[Distribution]] = {Gaussian, Laplace, StudentT, GeneralizedGaussian}
+
+
+def fit_distributions(data: np.ndarray) -> list[Distribution]:
+  return sorted((d(data) for d in Distributions), key=lambda dist: dist.log_likelihood, reverse=True)
+
+
+class ClippedGaussian:
+  """Analytical mean / variance for N(beta, gamma**2) clipped to [a, b].
+
+  Source: arXiv:1906.04721. ReLU is the special case (a=0, b=+inf)."""
+
+  @classmethod
+  def mean(cls, beta: np.ndarray, gamma: np.ndarray, a: float = 0.0, b: float = np.inf) -> np.ndarray:
+    beta = np.asarray(beta, dtype=np.float64)
+    gamma = np.asarray(gamma, dtype=np.float64)
+    sigma = np.abs(gamma)
+    alpha_n = (a - beta) / sigma
+    beta_n = np.full_like(beta, np.inf) if not np.isfinite(b) else (b - beta) / sigma
+
+    Phi_alpha = stats.norm.cdf(alpha_n)
+    Phi_beta = np.ones_like(beta) if not np.isfinite(b) else stats.norm.cdf(beta_n)
+    phi_alpha = stats.norm.pdf(alpha_n)
+    phi_beta = np.zeros_like(beta) if not np.isfinite(b) else stats.norm.pdf(beta_n)
+
+    term_low = a * Phi_alpha
+    term_high = 0.0 if not np.isfinite(b) else b * (1.0 - Phi_beta)
+    return term_low + term_high + sigma * (phi_alpha - phi_beta) + beta * (Phi_beta - Phi_alpha)
+
+  @classmethod
+  def variance(cls, beta: np.ndarray, gamma: np.ndarray, a: float = 0.0, b: float = np.inf) -> np.ndarray:
+    beta = np.asarray(beta, dtype=np.float64)
+    gamma = np.asarray(gamma, dtype=np.float64)
+    sigma = np.abs(gamma)
+    alpha_n = (a - beta) / sigma
+    beta_n = np.full_like(beta, np.inf) if not np.isfinite(b) else (b - beta) / sigma
+
+    Phi_alpha = stats.norm.cdf(alpha_n)
+    Phi_beta = np.ones_like(beta) if not np.isfinite(b) else stats.norm.cdf(beta_n)
+    phi_alpha = stats.norm.pdf(alpha_n)
+    phi_beta = np.zeros_like(beta) if not np.isfinite(b) else stats.norm.pdf(beta_n)
+
+    mu_clip = cls.mean(beta, gamma, a, b)
+    Z = Phi_beta - Phi_alpha
+    b_phi_beta = 0.0 if not np.isfinite(b) else b * phi_beta
+    term_high = 0.0 if not np.isfinite(b) else (b - mu_clip) ** 2 * (1.0 - Phi_beta)
+
+    var = (
+      Z * (beta**2 + sigma**2 + mu_clip**2 - 2.0 * mu_clip * beta)
+      + sigma * (a * phi_alpha - b_phi_beta)
+      + sigma * (beta - 2.0 * mu_clip) * (phi_alpha - phi_beta)
+      + (a - mu_clip) ** 2 * Phi_alpha
+      + term_high
+    )
+    return np.maximum(var, 0.0)

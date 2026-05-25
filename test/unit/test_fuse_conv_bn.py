@@ -7,7 +7,7 @@ from torch.nn.utils.fusion import fuse_conv_bn_eval
 from tinygrad import Tensor
 from tinygrad.nn import BatchNorm2d as TGBatchNorm2d, Conv2d as TGConv2d
 
-from aciq.fusion import fuse_conv_bn, fuse_inplace
+from aciq.helpers import fuse_conv_bn, fuse_conv_bn_inplace
 
 
 def _matched_pair(bias: bool):
@@ -57,7 +57,7 @@ class TestFuseInplace(unittest.TestCase):
   def _assert_matches_torch(self, bias: bool) -> None:
     tc, tb, tgc, tgb = _matched_pair(bias)
     ref = fuse_conv_bn_eval(tc, tb)
-    fuse_inplace(tgc, tgb)
+    fuse_conv_bn_inplace(tgc, tgb)
     assert tgc.bias is not None, "fuse_inplace must attach a bias even when the Conv was bias=False"
     np.testing.assert_allclose(tgc.weight.numpy(), ref.weight.data.numpy(), atol=1e-6)
     np.testing.assert_allclose(tgc.bias.numpy(), ref.bias.data.numpy(), atol=1e-6)

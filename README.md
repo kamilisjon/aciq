@@ -7,17 +7,28 @@ conda activate aciq
 pip install -e .
 ```
 
-## Usage
-1. Download imagenet validation dataset from https://www.kaggle.com/competitions/imagenet-object-localization-challenge/overview
-1. ResNet analysis:
-    1. `DEV=NV JITBEAM=4 python -m examples.resnet_pipeline --dataset-path /home/kamilis/Downloads/imagenet-object-localization-challenge --model resnet50 --bits 8`
-1. MNIST training for evaluating layers outputs distributions shift after quantization:
-    1. `DEV=NV JITBEAM=4 python -m examples.mnist_quantization_shift --n-models 100 --epochs 5`
+## Project structure
+- `experiments/` — runnable experiment scripts (MNIST and ResNet quantization
+  analysis, pipelines, plotting utilities).
+- `aciq/` — the core library: distribution fitting, quantization and clipping,
+  bias correction, models, datasets, and plotting helpers.
+
+## ImageNet
+
+Some experiments (e.g. `experiments.resnet_pipeline`) require the ImageNet
+validation set. Download it from
+<https://www.kaggle.com/competitions/imagenet-object-localization-challenge/overview>,
+extract it, and pass the extracted root to those scripts via
+`--dataset-path <imagenet-root>`.
 
 ## Local testing
 ### Install extra dependencies
 ```sh
 pip install -e '.[linting,testing]'
+```
+### Format code
+```sh
+./format.sh
 ```
 ### Run tests
 ```sh

@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 from torchvision.transforms._presets import ImageClassification
 
-from aciq.preprocess import load_and_preprocess
+from aciq.datasets.imagenet import load_and_preprocess
 
 
 class TestPreprocess(unittest.TestCase):
