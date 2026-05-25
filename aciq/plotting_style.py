@@ -6,7 +6,7 @@ from aciq.distributions import Distribution, Gaussian, GeneralizedGaussian, Lapl
 
 
 class TailwindColor(StrEnum):
-  """Tailwind color pallete. shade: 600. https://tailwindcss.com/docs/colors"""
+  """Tailwind color palette. shade: 600. https://tailwindcss.com/docs/colors"""
 
   SLATE = "#475569"
   GRAY = "#4B5563"
